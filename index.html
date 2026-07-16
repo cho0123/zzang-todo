@@ -137,9 +137,16 @@
         }
         .section-header .count { font-size: 12px; color: #adb5bd; font-weight: 600; }
 
-        /* 2단 레이아웃 (좌: 오늘 일정 / 우: 장기 플랜) */
-        .columns { display: flex; gap: 24px; align-items: flex-start; margin-top: 10px; }
-        .column { flex: 1; min-width: 0; }
+        /* 2단 레이아웃 (좌: 오늘 일정 / 우: 장기 플랜)
+           가로 폭이 충분하면(≈2×250px) 자동으로 좌우 2단, 좁으면 위아래로 쌓임 */
+        .columns {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+            gap: 24px;
+            align-items: start;
+            margin-top: 10px;
+        }
+        .column { min-width: 0; }
         .column .section-header { margin-top: 0; }
 
         /* 장기 플랜 리스트는 파란 상단선으로 구분 */
@@ -168,13 +175,6 @@
 
         /* 장기 전용 필드(마감일) */
         #longFields { align-items: center; }
-
-        /* 모바일: 2단을 세로로 쌓기 */
-        @media (max-width: 760px) {
-            .columns { flex-direction: column; gap: 8px; }
-            /* 세로 스택 시 각 컬럼을 컨테이너 폭에 맞춰(필터바는 내부 가로스크롤) */
-            .column { width: 100%; }
-        }
     </style>
 </head>
 <body>
