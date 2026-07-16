@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>짱구 ToDo Fixed</title>
+    <style>
+        body { font-family: 'Apple SD Gothic Neo', sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
+        .container { background: white; width: 100%; max-width: 1000px; padding: 25px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: #333; margin-bottom: 5px; letter-spacing: -1px; }
+        .sub-title { text-align: center; color: #888; font-size: 12px; margin-bottom: 25px; }
+        
+        /* 입력 영역 */
+        .input-group { 
+            background: #f8f9fa; 
+            padding: 20px; 
+            border-radius: 10px; 
+            border: 1px solid #e1e4e8;
+            margin-bottom: 20px; 
+            display: flex; flex-direction: column; gap: 12px; 
+        }
+        
+        input, select, textarea { 
+            padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px;
+            background-color: #fff;
+        }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #333; }
+        textarea { resize: none; }
+
+        /* 시간 입력 그룹 */
+        .time-group { display: flex; gap: 5px; flex: 1.5; }
+        .time-group select { flex: 1; min-width: 60px; text-align: center; }
+        .time-group input { flex: 1; text-align: center; }
+
+        /* 체크박스 스타일 */
+        .checkbox-wrapper { display: flex; align-items: center; }
+        .checkbox-wrapper input[type="checkbox"] { display: none; }
+        .checkbox-wrapper label {
+            background-color: #fff; border: 1px solid #ddd; color: #aaa;
+            padding: 10px 0; border-radius: 8px; cursor: pointer;
+            font-weight: bold; font-size: 13px; display: block; width: 100%;
+            text-align: center; transition: 0.2s; box-sizing: border-box;
+        }
+        
+        #impCheck:checked + label { background-color: #f59f00; color: white; border-color: #f59f00; }
+        #repeatCheck:checked + label { background-color: #be4bdb; color: white; border-color: #be4bdb; }
+        #pinCheck:checked + label { background-color: #228be6; color: white; border-color: #228be6; }
+
+        /* 버튼 그룹 */
+        .btn-area { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; }
+        button { border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; flex: 1; font-size: 14px; color: white; }
+        #add-btn { background-color: #212529; width: 100%; }
+        
+        .edit-mode-btns { display: none; width: 100%; gap: 5px; }
+        #update-btn { background-color: #228be6; flex: 2; } 
+        #complete-btn { background-color: #40c057; flex: 1; } 
+        #delete-btn { background-color: #fa5252; flex: 1; } 
+        #cancel-btn { background-color: #868e96; flex: 0.5; } 
+
+        /* 필터 버튼 */
+        .filter-group { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 5px; -webkit-overflow-scrolling: touch; }
+        .filter-btn { 
+            padding: 8px 12px; border-radius: 20px; font-size: 12px; white-space: nowrap; 
+            background: #f1f3f5; color: #868e96; border: 1px solid #dee2e6; flex: none; cursor: pointer;
+        }
+        .filter-btn.active { background: #333; color: white; border-color: #333; }
+
+        /* 리스트 스타일 */
+        ul { list-style: none; padding: 0; margin: 0; border-top: 3px solid #333; }
+        li { 
+            border-bottom: 2px solid #dde2e5; padding: 0;
+            position: relative; overflow: hidden;
+        }
+        li:last-child { border-bottom: none; }
+
+        /* 스와이프 배경 (색·문구는 JS에서 완료 여부에 맞춤) */
+        .swipe-bg {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 100%;
+            background-color: #40c057; color: #fff; font-weight: 800; font-size: 15px;
+            display: flex; align-items: center; padding-left: 18px; box-sizing: border-box;
+            z-index: 0; pointer-events: none;
+        }
+        .swipe-content {
+            position: relative; z-index: 1;
+            display: flex; gap: 15px; align-items: flex-start;
+            padding: 18px 15px; width: 100%; box-sizing: border-box;
+            background: #fff; cursor: pointer;
+            transition: transform 0.28s ease-out;
+            touch-action: pan-y;
+        }
+        .swipe-content.swipe-no-transition { transition: none; }
+
+        li:hover .swipe-content { background-color: #f8f9fa; }
+
+        /* 핀 고정된 항목 배경색 (연한 핑크) */
+        li.pinned .swipe-content { background-color: #fff0f6; }
+        li.pinned:hover .swipe-content { background-color: #ffdeeb; }
+        
+        .row-num { font-size: 12px; color: #adb5bd; font-weight: bold; min-width: 25px; margin-top: 3px; }
+        .content-area { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+
+        /* 뱃지 및 색상 */
+        .badges { display: flex; gap: 6px; font-size: 11px; font-weight: 700; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
+        .badge { padding: 3px 6px; border-radius: 4px; color: white; }
+        
+        .cat-vt { background-color: #7950f2; }      
+        .cat-botiz { background-color: #228be6; }   
+        .cat-money { background-color: #2f9e44; }   
+        .cat-general { background-color: #868e96; } 
+
+        .type-date { background-color: #e64980; } 
+        .type-time { background-color: #1098ad; }
+        .type-repeat { background-color: #be4bdb; } 
+        .imp-icon { color: #fa5252; font-weight: 800; font-size: 13px; }
+
+        /* 리스트 내 핀 버튼 */
+        .task-line { display: flex; align-items: center; gap: 8px; }
+        .inline-pin-btn {
+            background: none; border: none; padding: 0; cursor: pointer; margin: 0; flex: none;
+            font-size: 18px; color: #e9ecef; transition: all 0.2s; line-height: 1;
+        }
+        .inline-pin-btn.active { color: #fa5252; transform: rotate(-45deg); } 
+        .inline-pin-btn:hover { transform: scale(1.2); }
+
+        .task-text { font-size: 16px; font-weight: 600; color: #333; line-height: 1.4; flex: 1; }
+        .task-memo { font-size: 13px; color: #868e96; margin-top: 2px; margin-left: 1px; }
+
+        /* 완료된 항목 */
+        li.completed .swipe-content { opacity: 0.5; background-color: #f1f3f5; }
+        li.completed .task-text { text-decoration: line-through; color: #ced4da; }
+        li.completed .badges { filter: grayscale(100%); opacity: 0.7; }
+
+        /* 섹션 헤더 (오늘 할 일 / 장기일정) */
+        .section-header {
+            font-size: 14px; font-weight: 800; color: #495057; letter-spacing: -0.5px;
+            margin: 22px 0 8px; display: flex; align-items: center; gap: 6px;
+        }
+        .section-header .count { font-size: 12px; color: #adb5bd; font-weight: 600; }
+
+        /* 2단 레이아웃 (좌: 오늘 일정 / 우: 장기 플랜) */
+        .columns { display: flex; gap: 24px; align-items: flex-start; margin-top: 10px; }
+        .column { flex: 1; min-width: 0; }
+        .column .section-header { margin-top: 0; }
+
+        /* 장기 플랜 리스트는 파란 상단선으로 구분 */
+        #longColumn ul { border-top: 3px solid #1c7ed6; }
+
+        /* 빈 상태 안내 문구 */
+        .empty-msg { text-align: center; padding: 30px 10px; color: #adb5bd; font-size: 13px; }
+
+        /* 날짜 옆 '오늘' 버튼 */
+        .date-wrap { display: flex; gap: 6px; align-items: stretch; }
+        .today-btn {
+            flex: none; width: auto; padding: 0 14px;
+            background: #e7f5ff; color: #1c7ed6; border: 1px solid #a5d8ff;
+            border-radius: 8px; font-size: 13px; font-weight: 700; white-space: nowrap;
+            cursor: pointer;
+        }
+        .today-btn:hover { background: #d0ebff; }
+
+        /* 장기일정 관련 뱃지 */
+        .type-due { background-color: #f76707; }
+        .badge.dday { color: #fff; }
+
+        /* 마감 임박 항목 (오늘 목록 상단 노출) */
+        li.imminent .swipe-content { background-color: #fff9db; }
+        li.imminent:hover .swipe-content { background-color: #fff3bf; }
+
+        /* 장기 전용 필드(마감일) */
+        #longFields { align-items: center; }
+
+        /* 모바일: 2단을 세로로 쌓기 */
+        @media (max-width: 760px) {
+            .columns { flex-direction: column; gap: 8px; }
+            /* 세로 스택 시 각 컬럼을 컨테이너 폭에 맞춰(필터바는 내부 가로스크롤) */
+            .column { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>⚡ 짱구 Manager</h2>
+    <div class="sub-title">오늘도 화이팅!</div>
+    
+    <div class="input-group">
+        <input type="text" id="taskInput" placeholder="할 일을 입력하세요">
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <select id="scheduleTypeInput" style="flex: 1; min-width: 80px;">
+                <option value="short" selected>📌 단기(1회성)</option>
+                <option value="long">🌱 장기(플랜)</option>
+            </select>
+            <select id="categoryInput" style="flex: 1; min-width: 80px;">
+                <option value="vt">🎙️ VT</option>
+                <option value="botiz">🤖 보티즈</option>
+                <option value="money">💰 머니</option>
+                <option value="general" selected>📂 일반</option>
+            </select>
+        </div>
+
+        <!-- 단기(오늘) 전용: 날짜 + 시간 -->
+        <div id="shortFields" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <div class="date-wrap" style="flex: 1.2;">
+                <input type="date" id="dateInput" style="flex: 1; min-width: 0;">
+                <button type="button" class="today-btn" id="todayBtnShort">오늘</button>
+            </div>
+
+            <div class="time-group">
+                <select id="ampmInput">
+                    <option value="AM">오전</option>
+                    <option value="PM" selected>오후</option>
+                </select>
+                <input type="number" id="hourInput" placeholder="시" min="1" max="12">
+                <input type="number" id="minuteInput" placeholder="분" min="0" max="59">
+            </div>
+        </div>
+
+        <!-- 장기 전용: 마감일 (선택 입력) -->
+        <div id="longFields" style="display: none; gap: 8px;">
+            <span style="font-size:13px; color:#868e96; font-weight:700; white-space:nowrap;">📅 마감일 <span style="color:#adb5bd; font-weight:600;">(선택)</span></span>
+            <input type="date" id="dueDateInput" style="flex: 1; min-width: 0;">
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+             <div class="checkbox-wrapper" style="flex: 1;">
+                <input type="checkbox" id="pinCheck">
+                <label for="pinCheck">📌 고정</label>
+            </div>
+            <div class="checkbox-wrapper" style="flex: 1;">
+                <input type="checkbox" id="repeatCheck">
+                <label for="repeatCheck">🔄 반복</label>
+            </div>
+            <div class="checkbox-wrapper" style="flex: 1;">
+                <input type="checkbox" id="impCheck">
+                <label for="impCheck">⭐ 우선</label>
+            </div>
+        </div>
+
+        <textarea id="memoInput" rows="2" placeholder="메모"></textarea>
+        
+        <div class="btn-area" id="add-mode-area">
+            <button id="add-btn">등록하기</button>
+        </div>
+
+        <div class="btn-area edit-mode-btns" id="edit-mode-area">
+            <button id="update-btn">수정저장</button>
+            <button id="complete-btn">완료(✔)</button>
+            <button id="delete-btn">삭제(🗑️)</button>
+            <button id="cancel-btn">취소</button>
+        </div>
+    </div>
+
+    <div class="columns">
+        <!-- 왼쪽: 단기(오늘) 일정 -->
+        <div class="column" id="shortColumn">
+            <div class="section-header">📅 오늘 일정 <span class="count" id="shortCount"></span></div>
+
+            <div class="filter-group" id="filterContainer">
+                <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">📋 전체</button>
+                <button class="filter-btn" data-filter="important" onclick="setFilter('important')">⚡ 주요</button>
+                <button class="filter-btn" data-filter="vt" onclick="setFilter('vt')">🎙️ 보이스튜닝</button>
+                <button class="filter-btn" data-filter="botiz" onclick="setFilter('botiz')">🤖 보티즈</button>
+                <button class="filter-btn" data-filter="money" onclick="setFilter('money')">💰 머니</button>
+                <button class="filter-btn" data-filter="general" onclick="setFilter('general')">📂 일반</button>
+            </div>
+
+            <ul id="taskList">
+                <div class="empty-msg">로딩중...</div>
+            </ul>
+        </div>
+
+        <!-- 오른쪽: 장기 플랜 (빌드업) -->
+        <div class="column" id="longColumn">
+            <div class="section-header">🌱 장기 플랜 <span class="count" id="longCount"></span></div>
+            <ul id="longList"></ul>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, updateDoc, doc, deleteDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // Firebase 설정
+    const firebaseConfig = {
+        apiKey: "AIzaSyC1x5B7Nm6iFJ85UPye-vy-aWWefbwmZLw",
+        authDomain: "cho-works.firebaseapp.com",
+        projectId: "cho-works",
+        storageBucket: "cho-works.firebasestorage.app",
+        messagingSenderId: "595194586746",
+        appId: "1:595194586746:web:249edc78bb6c4680da7dc3",
+        measurementId: "G-28FZEQKMGE"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const TASKS_COLLECTION = "tasks";
+
+    let isEditing = false;
+    let currentEditId = null;
+    let currentFilter = 'all';
+
+    function formatTimeInput() {
+        const ampm = document.getElementById('ampmInput').value;
+        let hour = parseInt(document.getElementById('hourInput').value);
+        let minute = parseInt(document.getElementById('minuteInput').value);
+
+        if (isNaN(hour) || isNaN(minute)) return ""; 
+
+        if (ampm === "PM" && hour < 12) hour += 12;
+        if (ampm === "AM" && hour === 12) hour = 0;
+
+        return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    }
+
+    function setTimeInput(timeStr) {
+        if (!timeStr) {
+            document.getElementById('ampmInput').value = 'PM';
+            document.getElementById('hourInput').value = '';
+            document.getElementById('minuteInput').value = '';
+            return;
+        }
+
+        let [h, m] = timeStr.split(':').map(Number);
+        let ampm = h >= 12 ? 'PM' : 'AM';
+        
+        if (h > 12) h -= 12;
+        if (h === 0) h = 12;
+
+        document.getElementById('ampmInput').value = ampm;
+        document.getElementById('hourInput').value = h;
+        document.getElementById('minuteInput').value = m;
+    }
+
+    // 마감일까지 남은 D-day 계산 (날짜 기준)
+    function getDDay(dueDate) {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const [y, mo, d] = dueDate.split('-').map(Number);
+        const due = new Date(y, mo - 1, d);
+        const diff = Math.round((due - today) / 86400000);
+        let label;
+        if (diff === 0) label = 'D-day';
+        else if (diff > 0) label = 'D-' + diff;
+        else label = 'D+' + Math.abs(diff);
+        return { diff, label };
+    }
+
+    // D-day 임박도에 따른 색상
+    function ddayColor(diff) {
+        if (diff < 0) return '#e03131';   // 지남
+        if (diff === 0) return '#f03e3e'; // 당일
+        if (diff <= 3) return '#f59f00';  // 임박
+        return '#1c7ed6';                 // 여유
+    }
+
+    // 카테고리 정렬 우선순위: 보이스튜닝 > 보티즈 > 머니 > 일반
+    const CAT_ORDER = { vt: 0, botiz: 1, money: 2, general: 3 };
+    const catRank = t => (CAT_ORDER[t.category] !== undefined ? CAT_ORDER[t.category] : 99);
+
+    // 일정 타입(단기/장기)에 따른 입력 필드 표시 전환
+    function applyScheduleTypeUI(type) {
+        const isLong = type === 'long';
+        document.getElementById('shortFields').style.display = isLong ? 'none' : 'flex';
+        document.getElementById('longFields').style.display = isLong ? 'flex' : 'none';
+    }
+
+    document.getElementById('scheduleTypeInput').addEventListener('change', (e) => {
+        applyScheduleTypeUI(e.target.value);
+    });
+
+    // 로컬 기준 오늘 날짜(YYYY-MM-DD)
+    function todayStr() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    document.getElementById('todayBtnShort').addEventListener('click', () => {
+        document.getElementById('dateInput').value = todayStr();
+    });
+
+    window.setFilter = function(filter) {
+        currentFilter = filter;
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`.filter-btn[data-filter="${filter}"]`).classList.add('active');
+        renderTasks(window.allTasks || []);
+    };
+
+    window.togglePin = async function(event, id, currentStatus) {
+        event.stopPropagation(); 
+        try {
+            const taskRef = doc(db, TASKS_COLLECTION, id);
+            await updateDoc(taskRef, { isPinned: !currentStatus });
+        } catch (e) { console.error("핀 토글 실패:", e); }
+    };
+
+    window.toggleComplete = async function(taskId, currentStatus) {
+        try {
+            const newStatus = !currentStatus;
+            await updateDoc(doc(db, TASKS_COLLECTION, taskId), {
+                isCompleted: newStatus,
+                completedAt: newStatus ? Date.now() : null
+            });
+        } catch (e) { console.error("완료 토글 실패:", e); }
+    };
+
+    document.getElementById('add-btn').addEventListener('click', addTask);
+    document.getElementById('update-btn').addEventListener('click', updateTaskAction);
+    document.getElementById('delete-btn').addEventListener('click', deleteTaskAction);
+    document.getElementById('complete-btn').addEventListener('click', completeTaskAction);
+    document.getElementById('cancel-btn').addEventListener('click', resetForm);
+
+    const q = collection(db, TASKS_COLLECTION);
+    onSnapshot(q, (snapshot) => {
+        const tasks = [];
+        snapshot.forEach((doc) => {
+            tasks.push({ id: doc.id, ...doc.data() });
+        });
+        window.allTasks = tasks;
+        renderTasks(tasks);
+    });
+
+    cleanUpOldTasks();
+
+    async function addTask() {
+        const text = document.getElementById('taskInput').value;
+        const scheduleType = document.getElementById('scheduleTypeInput').value;
+        const category = document.getElementById('categoryInput').value;
+        const isImportant = document.getElementById('impCheck').checked;
+        const isRepeat = document.getElementById('repeatCheck').checked;
+        const isPinned = document.getElementById('pinCheck').checked;
+        const memo = document.getElementById('memoInput').value;
+
+        if (text.trim() === '') return alert('내용을 입력해주세요.');
+
+        const isLong = scheduleType === 'long';
+        // 장기 플랜의 마감일은 선택 입력 (없어도 등록 가능)
+        const dueDate = isLong ? document.getElementById('dueDateInput').value : '';
+        const targetDate = isLong ? '' : document.getElementById('dateInput').value;
+        const targetTime = isLong ? '' : formatTimeInput();
+
+        try {
+            await addDoc(collection(db, TASKS_COLLECTION), {
+                text, category, scheduleType, dueDate, isImportant, isRepeat, isPinned, memo, targetDate, targetTime,
+                isCompleted: false, createdAt: Date.now(), completedAt: null
+            });
+            resetForm();
+        } catch (e) { console.error("Error adding: ", e); }
+    }
+
+    window.openEditMode = function(taskObj) {
+        const task = JSON.parse(decodeURIComponent(taskObj));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        const scheduleType = task.scheduleType === 'long' ? 'long' : 'short';
+        document.getElementById('taskInput').value = task.text;
+        document.getElementById('scheduleTypeInput').value = scheduleType;
+        document.getElementById('dueDateInput').value = task.dueDate || '';
+        applyScheduleTypeUI(scheduleType);
+        document.getElementById('dateInput').value = task.targetDate || '';
+        setTimeInput(task.targetTime);
+        document.getElementById('categoryInput').value = task.category || 'general';
+        document.getElementById('memoInput').value = task.memo || "";
+        document.getElementById('impCheck').checked = !!task.isImportant;
+        document.getElementById('repeatCheck').checked = !!task.isRepeat;
+        document.getElementById('pinCheck').checked = !!task.isPinned;
+
+        document.getElementById('add-mode-area').style.display = 'none';
+        document.getElementById('edit-mode-area').style.display = 'flex';
+        
+        const completeBtn = document.getElementById('complete-btn');
+        completeBtn.innerText = task.isCompleted ? '미완료로 복구' : '완료 처리(✔)';
+        completeBtn.style.backgroundColor = task.isCompleted ? '#fab005' : '#40c057';
+
+        isEditing = true;
+        currentEditId = task.id;
+        window.currentTaskCompleted = task.isCompleted;
+    }
+
+    async function updateTaskAction() {
+        if (!isEditing || !currentEditId) return;
+        const text = document.getElementById('taskInput').value;
+        const scheduleType = document.getElementById('scheduleTypeInput').value;
+        const category = document.getElementById('categoryInput').value;
+        const isImportant = document.getElementById('impCheck').checked;
+        const isRepeat = document.getElementById('repeatCheck').checked;
+        const isPinned = document.getElementById('pinCheck').checked;
+        const memo = document.getElementById('memoInput').value;
+
+        const isLong = scheduleType === 'long';
+        // 장기 플랜의 마감일은 선택 입력 (없어도 저장 가능)
+        const dueDate = isLong ? document.getElementById('dueDateInput').value : '';
+        const targetDate = isLong ? '' : document.getElementById('dateInput').value;
+        const targetTime = isLong ? '' : formatTimeInput();
+
+        try {
+            const taskRef = doc(db, TASKS_COLLECTION, currentEditId);
+            await updateDoc(taskRef, { text, category, scheduleType, dueDate, isImportant, isRepeat, isPinned, memo, targetDate, targetTime });
+            resetForm();
+        } catch (e) { console.error(e); alert("수정 실패"); }
+    }
+
+    async function deleteTaskAction() {
+        if (!isEditing || !currentEditId) return;
+        if(confirm("정말로 삭제하시겠습니까?")) {
+            try { await deleteDoc(doc(db, TASKS_COLLECTION, currentEditId)); resetForm(); } catch (e) { console.error(e); }
+        }
+    }
+
+    async function completeTaskAction() {
+        if (!isEditing || !currentEditId) return;
+        const newStatus = !window.currentTaskCompleted;
+        const taskRef = doc(db, TASKS_COLLECTION, currentEditId);
+        try { await updateDoc(taskRef, { isCompleted: newStatus, completedAt: newStatus ? Date.now() : null }); resetForm(); } catch (e) { console.error(e); }
+    }
+
+    function resetForm() {
+        document.getElementById('taskInput').value = '';
+        document.getElementById('memoInput').value = '';
+        document.getElementById('dateInput').value = '';
+        document.getElementById('dueDateInput').value = '';
+        document.getElementById('scheduleTypeInput').value = 'short';
+        applyScheduleTypeUI('short');
+
+        document.getElementById('ampmInput').value = 'PM';
+        document.getElementById('hourInput').value = '';
+        document.getElementById('minuteInput').value = '';
+        
+        document.getElementById('categoryInput').value = 'general';
+        document.getElementById('impCheck').checked = false;
+        document.getElementById('repeatCheck').checked = false;
+        document.getElementById('pinCheck').checked = false;
+
+        document.getElementById('add-mode-area').style.display = 'flex';
+        document.getElementById('edit-mode-area').style.display = 'none';
+
+        isEditing = false;
+        currentEditId = null;
+    }
+
+    function renderTasks(tasks) {
+        // 일정 타입으로 분리 (타입 없는 기존 데이터는 '단기'로 취급)
+        const shortTasks = [];
+        const longTasks = [];
+        tasks.forEach(t => {
+            if (t.scheduleType === 'long') longTasks.push(t);
+            else shortTasks.push(t);
+        });
+
+        renderLongSection(longTasks);
+
+        const list = document.getElementById('taskList');
+        list.innerHTML = '';
+
+        // 마감 임박(D-3 이내, 미완료) 장기일정을 오늘 목록 상단에 노출
+        const imminent = longTasks
+            .filter(t => !t.isCompleted && t.dueDate && getDDay(t.dueDate).diff <= 3)
+            .sort((a, b) => getDDay(a.dueDate).diff - getDDay(b.dueDate).diff);
+        imminent.forEach(task => list.appendChild(createTaskItem(task, '⏰', true)));
+
+        let filteredTasks = shortTasks.filter(task => {
+            if (currentFilter === 'all') return true;
+            if (currentFilter === 'important') return !!task.isImportant || !!task.isPinned;
+            return (task.category || 'general') === currentFilter;
+        });
+
+        filteredTasks.sort((a, b) => {
+            // 완료는 하단으로
+            if (!!a.isCompleted !== !!b.isCompleted) return a.isCompleted ? 1 : -1;
+
+            // 속성(고정/날짜/우선)이 있는 항목은 상단, 아무것도 없는 항목은 하단
+            const aAttr = !!a.isPinned || !!a.targetDate || !!a.isImportant;
+            const bAttr = !!b.isPinned || !!b.targetDate || !!b.isImportant;
+            if (aAttr !== bAttr) return aAttr ? -1 : 1;
+
+            if (aAttr && bAttr) {
+                // 1) 고정
+                if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
+                // 2) 날짜 (있는 것 먼저, 빠른 날짜·시간 순)
+                const aHasDate = !!a.targetDate, bHasDate = !!b.targetDate;
+                if (aHasDate !== bHasDate) return aHasDate ? -1 : 1;
+                if (aHasDate && bHasDate) {
+                    const ad = a.targetDate + (a.targetTime || ''), bd = b.targetDate + (b.targetTime || '');
+                    if (ad !== bd) return ad < bd ? -1 : 1;
+                }
+                // 3) 우선(중요)
+                if (!!a.isImportant !== !!b.isImportant) return a.isImportant ? -1 : 1;
+                // 동순위는 카테고리 순
+                return catRank(a) - catRank(b);
+            }
+
+            // 아무 선택 없는 항목: 카테고리 순 (보이스튜닝 > 보티즈 > 머니 > 일반)
+            return catRank(a) - catRank(b);
+        });
+
+        const totalCount = filteredTasks.length;
+        filteredTasks.forEach((task, index) => {
+            list.appendChild(createTaskItem(task, totalCount - index, false));
+        });
+
+        const shortActive = filteredTasks.filter(t => !t.isCompleted).length;
+        document.getElementById('shortCount').textContent = shortActive ? `(${shortActive})` : '';
+
+        if (imminent.length === 0 && filteredTasks.length === 0) {
+            list.innerHTML = '<div class="empty-msg">할 일이 없습니다.</div>';
+        }
+    }
+
+    // 장기 플랜 렌더링 (마감일 있는 항목이 가까운 순으로 먼저, 완료는 하단)
+    function renderLongSection(longTasks) {
+        const list = document.getElementById('longList');
+        list.innerHTML = '';
+
+        if (!longTasks.length) {
+            document.getElementById('longCount').textContent = '';
+            list.innerHTML = '<div class="empty-msg">아직 장기 플랜이 없어요.<br>등록 시 "🌱 장기(플랜)"을 선택해 추가하세요.</div>';
+            return;
+        }
+
+        const sorted = longTasks.slice().sort((a, b) => {
+            // 완료 항목은 하단으로
+            if (!!a.isCompleted !== !!b.isCompleted) return a.isCompleted ? 1 : -1;
+            // 카테고리 순서 (vt > botiz > money > general)
+            const ca = catRank(a), cb = catRank(b);
+            if (ca !== cb) return ca - cb;
+            // 같은 카테고리 내에서 '우선'(중요) 항목을 상단으로
+            if (!!a.isImportant !== !!b.isImportant) return a.isImportant ? -1 : 1;
+            // 마감일 있는 항목을 먼저(가까운 순), 없는 항목은 뒤로
+            const aHas = !!a.dueDate, bHas = !!b.dueDate;
+            if (aHas !== bHas) return aHas ? -1 : 1;
+            if (aHas && bHas) return a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0;
+            // 둘 다 마감일 없으면 최근 등록순
+            return (b.createdAt || 0) - (a.createdAt || 0);
+        });
+
+        const activeCount = sorted.filter(t => !t.isCompleted).length;
+        document.getElementById('longCount').textContent = activeCount ? `(${activeCount})` : '';
+
+        sorted.forEach((task, index) => {
+            list.appendChild(createTaskItem(task, index + 1, false));
+        });
+    }
+
+    // 뱃지 영역(날짜/시간/마감일/D-day/반복) 생성
+    function buildTypeHtml(task) {
+        let typeHtml = '';
+        if (task.scheduleType === 'long') {
+            if (task.dueDate) {
+                const dueShort = task.dueDate.substring(5).replace('-', '/');
+                typeHtml += `<span class="badge type-due">📅 ${dueShort}</span>`;
+                const dd = getDDay(task.dueDate);
+                typeHtml += `<span class="badge dday" style="background-color:${ddayColor(dd.diff)}">${dd.label}</span>`;
+            }
+        } else if (task.targetDate) {
+            const dateShort = task.targetDate.substring(5).replace('-', '/');
+            const dd = getDDay(task.targetDate);
+            if (dd.diff === 0) {
+                // 오늘 마감
+                typeHtml += `<span class="badge" style="background-color:#f76707;">오늘</span>`;
+            } else if (dd.diff < 0 && !task.isCompleted) {
+                // 처리 안 된 지난 일정: 날짜 + D+n
+                typeHtml += `<span class="badge type-date">${dateShort}</span>`;
+                typeHtml += `<span class="badge" style="background-color:#e03131;">${dd.label}</span>`;
+            } else {
+                typeHtml += `<span class="badge type-date">${dateShort}</span>`;
+            }
+
+            if (task.targetTime) {
+                let [h, m] = task.targetTime.split(':').map(Number);
+                let ampm = h >= 12 ? 'PM' : 'AM';
+                if (h > 12) h -= 12;
+                if (h === 0) h = 12;
+                const timeShort = `${ampm} ${h}:${m.toString().padStart(2,'0')}`;
+                typeHtml += `<span class="badge type-time">${timeShort}</span>`;
+            }
+        }
+        if (task.isRepeat) {
+            typeHtml += `<span class="badge type-repeat">🔄 반복</span>`;
+        }
+        return typeHtml;
+    }
+
+    // 개별 항목(li) 생성 — 오늘 목록/장기 섹션 공통 사용
+    // numLabel: 순번 또는 '⏰' 같은 표시, isImminent: 마감임박 강조 여부
+    function createTaskItem(task, numLabel, isImminent) {
+            const li = document.createElement('li');
+            if (task.isCompleted) li.classList.add('completed');
+            if (task.isPinned) li.classList.add('pinned');
+            if (isImminent) li.classList.add('imminent');
+            li.setAttribute('data-completed', task.isCompleted ? 'true' : 'false');
+
+            const catLabels = { 'vt': 'VT', 'botiz': '보티즈', 'money': '머니', 'general': '일반' };
+            const catKey = task.category || 'general';
+
+            const typeHtml = buildTypeHtml(task);
+
+            const impHtml = task.isImportant ? '<span class="badge" style="background-color:#f59f00;">⭐ 우선</span>' : '';
+            const imminentHtml = isImminent ? '<span class="imp-icon" style="color:#f76707;">⏰ 마감임박</span>' : '';
+
+            let memoHtml = '';
+            if (task.memo) {
+                const onelineMemo = task.memo.replace(/\n/g, " / ");
+                memoHtml = `<div class="task-memo">└ ${onelineMemo}</div>`;
+            }
+
+            let statusMsg = '';
+            if (task.isCompleted && task.completedAt) {
+                const deleteTime = task.completedAt + (36 * 60 * 60 * 1000);
+                const delDate = new Date(deleteTime);
+                const month = delDate.getMonth() + 1;
+                const day = delDate.getDate();
+                const hours = delDate.getHours().toString().padStart(2, '0');
+                const minutes = delDate.getMinutes().toString().padStart(2, '0');
+                statusMsg = `<span style="font-size:11px; color:#aaa; margin-left:auto;">(${month}/${day} ${hours}:${minutes} 삭제)</span>`;
+            }
+
+            const pinBtnClass = task.isPinned ? 'inline-pin-btn active' : 'inline-pin-btn';
+            const pinIcon = '📌';
+
+            const taskStr = encodeURIComponent(JSON.stringify(task));
+
+            const swipeBg = document.createElement('div');
+            swipeBg.className = 'swipe-bg';
+
+            function syncSwipeBgFromLi() {
+                const completed = li.getAttribute('data-completed') === 'true';
+                swipeBg.style.backgroundColor = completed ? '#fab005' : '#40c057';
+                swipeBg.textContent = completed ? '↩ 복구' : '✔ 완료';
+            }
+            syncSwipeBgFromLi();
+
+            const swipeContent = document.createElement('div');
+            swipeContent.className = 'swipe-content';
+            swipeContent.innerHTML = `
+                <div class="row-num">${numLabel}</div>
+                <div class="content-area">
+                    <div class="badges">
+                        <span class="badge cat-${catKey}">${catLabels[catKey] || catKey}</span>
+                        ${typeHtml}
+                        ${imminentHtml}
+                        ${impHtml}
+                        ${statusMsg}
+                    </div>
+                    <div class="task-line">
+                        <div class="task-text">${task.text}</div>
+                        <button class="${pinBtnClass}" onclick="togglePin(event, '${task.id}', ${task.isPinned})">${pinIcon}</button>
+                    </div>
+                    ${memoHtml}
+                </div>
+            `;
+
+            li.appendChild(swipeBg);
+            li.appendChild(swipeContent);
+
+            const SWIPE_COMMIT_PX = 80;
+            const TAP_SLOP_PX = 12;
+            let startX = 0;
+            let startY = 0;
+            let maxAbsDx = 0;
+            let maxRightDx = 0;
+            let dragging = false;
+
+            function setTranslateX(px) {
+                swipeContent.style.transform = `translateX(${px}px)`;
+            }
+
+            function resetPosition(animated) {
+                if (animated) {
+                    swipeContent.classList.remove('swipe-no-transition');
+                } else {
+                    swipeContent.classList.add('swipe-no-transition');
+                }
+                setTranslateX(0);
+            }
+
+            swipeContent.addEventListener('click', (e) => {
+                if (swipeContent.dataset.suppressClick === '1') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    delete swipeContent.dataset.suppressClick;
+                    return;
+                }
+                openEditMode(taskStr);
+            });
+
+            function onPointerDown(e) {
+                if (e.button !== undefined && e.button !== 0) return;
+                if (e.target.closest && e.target.closest('.inline-pin-btn')) return;
+                syncSwipeBgFromLi();
+                startX = e.clientX;
+                startY = e.clientY;
+                maxAbsDx = 0;
+                maxRightDx = 0;
+                dragging = true;
+                swipeContent.classList.add('swipe-no-transition');
+                try { swipeContent.setPointerCapture(e.pointerId); } catch (_) {}
+            }
+
+            function onPointerMove(e) {
+                if (!dragging) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                maxAbsDx = Math.max(maxAbsDx, Math.abs(dx));
+                maxRightDx = Math.max(maxRightDx, dx);
+                if (dx > 0) {
+                    setTranslateX(dx);
+                } else {
+                    setTranslateX(0);
+                }
+            }
+
+            function onPointerUp(e) {
+                if (!dragging) return;
+                dragging = false;
+                try { swipeContent.releasePointerCapture(e.pointerId); } catch (_) {}
+
+                const committed = maxRightDx >= SWIPE_COMMIT_PX;
+                if (committed) {
+                    swipeContent.dataset.suppressClick = '1';
+                    window.toggleComplete(task.id, !!task.isCompleted);
+                    resetPosition(true);
+                } else {
+                    resetPosition(true);
+                    if (maxAbsDx > TAP_SLOP_PX) {
+                        swipeContent.dataset.suppressClick = '1';
+                    }
+                }
+            }
+
+            function onPointerCancel(e) {
+                if (!dragging) return;
+                dragging = false;
+                try { swipeContent.releasePointerCapture(e.pointerId); } catch (_) {}
+                resetPosition(true);
+                if (maxAbsDx > TAP_SLOP_PX) swipeContent.dataset.suppressClick = '1';
+            }
+
+            swipeContent.addEventListener('pointerdown', onPointerDown);
+            swipeContent.addEventListener('pointermove', onPointerMove);
+            swipeContent.addEventListener('pointerup', onPointerUp);
+            swipeContent.addEventListener('pointercancel', onPointerCancel);
+
+            return li;
+    }
+
+    async function cleanUpOldTasks() {
+        const threshold = Date.now() - (36 * 60 * 60 * 1000);
+        const q = query(
+            collection(db, TASKS_COLLECTION), 
+            where("isCompleted", "==", true), 
+            where("completedAt", "<=", threshold)
+        );
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach(async (docSnapshot) => {
+            await deleteDoc(doc(db, TASKS_COLLECTION, docSnapshot.id));
+        });
+    }
+    
+    window.openEditMode = openEditMode;
+</script>
+
+</body>
+</html>
