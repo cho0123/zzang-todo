@@ -175,6 +175,113 @@
 
         /* 장기 전용 필드(마감일) */
         #longFields { align-items: center; }
+
+        /* ===================== After10 (일지) ===================== */
+        /* 포인트 컬러: #364fc7 (남색) — 기존 팔레트와 겹치지 않음 */
+
+        /* 상단 탭 (ToDo / After10) */
+        .tab-group { display: flex; gap: 8px; justify-content: center; margin-bottom: 22px; }
+        .tab-btn {
+            padding: 11px 24px; border-radius: 22px; font-size: 14px; font-weight: 700;
+            background: #f1f3f5; color: #868e96; border: 1px solid #dee2e6;
+            cursor: pointer; flex: none; white-space: nowrap; transition: 0.2s;
+        }
+        .tab-btn:hover { background: #e9ecef; }
+        .tab-btn.active { background: #364fc7; color: #fff; border-color: #364fc7; }
+
+        /* After10 내부 뷰 전환 버튼 */
+        .a10-viewtabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+        .a10-viewbtn {
+            padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 700;
+            background: #f1f3f5; color: #868e96; border: 1px solid #dee2e6;
+            cursor: pointer; flex: none; white-space: nowrap; transition: 0.2s;
+        }
+        .a10-viewbtn:hover { background: #e9ecef; }
+        .a10-viewbtn.active { background: #364fc7; color: #fff; border-color: #364fc7; }
+
+        /* 뷰1: 오늘 쓰기 */
+        .a10-concept { font-size: 12px; color: #adb5bd; text-align: center; letter-spacing: -0.3px; margin-bottom: 6px; }
+        .a10-date { font-size: 20px; font-weight: 800; color: #364fc7; text-align: center; letter-spacing: -0.5px; margin-bottom: 16px; }
+        .a10-editing-note { font-size: 12px; font-weight: 700; color: #f76707; text-align: center; margin: -10px 0 14px; }
+        #a10Content {
+            width: 100%; min-height: 260px; padding: 16px;
+            border: 1px solid #e1e4e8; border-radius: 8px; box-sizing: border-box;
+            font-family: inherit; font-size: 15px; line-height: 1.7; color: #333;
+            background: #fff; resize: vertical;
+        }
+        #a10Content:focus { outline: none; border-color: #364fc7; }
+        .a10-btnrow { display: flex; gap: 8px; margin-top: 12px; }
+        .a10-save-btn { background-color: #364fc7; flex: 1; }
+        .a10-save-btn.saved { background-color: #40c057; }
+        .a10-sub-btn { background-color: #868e96; flex: none; padding: 12px 16px; }
+
+        /* 기록할 날짜 선택 */
+        .a10-datepick { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; }
+        .a10-datepick input[type="date"] { flex: 0 1 190px; text-align: center; }
+
+        /* 최근 기록 (쓰기 뷰 하단) */
+        .a10-recent { margin-top: 32px; padding-top: 22px; border-top: 1px solid #e1e4e8; }
+        .a10-recent-title {
+            font-size: 14px; font-weight: 800; color: #495057; letter-spacing: -0.5px;
+            display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
+        }
+        .a10-recent-count { font-size: 12px; font-weight: 600; color: #adb5bd; }
+        .a10-card-compact { padding: 12px 14px; }
+        .a10-card.current { border-color: #364fc7; background: #edf2ff; }
+        .a10-card-body.clamp {
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+        }
+
+        /* 리스트 서브타이틀 (+10년 뒤 짱구에게) */
+        .a10-card-sub { font-size: 11px; font-weight: 700; color: #364fc7; margin-bottom: 8px; }
+
+        /* 뷰2: 전체 타임라인 — 연/월 접이식 */
+        .a10-caret { font-size: 11px; width: 10px; flex: none; }
+        .a10-cnt { margin-left: auto; font-size: 11px; font-weight: 700; }
+
+        .a10-year-block { margin-bottom: 10px; }
+        .a10-year-head {
+            display: flex; align-items: center; gap: 8px; cursor: pointer;
+            padding: 12px 14px; border-radius: 8px;
+            background: #f8f9fa; border: 1px solid #e1e4e8; transition: 0.15s;
+        }
+        .a10-year-head:hover { background: #edf2ff; border-color: #364fc7; }
+        .a10-year-head.open { background: #364fc7; border-color: #364fc7; color: #fff; }
+        .a10-year-label { font-size: 16px; font-weight: 800; letter-spacing: -0.5px; }
+        .a10-year-head .a10-cnt { color: #adb5bd; }
+        .a10-year-head.open .a10-cnt { color: #fff; opacity: 0.8; }
+        .a10-year-body { padding: 10px 0 4px 10px; }
+
+        .a10-month-block { margin-bottom: 8px; }
+        .a10-month-head {
+            display: flex; align-items: center; gap: 8px; cursor: pointer;
+            padding: 9px 12px; border-radius: 6px;
+            background: #fff; border: 1px solid #e1e4e8;
+            font-size: 13px; font-weight: 800; color: #495057; transition: 0.15s;
+        }
+        .a10-month-head:hover { border-color: #364fc7; color: #364fc7; }
+        .a10-month-head.open { background: #f8f9ff; border-color: #a5b4e8; color: #364fc7; }
+        .a10-month-head .a10-cnt { color: #adb5bd; }
+        .a10-month-body { margin-left: 6px; padding: 10px 0 6px 8px; border-left: 2px solid #e1e4e8; }
+        .a10-card {
+            background: #fff; border: 1px solid #e1e4e8; border-radius: 8px;
+            padding: 14px 16px; margin-bottom: 10px; cursor: pointer; transition: 0.15s;
+        }
+        .a10-card:hover { border-color: #364fc7; background: #f8f9fa; }
+        .a10-card-date { font-size: 12px; font-weight: 800; color: #868e96; margin-bottom: 6px; }
+        .a10-card-body { font-size: 14px; color: #333; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+
+        /* 뷰3: 과거의 오늘 */
+        .a10-past-card {
+            background: #fff; border: 1px solid #e1e4e8; border-left: 4px solid #364fc7;
+            border-radius: 8px; padding: 18px; margin-bottom: 12px;
+        }
+        .a10-past-year { font-size: 18px; font-weight: 800; color: #364fc7; letter-spacing: -0.5px; margin-bottom: 10px; }
+        .a10-hint {
+            text-align: center; color: #adb5bd; font-size: 13px; line-height: 1.7;
+            padding: 18px 12px; border: 1px dashed #dee2e6; border-radius: 8px; margin-top: 4px;
+        }
+        .a10-empty { text-align: center; color: #adb5bd; font-size: 13px; line-height: 1.7; padding: 40px 10px; }
     </style>
 </head>
 <body>
@@ -182,7 +289,16 @@
 <div class="container">
     <h2>⚡ 짱구 Manager</h2>
     <div class="sub-title">오늘도 화이팅!</div>
-    
+
+    <!-- 상단 탭 -->
+    <div class="tab-group">
+        <button class="tab-btn active" data-tab="todo" onclick="switchTab('todo')">📋 ToDo</button>
+        <button class="tab-btn" data-tab="after10" onclick="switchTab('after10')">⏳ After10</button>
+    </div>
+
+<!-- ===== ToDo 탭 (기존 화면 전체) ===== -->
+<div id="todoTab">
+
     <div class="input-group">
         <input type="text" id="taskInput" placeholder="할 일을 입력하세요">
 
@@ -276,11 +392,62 @@
             <ul id="longList"></ul>
         </div>
     </div>
+
+</div>
+<!-- ===== /ToDo 탭 ===== -->
+
+<!-- ===== After10 탭 (일지) ===== -->
+<div id="after10Tab" style="display:none">
+
+    <div class="a10-viewtabs">
+        <button class="a10-viewbtn active" data-view="write" onclick="switchAfter10View('write')">✍️ 오늘 쓰기</button>
+        <button class="a10-viewbtn" data-view="timeline" onclick="switchAfter10View('timeline')">📜 전체 타임라인</button>
+        <button class="a10-viewbtn" data-view="past" onclick="switchAfter10View('past')">🗓️ 과거의 오늘</button>
+    </div>
+
+    <!-- 뷰 1: 오늘 쓰기 -->
+    <div id="a10ViewWrite">
+        <div class="a10-concept">10년 뒤 나를 위해 쓰는 기록</div>
+
+        <!-- 기록할 날짜 선택 (기본: 오늘) -->
+        <div class="a10-datepick">
+            <input type="date" id="a10DateInput">
+            <button type="button" class="today-btn" id="a10TodayPickBtn">오늘</button>
+        </div>
+
+        <div class="a10-date" id="a10WriteDate"></div>
+        <div class="a10-editing-note" id="a10EditingNote" style="display:none"></div>
+
+        <textarea id="a10Content" placeholder="오늘 하루를 기록해보세요."></textarea>
+        <div class="a10-btnrow">
+            <button id="a10SaveBtn" class="a10-save-btn">저장하기</button>
+        </div>
+
+        <!-- 최근 기록 10개 -->
+        <div class="a10-recent">
+            <div class="a10-recent-title">📜 최근 기록 <span class="a10-recent-count" id="a10RecentCount"></span></div>
+            <div id="a10Recent"></div>
+        </div>
+    </div>
+
+    <!-- 뷰 2: 전체 타임라인 -->
+    <div id="a10ViewTimeline" style="display:none">
+        <div id="a10Timeline"></div>
+    </div>
+
+    <!-- 뷰 3: 과거의 오늘 -->
+    <div id="a10ViewPast" style="display:none">
+        <div id="a10Past"></div>
+    </div>
+
+</div>
+<!-- ===== /After10 탭 ===== -->
+
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, onSnapshot, updateDoc, doc, deleteDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, onSnapshot, updateDoc, doc, deleteDoc, query, where, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     // Firebase 설정
     const firebaseConfig = {
@@ -856,6 +1023,316 @@
     }
     
     window.openEditMode = openEditMode;
+
+    /* ===================== After10 (일지) =====================
+       기존 tasks 로직과 완전히 독립.
+       - 별도 컬렉션 "diary", 문서 ID = YYYY-MM-DD
+       - onSnapshot 미사용: 탭 진입 시 / 저장 후에만 getDocs로 조회
+    ========================================================== */
+    const DIARY_COLLECTION = "diary";
+    const A10_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+    let a10Entries = [];       // 불러온 일지 문서들
+    let a10CurrentDate = null; // 현재 작성/수정 중인 날짜(YYYY-MM-DD)
+
+    function a10ParseDate(s) {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d);
+    }
+    // 2026년 7월 18일 토요일
+    function a10KoreanFull(s) {
+        const d = a10ParseDate(s);
+        return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${A10_DAYS[d.getDay()]}요일`;
+    }
+    // 7월 18일 (토)
+    function a10KoreanShort(s) {
+        const d = a10ParseDate(s);
+        return `${d.getMonth() + 1}월 ${d.getDate()}일 (${A10_DAYS[d.getDay()]})`;
+    }
+    // 해당 날짜의 10년 뒤 Date
+    function a10Plus10(s) {
+        const d = a10ParseDate(s);
+        return new Date(d.getFullYear() + 10, d.getMonth(), d.getDate());
+    }
+    // 생년월일 (만 나이 계산 기준)
+    const A10_BIRTH = { y: 1978, m: 1, d: 23 };
+    // 해당 시점의 만 나이 (생일 지났으면 +1)
+    function a10AgeAt(dateObj) {
+        let age = dateObj.getFullYear() - A10_BIRTH.y;
+        const m = dateObj.getMonth() + 1;
+        const d = dateObj.getDate();
+        if (m < A10_BIRTH.m || (m === A10_BIRTH.m && d < A10_BIRTH.d)) age--;
+        return age;
+    }
+    // 제목용: 2036년 7월 19일 토요일 58살 짱구에게..
+    function a10FutureTitle(s) {
+        const f = a10Plus10(s);
+        return `${f.getFullYear()}년 ${f.getMonth() + 1}월 ${f.getDate()}일 ${A10_DAYS[f.getDay()]}요일 ${a10AgeAt(f)}살 짱구에게..`;
+    }
+    // 리스트 서브타이틀용: 2036년 7월 19일 58살 짱구에게
+    function a10FutureSub(s) {
+        const f = a10Plus10(s);
+        return `${f.getFullYear()}년 ${f.getMonth() + 1}월 ${f.getDate()}일 ${a10AgeAt(f)}살 짱구에게`;
+    }
+    function a10Escape(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function a10FindEntry(dateStr) {
+        return a10Entries.find(e => e.id === dateStr) || null;
+    }
+
+    // 상단 탭 전환 (기본: todo)
+    window.switchTab = function(tab) {
+        document.getElementById('todoTab').style.display = (tab === 'todo') ? 'block' : 'none';
+        document.getElementById('after10Tab').style.display = (tab === 'after10') ? 'block' : 'none';
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.tab === tab);
+        });
+        if (tab === 'after10') a10LoadEntries();
+    };
+
+    // After10 내부 뷰 전환
+    window.switchAfter10View = function(view) {
+        const views = { write: 'a10ViewWrite', timeline: 'a10ViewTimeline', past: 'a10ViewPast' };
+        Object.keys(views).forEach(k => {
+            document.getElementById(views[k]).style.display = (k === view) ? 'block' : 'none';
+        });
+        document.querySelectorAll('.a10-viewbtn').forEach(b => {
+            b.classList.toggle('active', b.dataset.view === view);
+        });
+        if (view === 'timeline') a10RenderTimeline();
+        if (view === 'past') a10RenderPast();
+    };
+
+    // Firestore에서 일지 전체 조회 (구독 아님)
+    async function a10FetchEntries() {
+        const snap = await getDocs(collection(db, DIARY_COLLECTION));
+        a10Entries = [];
+        snap.forEach(d => a10Entries.push({ id: d.id, ...d.data() }));
+    }
+
+    // 탭 진입 시: 조회 후 현재 뷰 갱신
+    async function a10LoadEntries() {
+        try {
+            await a10FetchEntries();
+            a10FillWriteForm(a10CurrentDate || todayStr());
+            if (document.getElementById('a10ViewTimeline').style.display !== 'none') a10RenderTimeline();
+            if (document.getElementById('a10ViewPast').style.display !== 'none') a10RenderPast();
+        } catch (e) {
+            console.error('일지 불러오기 실패:', e);
+        }
+    }
+
+    // 작성 폼에 특정 날짜 내용 채우기
+    function a10FillWriteForm(dateStr) {
+        a10CurrentDate = dateStr;
+        const entry = a10FindEntry(dateStr);
+        const isToday = dateStr === todayStr();
+
+        document.getElementById('a10DateInput').value = dateStr;
+        document.getElementById('a10WriteDate').textContent = a10FutureTitle(dateStr);
+        document.getElementById('a10Content').value = entry ? (entry.content || '') : '';
+
+        // 오늘이 아니면 어느 날짜의 기록인지 안내
+        const note = document.getElementById('a10EditingNote');
+        note.style.display = isToday ? 'none' : 'block';
+        note.textContent = isToday ? '' : `${a10KoreanFull(dateStr)}의 기록입니다.`;
+
+        const btn = document.getElementById('a10SaveBtn');
+        btn.classList.remove('saved');
+        btn.disabled = false;
+        btn.textContent = entry ? '수정 저장' : '저장하기';
+
+        a10RenderRecent();
+    }
+
+    // 쓰기 뷰 하단: 최근 기록 10개 (최신순)
+    function a10RenderRecent() {
+        const wrap = document.getElementById('a10Recent');
+        const countEl = document.getElementById('a10RecentCount');
+
+        if (!a10Entries.length) {
+            countEl.textContent = '';
+            wrap.innerHTML = '<div class="a10-empty" style="padding:24px 10px;">아직 기록이 없습니다.</div>';
+            return;
+        }
+        const recent = a10Entries.slice()
+            .sort((a, b) => a.id < b.id ? 1 : a.id > b.id ? -1 : 0)
+            .slice(0, 10);
+
+        countEl.textContent = `(${recent.length}개)`;
+        wrap.innerHTML = recent.map(e => `
+            <div class="a10-card a10-card-compact${e.id === a10CurrentDate ? ' current' : ''}" onclick="a10EditDate('${e.id}')">
+                <div class="a10-card-date">${a10KoreanShort(e.id)}</div>
+                <div class="a10-card-sub">${a10FutureSub(e.id)}</div>
+                <div class="a10-card-body clamp">${a10Escape(e.content || '')}</div>
+            </div>`).join('');
+    }
+
+    // 저장 (setDoc merge — 기존 문서면 createdAt 보존, updatedAt만 갱신)
+    async function a10Save() {
+        const btn = document.getElementById('a10SaveBtn');
+        const content = document.getElementById('a10Content').value;
+        const dateStr = a10CurrentDate || todayStr();
+        const existing = a10FindEntry(dateStr);
+        const now = Date.now();
+
+        const payload = {
+            date: dateStr,
+            monthDay: dateStr.substring(5),
+            content,
+            updatedAt: now
+        };
+        if (!existing) payload.createdAt = now;
+
+        try {
+            btn.disabled = true;
+            await setDoc(doc(db, DIARY_COLLECTION, dateStr), payload, { merge: true });
+            await a10FetchEntries(); // 저장 후 다시 불러오기
+            a10RenderRecent();       // 하단 최근 목록 즉시 반영
+
+            btn.textContent = '✓ 저장되었습니다';
+            btn.classList.add('saved');
+            setTimeout(() => a10FillWriteForm(a10CurrentDate), 1600);
+        } catch (e) {
+            console.error('일지 저장 실패:', e);
+            btn.textContent = '저장 실패 — 다시 시도해주세요';
+            setTimeout(() => a10FillWriteForm(a10CurrentDate), 1600);
+        }
+    }
+
+    // 뷰2: 전체 타임라인 (날짜 오름차순, 월 바뀔 때 구분선)
+    // 타임라인 펼침 상태 (기본: 올해 + 이번 달만 펼침)
+    let a10OpenYears = null;
+    let a10OpenMonths = null;
+    function a10InitTimelineState() {
+        if (a10OpenYears) return;
+        const t = todayStr();
+        a10OpenYears = new Set([t.substring(0, 4)]);
+        a10OpenMonths = new Set([t.substring(0, 7)]);
+    }
+    window.a10ToggleYear = function(y) {
+        a10InitTimelineState();
+        if (a10OpenYears.has(y)) a10OpenYears.delete(y); else a10OpenYears.add(y);
+        a10RenderTimeline();
+    };
+    window.a10ToggleMonth = function(ym) {
+        a10InitTimelineState();
+        if (a10OpenMonths.has(ym)) a10OpenMonths.delete(ym); else a10OpenMonths.add(ym);
+        a10RenderTimeline();
+    };
+
+    function a10RenderTimeline() {
+        const wrap = document.getElementById('a10Timeline');
+        if (!a10Entries.length) {
+            wrap.innerHTML = '<div class="a10-empty">아직 기록이 없습니다.<br>"✍️ 오늘 쓰기"에서 첫 기록을 남겨보세요.</div>';
+            return;
+        }
+        a10InitTimelineState();
+
+        // 최신순 정렬 후 연 → 월로 그룹핑 (Map이 삽입순서 유지 → 연/월도 최신순)
+        const sorted = a10Entries.slice().sort((a, b) => a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+        const years = new Map();
+        sorted.forEach(e => {
+            const y = e.id.substring(0, 4);
+            const ym = e.id.substring(0, 7);
+            if (!years.has(y)) years.set(y, new Map());
+            const months = years.get(y);
+            if (!months.has(ym)) months.set(ym, []);
+            months.get(ym).push(e);
+        });
+
+        let html = '';
+        years.forEach((months, y) => {
+            const yearCount = [...months.values()].reduce((s, arr) => s + arr.length, 0);
+            const yOpen = a10OpenYears.has(y);
+
+            html += `<div class="a10-year-block">
+                <div class="a10-year-head${yOpen ? ' open' : ''}" onclick="a10ToggleYear('${y}')">
+                    <span class="a10-caret">${yOpen ? '▾' : '▸'}</span>
+                    <span class="a10-year-label">${Number(y)}년</span>
+                    <span class="a10-cnt">${yearCount}개</span>
+                </div>`;
+
+            if (yOpen) {
+                html += `<div class="a10-year-body">`;
+                months.forEach((list, ym) => {
+                    const mOpen = a10OpenMonths.has(ym);
+                    html += `<div class="a10-month-block">
+                        <div class="a10-month-head${mOpen ? ' open' : ''}" onclick="a10ToggleMonth('${ym}')">
+                            <span class="a10-caret">${mOpen ? '▾' : '▸'}</span>
+                            <span>${Number(ym.substring(5))}월</span>
+                            <span class="a10-cnt">${list.length}개</span>
+                        </div>`;
+                    if (mOpen) {
+                        html += `<div class="a10-month-body">`;
+                        list.forEach(e => {
+                            html += `
+                                <div class="a10-card" onclick="a10EditDate('${e.id}')">
+                                    <div class="a10-card-date">${a10KoreanShort(e.id)}</div>
+                                    <div class="a10-card-sub">${a10FutureSub(e.id)}</div>
+                                    <div class="a10-card-body">${a10Escape(e.content || '')}</div>
+                                </div>`;
+                        });
+                        html += `</div>`;
+                    }
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            }
+            html += `</div>`;
+        });
+        wrap.innerHTML = html;
+    }
+
+    // 뷰3: 과거의 오늘 (monthDay 일치, 연도 내림차순)
+    function a10RenderPast() {
+        const wrap = document.getElementById('a10Past');
+        const today = todayStr();
+        const md = today.substring(5);
+
+        const list = a10Entries
+            .filter(e => (e.monthDay || e.id.substring(5)) === md)
+            .sort((a, b) => a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+
+        if (!list.length) {
+            wrap.innerHTML = `<div class="a10-empty">${a10KoreanShort(today)}에 남긴 기록이 아직 없습니다.<br>오늘 첫 기록을 남기면 내년부터 여기에 쌓입니다.</div>`;
+            return;
+        }
+
+        const thisYear = new Date().getFullYear();
+        let html = '';
+        list.forEach(e => {
+            const y = Number(e.id.substring(0, 4));
+            const label = (y === thisYear) ? `${y}년 — 오늘` : `${y}년`;
+            html += `
+                <div class="a10-past-card">
+                    <div class="a10-past-year">${label}</div>
+                    <div class="a10-card-body">${a10Escape(e.content || '')}</div>
+                </div>`;
+        });
+        if (list.length === 1) {
+            html += '<div class="a10-hint">내년 오늘, 이 아래에 기록이 하나 더 쌓입니다.</div>';
+        }
+        wrap.innerHTML = html;
+    }
+
+    // 타임라인 항목 클릭 → 해당 날짜를 작성 폼으로
+    window.a10EditDate = function(dateStr) {
+        a10FillWriteForm(dateStr);
+        window.switchAfter10View('write');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    document.getElementById('a10SaveBtn').addEventListener('click', a10Save);
+    document.getElementById('a10DateInput').addEventListener('change', (e) => {
+        if (e.target.value) a10FillWriteForm(e.target.value);
+    });
+    document.getElementById('a10TodayPickBtn').addEventListener('click', () => a10FillWriteForm(todayStr()));
+
+    // 초기 상태: ToDo 탭 / 오늘 날짜 표시 (데이터는 탭 진입 시 조회)
+    a10FillWriteForm(todayStr());
 </script>
 
 </body>
