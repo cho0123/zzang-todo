@@ -1,7 +1,7 @@
-# Netlify 배포 설정 (정적 index.html + 경제지표 프록시 함수)
+# Netlify 배포 설정 (정적 사이트 public/ + 경제지표 프록시 함수)
 [build]
-  # 별도 빌드 과정 없음
-  publish = "."
+  # 배포 대상은 public 폴더만 (netlify/functions 소스는 노출되지 않음)
+  publish = "public"
 
 # 서버리스 함수 (After10 경제지표 프록시)
 [functions]
