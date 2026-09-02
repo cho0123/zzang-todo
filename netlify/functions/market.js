@@ -45,7 +45,19 @@ async function fetchOne(yahooSym, targetEpoch) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}` +
               `?period1=${period1}&period2=${period2}&interval=1d`;
 
-  const res = await fetch(url, { headers: { "User-Agent": UA, "Accept": "application/json" } });
+  // 요청별 타임아웃 6초: 한 심볼이 늘어져도 함수 전체가 Netlify 한도(10초)를
+  // 넘겨 502가 되는 것을 막고, 그 심볼만 실패로 처리한다.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { "User-Agent": UA, "Accept": "application/json" },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
 

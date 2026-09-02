@@ -1266,6 +1266,33 @@
             </div>`).join('');
     }
 
+    // 경제지표 함수 호출 — 성공/실패를 콘솔에 남기고, 일시 실패는 1회 재시도.
+    // 실패하면 null 반환 (지표 없이 저장 진행).
+    async function a10FetchMarket(dateStr) {
+        const url = `/.netlify/functions/market?date=${dateStr}`;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                const res = await fetch(url);
+                console.log(`[After10 지표] 호출 ${attempt}/2 → HTTP ${res.status} (ok=${res.ok})`);
+                if (res.ok) {
+                    const m = await res.json();
+                    if (m && !m.error) {
+                        console.log('[After10 지표] 조회 성공 → 저장에 포함:', m);
+                        return m;
+                    }
+                    console.warn('[After10 지표] 응답이 error/빈값 → 지표 없이 저장:', m);
+                    return null; // 형식 문제는 재시도해도 동일 → 중단
+                }
+                console.warn(`[After10 지표] 함수 응답 실패(HTTP ${res.status})` +
+                             (attempt < 2 ? ' → 재시도' : ' → 지표 없이 저장'));
+            } catch (e) {
+                console.warn('[After10 지표] 조회 예외' +
+                             (attempt < 2 ? ' → 재시도' : ' → 지표 없이 저장') + ':', e);
+            }
+        }
+        return null;
+    }
+
     // 저장 (setDoc merge — 기존 문서면 createdAt 보존, updatedAt만 갱신)
     async function a10Save() {
         const btn = document.getElementById('a10SaveBtn');
@@ -1284,22 +1311,18 @@
 
         btn.disabled = true;
 
-        // 경제지표: 아직 저장 안 된 문서에만 조회해 함께 저장 (기존 market은 유지)
-        // 실패해도 일지 저장은 계속 진행 (지표는 부가 정보)
-        if (!existing || !existing.market) {
-            try {
-                const res = await fetch(`/.netlify/functions/market?date=${dateStr}`);
-                if (res.ok) {
-                    const m = await res.json();
-                    if (m && !m.error) payload.market = m;
-                }
-            } catch (e) {
-                console.warn('지표 조회 실패 — 지표 없이 저장합니다:', e);
-            }
+        // 경제지표: market이 아직 없는 문서에만 조회해 함께 저장 (보존 로직은 market이 이미 있을 때만).
+        // 실패해도 일지 저장은 계속 진행 (지표는 부가 정보).
+        const needMarket = !existing || !existing.market;
+        console.log(`[After10] 저장 시작 ${dateStr} · 지표조회 ${needMarket ? 'O' : 'X (기존 market 유지)'}`);
+        if (needMarket) {
+            const m = await a10FetchMarket(dateStr);
+            if (m) payload.market = m;
         }
 
         try {
             await setDoc(doc(db, DIARY_COLLECTION, dateStr), payload, { merge: true });
+            console.log(`[After10] 저장 완료 ${dateStr} · market 포함 ${!!payload.market}`);
             await a10FetchEntries(); // 저장 후 다시 불러오기
             a10RenderRecent();       // 하단 최근 목록 즉시 반영
 
