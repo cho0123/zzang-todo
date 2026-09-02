@@ -624,12 +624,13 @@
     // [로그인 게이트] 기존 tasks 구독/정리를 로그인 확인 후 실행하도록 호출 시점만 이동.
     // (아래 블록 내부 로직은 원본 그대로 — 최초 1회만 실행)
     let __todoStarted = false;
+    let __todoUnsub = null;   // onSnapshot 해제 함수 보관
     function startTodoData() {
         if (__todoStarted) return;
         __todoStarted = true;
 
         const q = collection(db, TASKS_COLLECTION);
-        onSnapshot(q, (snapshot) => {
+        __todoUnsub = onSnapshot(q, (snapshot) => {
             const tasks = [];
             snapshot.forEach((doc) => {
                 tasks.push({ id: doc.id, ...doc.data() });
@@ -639,6 +640,14 @@
         });
 
         cleanUpOldTasks();
+    }
+
+    // 로그아웃 시: 구독 해제 + 상태/데이터 초기화 (재로그인 시 startTodoData 재실행 가능)
+    function stopTodoData() {
+        if (__todoUnsub) { __todoUnsub(); __todoUnsub = null; }
+        __todoStarted = false;
+        window.allTasks = undefined;
+        a10Entries = [];   // After10 diary 캐시도 정리
     }
 
     async function addTask() {
@@ -1440,7 +1449,8 @@
             logoutBtnEl.style.display = 'block';
             startTodoData();
         } else {
-            // 로그인 안 됨 → 로그인 화면만
+            // 로그인 안 됨 → 구독 해제 후 로그인 화면만
+            stopTodoData();
             containerEl.style.display = 'none';
             logoutBtnEl.style.display = 'none';
             loginScreenEl.style.display = 'flex';
