@@ -282,11 +282,55 @@
             padding: 18px 12px; border: 1px dashed #dee2e6; border-radius: 8px; margin-top: 4px;
         }
         .a10-empty { text-align: center; color: #adb5bd; font-size: 13px; line-height: 1.7; padding: 40px 10px; }
+
+        /* ===================== 로그인 게이트 ===================== */
+        #loginScreen { width: 100%; max-width: 360px; margin-top: 8vh; }
+        .login-card {
+            background: #fff; padding: 34px 26px; border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center;
+        }
+        .login-title { margin-bottom: 6px; }
+        .login-sub { color: #888; font-size: 12px; margin-bottom: 26px; }
+        #loginScreen input {
+            width: 100%; padding: 13px; margin-bottom: 10px; box-sizing: border-box;
+            border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: #fff;
+        }
+        #loginScreen input:focus { outline: none; border-color: #212529; }
+        #loginBtn {
+            width: 100%; padding: 13px; margin-top: 6px;
+            background: #212529; color: #fff; font-weight: bold; font-size: 14px;
+        }
+        #loginBtn:disabled { opacity: 0.6; cursor: default; }
+        .login-error { display: none; margin-top: 14px; color: #e03131; font-size: 13px; font-weight: 600; line-height: 1.5; }
+
+        /* 로그아웃 버튼 (상단 우측, 작게) */
+        #logoutBtn {
+            position: fixed; top: 12px; right: 12px; z-index: 100; flex: none; width: auto;
+            padding: 6px 13px; border: 1px solid #dee2e6; border-radius: 20px;
+            background: rgba(255,255,255,0.92); color: #868e96; font-size: 12px; font-weight: 700;
+        }
+        #logoutBtn:hover { background: #f1f3f5; color: #495057; }
     </style>
 </head>
 <body>
 
-<div class="container">
+<!-- 로그아웃 (상단 우측) -->
+<button id="logoutBtn" style="display:none">로그아웃</button>
+
+<!-- ===== 로그인 화면 (로그인 전) ===== -->
+<div id="loginScreen">
+    <div class="login-card">
+        <h2 class="login-title">⚡ 짱구 Manager</h2>
+        <div class="login-sub">로그인이 필요합니다</div>
+        <input type="email" id="loginEmail" placeholder="이메일" autocomplete="username">
+        <input type="password" id="loginPassword" placeholder="비밀번호" autocomplete="current-password">
+        <button id="loginBtn">로그인</button>
+        <div id="loginError" class="login-error"></div>
+    </div>
+</div>
+
+<!-- ===== 메인 앱 (로그인 후 표시) ===== -->
+<div class="container" style="display:none">
     <h2>⚡ 짱구 Manager</h2>
     <div class="sub-title">오늘도 화이팅!</div>
 
@@ -448,6 +492,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getFirestore, collection, addDoc, onSnapshot, updateDoc, doc, deleteDoc, query, where, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
     // Firebase 설정
     const firebaseConfig = {
@@ -576,17 +621,25 @@
     document.getElementById('complete-btn').addEventListener('click', completeTaskAction);
     document.getElementById('cancel-btn').addEventListener('click', resetForm);
 
-    const q = collection(db, TASKS_COLLECTION);
-    onSnapshot(q, (snapshot) => {
-        const tasks = [];
-        snapshot.forEach((doc) => {
-            tasks.push({ id: doc.id, ...doc.data() });
-        });
-        window.allTasks = tasks;
-        renderTasks(tasks);
-    });
+    // [로그인 게이트] 기존 tasks 구독/정리를 로그인 확인 후 실행하도록 호출 시점만 이동.
+    // (아래 블록 내부 로직은 원본 그대로 — 최초 1회만 실행)
+    let __todoStarted = false;
+    function startTodoData() {
+        if (__todoStarted) return;
+        __todoStarted = true;
 
-    cleanUpOldTasks();
+        const q = collection(db, TASKS_COLLECTION);
+        onSnapshot(q, (snapshot) => {
+            const tasks = [];
+            snapshot.forEach((doc) => {
+                tasks.push({ id: doc.id, ...doc.data() });
+            });
+            window.allTasks = tasks;
+            renderTasks(tasks);
+        });
+
+        cleanUpOldTasks();
+    }
 
     async function addTask() {
         const text = document.getElementById('taskInput').value;
@@ -1333,6 +1386,70 @@
 
     // 초기 상태: ToDo 탭 / 오늘 날짜 표시 (데이터는 탭 진입 시 조회)
     a10FillWriteForm(todayStr());
+
+    /* ===================== 로그인 게이트 =====================
+       - 로그인 전: #loginScreen 만 표시, 메인(.container) 숨김
+       - 로그인 후: 메인 표시 + startTodoData()로 tasks 구독 시작
+       - After10 diary 조회는 탭 클릭 시(a10LoadEntries)라 이미 로그인 이후에만 실행됨
+    ========================================================== */
+    const auth = getAuth(app);
+
+    const loginScreenEl = document.getElementById('loginScreen');
+    const containerEl   = document.querySelector('.container');
+    const logoutBtnEl   = document.getElementById('logoutBtn');
+    const loginEmailEl  = document.getElementById('loginEmail');
+    const loginPwEl     = document.getElementById('loginPassword');
+    const loginBtnEl    = document.getElementById('loginBtn');
+    const loginErrorEl  = document.getElementById('loginError');
+
+    function showLoginError(msg) {
+        loginErrorEl.textContent = msg;
+        loginErrorEl.style.display = 'block';
+    }
+
+    async function doLogin() {
+        const email = loginEmailEl.value.trim();
+        const pw = loginPwEl.value;
+        loginErrorEl.style.display = 'none';
+        if (!email || !pw) {
+            showLoginError('이메일과 비밀번호를 입력해주세요.');
+            return;
+        }
+        loginBtnEl.disabled = true;
+        loginBtnEl.textContent = '로그인 중...';
+        try {
+            await signInWithEmailAndPassword(auth, email, pw);
+            // 성공 시 onAuthStateChanged가 화면 전환/데이터 로딩 처리
+        } catch (e) {
+            showLoginError('로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.');
+            loginBtnEl.disabled = false;
+            loginBtnEl.textContent = '로그인';
+        }
+    }
+
+    loginBtnEl.addEventListener('click', doLogin);
+    loginEmailEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginPwEl.focus(); });
+    loginPwEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+    logoutBtnEl.addEventListener('click', () => signOut(auth));
+
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            // 로그인됨 → 메인 표시 후 데이터 로딩 시작
+            loginScreenEl.style.display = 'none';
+            containerEl.style.display = 'block';
+            logoutBtnEl.style.display = 'block';
+            startTodoData();
+        } else {
+            // 로그인 안 됨 → 로그인 화면만
+            containerEl.style.display = 'none';
+            logoutBtnEl.style.display = 'none';
+            loginScreenEl.style.display = 'flex';
+            loginErrorEl.style.display = 'none';
+            loginPwEl.value = '';
+            loginBtnEl.disabled = false;
+            loginBtnEl.textContent = '로그인';
+        }
+    });
 </script>
 
 </body>
