@@ -12,3 +12,6 @@ desktop.ini
 
 # 로그/임시
 *.log
+
+# Local Netlify folder
+.netlify

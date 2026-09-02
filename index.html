@@ -235,6 +235,14 @@
         /* 리스트 서브타이틀 (+10년 뒤 짱구에게) */
         .a10-card-sub { font-size: 11px; font-weight: 700; color: #364fc7; margin-bottom: 8px; }
 
+        /* 경제지표 한 줄 */
+        .a10-market {
+            margin-top: 9px; padding-top: 8px; border-top: 1px dashed #e9ecef;
+            font-size: 11px; color: #495057; line-height: 1.7; word-break: keep-all;
+        }
+        .a10-market b { color: #212529; font-weight: 700; }
+        .a10-market .a10-basis { color: #adb5bd; font-weight: 600; }
+
         /* 뷰2: 전체 타임라인 — 연/월 접이식 */
         .a10-caret { font-size: 11px; width: 10px; flex: none; }
         .a10-cnt { margin-left: auto; font-size: 11px; font-weight: 700; }
@@ -1209,6 +1217,31 @@
         a10RenderRecent();
     }
 
+    // 숫자 포맷 (천단위 콤마 + 소수 자릿수)
+    function a10FmtNum(v, digits) {
+        if (v == null || isNaN(v)) return '-';
+        return Number(v).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    }
+
+    // 지표 한 줄 HTML (market 없으면 빈 문자열 → 아무것도 안 보임)
+    function a10MarketLine(m) {
+        if (!m) return '';
+        const parts = [];
+        if (m.usdkrw != null) parts.push(`원/달러 <b>${a10FmtNum(m.usdkrw, 2)}</b>`);
+        if (m.jpykrw != null) parts.push(`원/엔 <b>${a10FmtNum(m.jpykrw, 2)}</b>`);
+        if (m.kospi  != null) parts.push(`코스피 <b>${a10FmtNum(m.kospi, 2)}</b>`);
+        if (m.spx    != null) parts.push(`S&amp;P500 <b>${a10FmtNum(m.spx, 2)}</b>`);
+        if (m.ndq    != null) parts.push(`나스닥 <b>${a10FmtNum(m.ndq, 2)}</b>`);
+        if (m.gold   != null) parts.push(`금 <b>$${a10FmtNum(m.gold, 2)}</b>/oz`);
+        if (m.btc    != null) parts.push(`BTC <b>$${a10FmtNum(m.btc, 0)}</b>`);
+        if (!parts.length) return '';
+
+        // 기준일이 요청일과 다르면(주말/공휴일) 표시, 출처는 title로
+        const basis = (m.stale && m.basisDate) ? ` <span class="a10-basis">(${m.basisDate} 기준)</span>` : '';
+        const src = m.source ? `출처 ${m.source}${m.basisDate ? ' · 기준일 ' + m.basisDate : ''}` : '';
+        return `<div class="a10-market" title="${src}">📊 ${parts.join(' · ')}${basis}</div>`;
+    }
+
     // 쓰기 뷰 하단: 최근 기록 10개 (최신순)
     function a10RenderRecent() {
         const wrap = document.getElementById('a10Recent');
@@ -1229,6 +1262,7 @@
                 <div class="a10-card-date">${a10KoreanShort(e.id)}</div>
                 <div class="a10-card-sub">${a10FutureSub(e.id)}</div>
                 <div class="a10-card-body clamp">${a10Escape(e.content || '')}</div>
+                ${a10MarketLine(e.market)}
             </div>`).join('');
     }
 
@@ -1248,8 +1282,23 @@
         };
         if (!existing) payload.createdAt = now;
 
+        btn.disabled = true;
+
+        // 경제지표: 아직 저장 안 된 문서에만 조회해 함께 저장 (기존 market은 유지)
+        // 실패해도 일지 저장은 계속 진행 (지표는 부가 정보)
+        if (!existing || !existing.market) {
+            try {
+                const res = await fetch(`/.netlify/functions/market?date=${dateStr}`);
+                if (res.ok) {
+                    const m = await res.json();
+                    if (m && !m.error) payload.market = m;
+                }
+            } catch (e) {
+                console.warn('지표 조회 실패 — 지표 없이 저장합니다:', e);
+            }
+        }
+
         try {
-            btn.disabled = true;
             await setDoc(doc(db, DIARY_COLLECTION, dateStr), payload, { merge: true });
             await a10FetchEntries(); // 저장 후 다시 불러오기
             a10RenderRecent();       // 하단 최근 목록 즉시 반영
@@ -1335,6 +1384,7 @@
                                     <div class="a10-card-date">${a10KoreanShort(e.id)}</div>
                                     <div class="a10-card-sub">${a10FutureSub(e.id)}</div>
                                     <div class="a10-card-body">${a10Escape(e.content || '')}</div>
+                                    ${a10MarketLine(e.market)}
                                 </div>`;
                         });
                         html += `</div>`;
@@ -1372,6 +1422,7 @@
                 <div class="a10-past-card">
                     <div class="a10-past-year">${label}</div>
                     <div class="a10-card-body">${a10Escape(e.content || '')}</div>
+                    ${a10MarketLine(e.market)}
                 </div>`;
         });
         if (list.length === 1) {
