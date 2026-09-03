@@ -1978,7 +1978,10 @@
     function hlInfo(name) { return HL_INFO_LOOKUP.get(hlNameKey(hlNormalizeName(name))) || null; }
 
     // 병원명 힌트 (텍스트에 있으면 우선 사용). 없으면 '병원/의원/센터' 휴리스틱.
-    const HL_HOSPITALS = ['서울성모병원', '삼성서울병원', '서울아산병원', '세브란스병원', '분당서울대병원'];
+    // ※ 결과지 원문이 "서울맑음내과의원"처럼 적어도, 저장된 표기와 맞추기 위해 여기 적은 이름을 쓴다.
+    //    앞에서부터 먼저 걸린 것을 채택하므로 긴 이름을 먼저 둔다.
+    const HL_HOSPITALS = ['서울성모병원', '삼성서울병원', '서울아산병원', '세브란스병원', '분당서울대병원',
+        '서울맑음내과', '진내과'];
 
     let hlRecords = [];
     let hlPerson = '짱구';
