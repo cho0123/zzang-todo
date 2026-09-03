@@ -399,6 +399,16 @@
 
         #hlChartItem { width: 100%; margin-bottom: 12px; }
         .hl-ref { color: #0ca678 !important; }
+
+        /* 항목 설명 물음표 */
+        .hl-info {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 15px; height: 15px; border-radius: 50%; margin-left: 3px;
+            background: #dee2e6; color: #495057; font-size: 10px; font-weight: 800;
+            cursor: pointer; vertical-align: middle; line-height: 1; user-select: none;
+        }
+        .hl-info:hover { background: #0ca678; color: #fff; }
+        .hl-info-desc { display: block; margin-top: 4px; font-size: 11px; color: #868e96; line-height: 1.5; font-weight: 400; }
     </style>
 </head>
 <body>
@@ -1816,6 +1826,37 @@
         'HbA1c': 'HbA1c', '당화혈색소': 'HbA1c',
         'Hb': 'Hemoglobin', 'Hemoglobin': 'Hemoglobin', '혈색소': 'Hemoglobin',
     };
+    // 항목 설명 사전 — { 정규화된항목명: { short:짧은한글이름, desc:한 줄 설명 } }
+    // ※ '무엇을 재는가'만 적는다. 해석·조언(높으면 위험/개선법 등)은 넣지 않는다.
+    //    사전에 없는 항목은 설명 없이 그대로 표시(오류 없음). 항목은 여기 계속 추가.
+    const HL_ITEM_INFO = {
+        'Anti Microsomal Ab (Anti TPO Ab)': { short: '갑상선항체', desc: '갑상선 세포의 효소(TPO)에 대한 자가항체로, 갑상선 자가면역 여부를 볼 때 확인하는 항목입니다.' },
+        'Thyroglobulin Ab': { short: '갑상선항체', desc: '갑상선 단백질(티로글로불린)에 대한 자가항체를 측정하는 항목입니다.' },
+        'Free T4': { short: '유리 T4', desc: '혈액 속에서 단백질과 결합하지 않은 갑상선호르몬(T4)의 양을 재는 항목입니다.' },
+        'T3 (Triiodothyronine)': { short: 'T3', desc: '갑상선에서 분비되는 호르몬의 하나(삼요오드티로닌, T3)를 측정하는 항목입니다.' },
+        'TSH': { short: '갑상선자극호르몬', desc: '뇌하수체에서 분비되어 갑상선을 자극하는 호르몬(TSH)을 재는 항목입니다.' },
+        'Glucose': { short: '혈당', desc: '혈액 속 포도당 농도로, 보통 공복 상태에서 측정합니다.' },
+        'Urea Nitrogen': { short: '요소질소', desc: '단백질 대사 후 생기는 노폐물(요소질소)의 혈중 농도를 재는 항목입니다.' },
+        'Creatinine': { short: '크레아티닌', desc: '근육 대사 후 생기는 노폐물로, 콩팥 기능을 볼 때 함께 확인합니다.' },
+        'eGFR(CKD-EPI 2021)': { short: '추정 사구체여과율', desc: '크레아티닌 값으로 콩팥의 여과 기능을 추정한 수치(CKD-EPI 2021 공식)입니다.' },
+        'IDMS-traceable MDRD-eGFR': { short: '추정 사구체여과율', desc: 'MDRD 공식으로 계산한 콩팥 여과 기능 추정치입니다.' },
+        'eGFR(CKD-EPI 2009)': { short: '추정 사구체여과율', desc: 'CKD-EPI 2009 공식으로 계산한 콩팥 여과 기능 추정치입니다.' },
+        'AST(GOT)': { short: '간효소', desc: '간세포 등에 많은 효소로, 간·근육 상태를 볼 때 함께 확인합니다.' },
+        'ALT(GPT)': { short: '간효소', desc: '주로 간세포에 있는 효소로, 간 상태를 볼 때 확인하는 항목입니다.' },
+        'Total Bilirubin': { short: '총빌리루빈', desc: '적혈구가 분해되며 생기는 색소(빌리루빈)의 총량으로, 간·담도와 관련된 항목입니다.' },
+        'Alkaline Phosphatase': { short: '알칼리성 인산분해효소', desc: '간·담도, 뼈 등에 있는 효소(ALP)를 측정하는 항목입니다.' },
+        'Uric acid': { short: '요산', desc: '퓨린 대사 후 생기는 노폐물(요산)의 혈중 농도를 재는 항목입니다.' },
+        'Sodium': { short: '나트륨', desc: '체내 수분·전해질 균형과 관련된 나트륨(Na) 농도를 재는 항목입니다.' },
+        'Potassium': { short: '칼륨', desc: '신경·근육 기능 등과 관련된 전해질(칼륨, K) 농도를 재는 항목입니다.' },
+        'Chloride': { short: '염소', desc: '체내 산-염기·전해질 균형과 관련된 염소(클로라이드, Cl) 농도입니다.' },
+        'CPK': { short: '크레아틴키나아제', desc: '주로 근육에 있는 효소(CPK/CK)로, 근육 관련 상태를 볼 때 확인합니다.' },
+        'Total Cholesterol': { short: '총콜레스테롤', desc: '혈액 속 콜레스테롤의 총량을 재는 항목입니다.' },
+        'Triglycerides': { short: '중성지방', desc: '혈액 속 지방 성분으로, 식사 영향을 크게 받아 공복 채혈이 기본입니다.' },
+        'HDL-Cholesterol': { short: 'HDL콜레스테롤', desc: '콜레스테롤을 운반하는 지단백의 하나(HDL)에 실린 콜레스테롤을 재는 항목입니다.' },
+        'LDL-Cholesterol': { short: 'LDL콜레스테롤', desc: '콜레스테롤을 운반하는 지단백의 하나(LDL)에 실린 콜레스테롤을 재는 항목입니다.' },
+    };
+    function hlInfo(name) { return HL_ITEM_INFO[name] || null; }
+
     // 병원명 힌트 (텍스트에 있으면 우선 사용). 없으면 '병원/의원/센터' 휴리스틱.
     const HL_HOSPITALS = ['서울성모병원', '삼성서울병원', '서울아산병원', '세브란스병원', '분당서울대병원'];
 
@@ -2089,6 +2130,12 @@
     // ---------- 기록 목록 ----------
     const HL_TYPE_LABEL = { blood: '혈액', endoscopy: '내시경', other: '기타' };
     function hlEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function hlAttr(s) { return hlEsc(s).replace(/"/g, '&quot;'); }
+    // 항목 설명 물음표 토글 (마우스오버는 title, 클릭은 아래 desc 표시)
+    window.hlToggleInfo = function(el) {
+        const d = el.nextElementSibling;
+        if (d) d.style.display = (d.style.display === 'none') ? 'block' : 'none';
+    };
     function hlRenderList() {
         const wrap = document.getElementById('hlList');
         const recs = hlRecords.filter(r => r.person === hlPerson)
@@ -2099,10 +2146,16 @@
             const abn = (r.items || []).filter(i => i.abnormal).length;
             let body = '';
             if (type === 'blood') {
-                const rows = (r.items || []).map(i => `<tr class="${i.abnormal ? 'abnormal' : ''}">
-                    <td>${hlEsc(i.name)}</td>
+                const rows = (r.items || []).map(i => {
+                    const inf = hlInfo(i.name);
+                    const help = inf && inf.desc
+                        ? ` <span class="hl-info" title="${hlAttr(inf.desc)}" onclick="hlToggleInfo(this)">?</span><span class="hl-info-desc" style="display:none">${hlEsc(inf.desc)}</span>`
+                        : '';
+                    return `<tr class="${i.abnormal ? 'abnormal' : ''}">
+                    <td>${hlEsc(i.name)}${help}</td>
                     <td class="hl-v">${hlEsc(i.value != null ? i.value : i.raw)}${i.abnormal ? ' <span class="hl-abn-mark">▲▼</span>' : ''}</td>
-                    <td>${hlEsc(i.unit)}</td><td>${hlEsc(i.refText)}</td></tr>`).join('');
+                    <td>${hlEsc(i.unit)}</td><td>${hlEsc(i.refText)}</td></tr>`;
+                }).join('');
                 body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none">
                     <table class="hl-view-table"><thead><tr><th>항목</th><th>값</th><th>단위</th><th>참고치</th></tr></thead><tbody>${rows}</tbody></table></div>`;
             } else {
@@ -2135,7 +2188,11 @@
         const sel = document.getElementById('hlChartItem');
         const names = hlBloodItemNames(hlPerson);
         const prev = sel.value;
-        sel.innerHTML = names.map(n => `<option>${hlEsc(n)}</option>`).join('');
+        sel.innerHTML = names.map(n => {
+            const inf = hlInfo(n);
+            const label = inf && inf.short ? `${n} — ${inf.short}` : n;
+            return `<option value="${hlEsc(n)}">${hlEsc(label)}</option>`;
+        }).join('');
         if (names.includes(prev)) sel.value = prev;
 
         const canvas = document.getElementById('hlChart');
