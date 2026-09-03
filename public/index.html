@@ -1815,47 +1815,167 @@
     ============================================================== */
     const HEALTH_COLLECTION = "health";
 
-    // 항목명 정규화 사전 — 병원마다 표기가 달라 여기서 통일 (쉽게 추가)
-    const HL_NAME_MAP = {
-        'GOT': 'AST(GOT)', 'AST': 'AST(GOT)', 'AST(GOT)': 'AST(GOT)',
-        'GPT': 'ALT(GPT)', 'ALT': 'ALT(GPT)', 'ALT(GPT)': 'ALT(GPT)',
-        'r-GTP': 'γ-GTP', 'γ-GTP': 'γ-GTP', 'GGT': 'γ-GTP',
-        'T-Chol': 'Total Cholesterol', 'Total Cholesterol': 'Total Cholesterol', '총콜레스테롤': 'Total Cholesterol',
-        'TG': 'Triglyceride', '중성지방': 'Triglyceride',
-        'FBS': 'Glucose', 'Glucose': 'Glucose', '공복혈당': 'Glucose',
-        'HbA1c': 'HbA1c', '당화혈색소': 'HbA1c',
-        'Hb': 'Hemoglobin', 'Hemoglobin': 'Hemoglobin', '혈색소': 'Hemoglobin',
+    /* ── 항목명 정규화 ─────────────────────────────────────────────
+       병원마다 검사 항목명 표기가 다르다. 저장된 원본 이름은 결과지 그대로 두고,
+       ★목록·차트를 그릴 때만★ 아래 사전으로 통일해 보여준다.
+       Firestore 문서는 절대 수정하지 않는다(입력/수정 표는 원본 이름 그대로 유지).
+
+       매칭 규칙(hlNameKey): 대소문자 무시 · 연속 공백 1칸 · 괄호/콤마 앞뒤 공백 무시
+         → 'Sodium (Na)' = 'Sodium(Na)', 'HDL-Cholesterol' = 'HDL-cholesterol' 은 자동 처리
+         → 하이픈·띄어쓰기 자체가 다른 표기('HDL Cholesterol')는 아래 별칭에 명시해야 한다
+
+       형식: '기준이름': ['별칭', ...]
+       ※ 기준이름은 HL_ITEM_INFO의 키와 반드시 일치시킬 것 (안 맞으면 설명이 안 붙는다)
+
+       ⚠ 절대 합치지 말 것 — 검사 자체가 다르다:
+         · eGFR(CKD-EPI 2009) / eGFR(CKD-EPI 2021) / MDRD 계열 → 계산식이 다름
+         · HbA1c / HbA1c-IFCC / HbA1c-eAG → 단위·스케일이 다름
+         · TSH Receptor Ab (TSI/TBII) / TSI Bioassay → 다른 검사 (단위도 IU/L vs %)
+    ────────────────────────────────────────────────────────────── */
+    function hlNameKey(s) {
+        return String(s == null ? '' : s)
+            .replace(/\s+/g, ' ').trim().toLowerCase()
+            .replace(/\s*([(),])\s*/g, '$1');
+    }
+    const HL_NAME_GROUPS = {
+        // 간 · 담도
+        'AST(GOT)': ['AST', 'GOT'],
+        'ALT(GPT)': ['ALT', 'GPT'],
+        'Alkaline Phosphatase': ['ALP'],
+        'γ-GTP': ['GGT (γ-GTP)', 'GGT', 'r-GTP'],
+        'Total Bilirubin': ['Bilirubin, total'],
+        'Total Protein': ['Protein, total'],
+        // 콩팥 · 전해질
+        'Urea Nitrogen': ['BUN'],
+        'IDMS-traceable MDRD-eGFR': ['eGFR(IDMS-MDRD)'],
+        'Sodium': ['Sodium (Na)', 'Sodium(Na)'],
+        'Potassium': ['Potassium (K)', 'Potassium(K)'],
+        'Chloride': ['Chloride (Cl)', 'Chloride(Cl)'],
+        'Uric acid': ['Uric Acid'],
+        'Calcium (Ca)': ['Calcium'],
+        'Phosphorus (P)': ['Phosphorus'],
+        // 당 · 지질
+        'Glucose': ['FBS', '공복혈당'],
+        'HbA1c': ['HbA1c-NGSP', '당화혈색소'],
+        'Total Cholesterol': ['Cholesterol,total', 'T-Chol', '총콜레스테롤'],
+        'Triglycerides': ['Triglyceride (TG)', 'Triglyceride', 'TG', '중성지방'],
+        'HDL-Cholesterol': ['HDL-cholesterol', 'HDL Cholesterol'],
+        'LDL-Cholesterol': ['LDL-cholesterol', 'LDL Cholesterol(계산법)'],
+        // 갑상선
+        'TSH': ['TSH (Thyroid Stimulating Hormone) CLIA'],
+        'T3 (Triiodothyronine)': ['T3', 'T3 (Triiodothyronine) CLIA'],
+        'TSH Receptor Ab (TSI/TBII)': ['TSH-R-Ab'],
+        // 혈액(CBC)
+        'Hemoglobin': ['Hemoglobin (Hb)', 'Hemoglobin(Hb)', 'Hb', '혈색소'],
+        'Hematocrit': ['Hematocrit (Hct)', 'Hematocrit(Hct)'],
+        'Segmented neutrophil': ['Neutrophil Seg'],
+        'Neutrophil band': ['Band'],
     };
-    // 항목 설명 사전 — { 정규화된항목명: { short:짧은한글이름, desc:한 줄 설명 } }
+    // 기준이름 자신도 키로 넣어 표기 흔들림을 흡수한다
+    const HL_NAME_LOOKUP = (() => {
+        const m = new Map();
+        for (const canon of Object.keys(HL_NAME_GROUPS)) {
+            m.set(hlNameKey(canon), canon);
+            for (const a of HL_NAME_GROUPS[canon]) m.set(hlNameKey(a), canon);
+        }
+        return m;
+    })();
+
+    /* ── 단위 표기 통일 (표시할 때만) ──
+       대소문자·공백 차이만 정리한다. 서로 다른 단위끼리 환산하지 않는다.
+       (mIU/L 과 µIU/mL 은 값이 같아도 표기를 합치지 않는다 — 결과지가 다르게 적었다는 사실을 남긴다) */
+    const HL_UNIT_CANON = {
+        'mg/dl': 'mg/dL', 'ng/dl': 'ng/dL', 'ng/ml': 'ng/mL', 'pg/ml': 'pg/mL', 'g/dl': 'g/dL',
+        'u/l': 'U/L', 'iu/l': 'IU/L', 'iu/ml': 'IU/mL', 'u/ml': 'U/mL',
+        'mmol/l': 'mmol/L', 'mmol/mol': 'mmol/mol', 'umol/l': 'µmol/L', 'µmol/l': 'µmol/L',
+        'miu/l': 'mIU/L', 'uiu/ml': 'µIU/mL', 'µiu/ml': 'µIU/mL',
+        'fl': 'fL', 'pg': 'pg', 'cp': 'cP', '%': '%',
+        'ml/min/1.73㎡': 'mL/min/1.73㎡', 'ml/min/1.73m2': 'mL/min/1.73㎡',
+        'x(10)3/µl': 'x10³/µL', 'x10(3)/µl': 'x10³/µL', 'x(10)3/ul': 'x10³/µL', 'x10(3)/ul': 'x10³/µL',
+        'x(10)6/µl': 'x10⁶/µL', 'x10(6)/µl': 'x10⁶/µL', 'x(10)6/ul': 'x10⁶/µL', 'x10(6)/ul': 'x10⁶/µL',
+    };
+    function hlDisplayUnit(u) {
+        const raw = String(u == null ? '' : u).trim();
+        if (!raw) return '';
+        return HL_UNIT_CANON[raw.toLowerCase().replace(/\s+/g, '')] || raw;
+    }
+
+    // 항목 설명 사전 — { 기준이름: { short:짧은한글이름, desc:한 줄 설명 } }
     // ※ '무엇을 재는가'만 적는다. 해석·조언(높으면 위험/개선법 등)은 넣지 않는다.
     //    사전에 없는 항목은 설명 없이 그대로 표시(오류 없음). 항목은 여기 계속 추가.
     const HL_ITEM_INFO = {
+        // ── 갑상선
+        'TSH': { short: '갑상선자극호르몬', desc: '뇌하수체에서 분비되어 갑상선을 자극하는 호르몬(TSH)을 재는 항목입니다.' },
+        'Free T4': { short: '유리 T4', desc: '혈액 속에서 단백질과 결합하지 않은 갑상선호르몬(T4)의 양을 재는 항목입니다.' },
+        'Free T3': { short: '유리 T3', desc: '혈액 속에서 단백질과 결합하지 않은 갑상선호르몬(T3)의 양을 재는 항목입니다.' },
+        'T3 (Triiodothyronine)': { short: 'T3', desc: '갑상선에서 분비되는 호르몬의 하나(삼요오드티로닌, T3)를 측정하는 항목입니다.' },
         'Anti Microsomal Ab (Anti TPO Ab)': { short: '갑상선항체', desc: '갑상선 세포의 효소(TPO)에 대한 자가항체로, 갑상선 자가면역 여부를 볼 때 확인하는 항목입니다.' },
         'Thyroglobulin Ab': { short: '갑상선항체', desc: '갑상선 단백질(티로글로불린)에 대한 자가항체를 측정하는 항목입니다.' },
-        'Free T4': { short: '유리 T4', desc: '혈액 속에서 단백질과 결합하지 않은 갑상선호르몬(T4)의 양을 재는 항목입니다.' },
-        'T3 (Triiodothyronine)': { short: 'T3', desc: '갑상선에서 분비되는 호르몬의 하나(삼요오드티로닌, T3)를 측정하는 항목입니다.' },
-        'TSH': { short: '갑상선자극호르몬', desc: '뇌하수체에서 분비되어 갑상선을 자극하는 호르몬(TSH)을 재는 항목입니다.' },
+        'TSH Receptor Ab (TSI/TBII)': { short: 'TSH수용체항체', desc: '갑상선의 TSH 수용체에 대한 자가항체를 측정하는 항목입니다.' },
+        'TSI Bioassay': { short: '갑상선자극항체', desc: '갑상선을 자극하는 항체의 활성을 세포 반응으로 측정하는 항목입니다.' },
+        // ── 당 · 지질
         'Glucose': { short: '혈당', desc: '혈액 속 포도당 농도로, 보통 공복 상태에서 측정합니다.' },
-        'Urea Nitrogen': { short: '요소질소', desc: '단백질 대사 후 생기는 노폐물(요소질소)의 혈중 농도를 재는 항목입니다.' },
-        'Creatinine': { short: '크레아티닌', desc: '근육 대사 후 생기는 노폐물로, 콩팥 기능을 볼 때 함께 확인합니다.' },
-        'eGFR(CKD-EPI 2021)': { short: '추정 사구체여과율', desc: '크레아티닌 값으로 콩팥의 여과 기능을 추정한 수치(CKD-EPI 2021 공식)입니다.' },
-        'IDMS-traceable MDRD-eGFR': { short: '추정 사구체여과율', desc: 'MDRD 공식으로 계산한 콩팥 여과 기능 추정치입니다.' },
-        'eGFR(CKD-EPI 2009)': { short: '추정 사구체여과율', desc: 'CKD-EPI 2009 공식으로 계산한 콩팥 여과 기능 추정치입니다.' },
-        'AST(GOT)': { short: '간효소', desc: '간세포 등에 많은 효소로, 간·근육 상태를 볼 때 함께 확인합니다.' },
-        'ALT(GPT)': { short: '간효소', desc: '주로 간세포에 있는 효소로, 간 상태를 볼 때 확인하는 항목입니다.' },
-        'Total Bilirubin': { short: '총빌리루빈', desc: '적혈구가 분해되며 생기는 색소(빌리루빈)의 총량으로, 간·담도와 관련된 항목입니다.' },
-        'Alkaline Phosphatase': { short: '알칼리성 인산분해효소', desc: '간·담도, 뼈 등에 있는 효소(ALP)를 측정하는 항목입니다.' },
-        'Uric acid': { short: '요산', desc: '퓨린 대사 후 생기는 노폐물(요산)의 혈중 농도를 재는 항목입니다.' },
-        'Sodium': { short: '나트륨', desc: '체내 수분·전해질 균형과 관련된 나트륨(Na) 농도를 재는 항목입니다.' },
-        'Potassium': { short: '칼륨', desc: '신경·근육 기능 등과 관련된 전해질(칼륨, K) 농도를 재는 항목입니다.' },
-        'Chloride': { short: '염소', desc: '체내 산-염기·전해질 균형과 관련된 염소(클로라이드, Cl) 농도입니다.' },
-        'CPK': { short: '크레아틴키나아제', desc: '주로 근육에 있는 효소(CPK/CK)로, 근육 관련 상태를 볼 때 확인합니다.' },
+        'HbA1c': { short: '당화혈색소', desc: '포도당과 결합한 혈색소의 비율로, 최근 2~3개월의 평균적인 혈당 상태를 반영하는 항목입니다.' },
+        'HbA1c-IFCC': { short: '당화혈색소(IFCC)', desc: '같은 당화혈색소를 IFCC 국제표준 방식으로 나타낸 값으로, 단위가 mmol/mol입니다.' },
+        'HbA1c-eAG': { short: '추정 평균혈당', desc: '당화혈색소 값을 평균 혈당(mg/dL)으로 환산한 수치입니다.' },
         'Total Cholesterol': { short: '총콜레스테롤', desc: '혈액 속 콜레스테롤의 총량을 재는 항목입니다.' },
         'Triglycerides': { short: '중성지방', desc: '혈액 속 지방 성분으로, 식사 영향을 크게 받아 공복 채혈이 기본입니다.' },
         'HDL-Cholesterol': { short: 'HDL콜레스테롤', desc: '콜레스테롤을 운반하는 지단백의 하나(HDL)에 실린 콜레스테롤을 재는 항목입니다.' },
         'LDL-Cholesterol': { short: 'LDL콜레스테롤', desc: '콜레스테롤을 운반하는 지단백의 하나(LDL)에 실린 콜레스테롤을 재는 항목입니다.' },
+        'beta-hydroxybutyrate (ketone body)': { short: '케톤체', desc: '지방이 분해될 때 생기는 케톤체의 하나(베타-하이드록시부티르산)를 측정하는 항목입니다.' },
+        // ── 콩팥 · 전해질
+        'Urea Nitrogen': { short: '요소질소', desc: '단백질 대사 후 생기는 노폐물(요소질소)의 혈중 농도를 재는 항목입니다.' },
+        'Creatinine': { short: '크레아티닌', desc: '근육 대사 후 생기는 노폐물로, 콩팥 기능을 볼 때 함께 확인합니다.' },
+        'eGFR(CKD-EPI 2021)': { short: '추정 사구체여과율', desc: '크레아티닌 값으로 콩팥의 여과 기능을 추정한 수치(CKD-EPI 2021 공식)입니다.' },
+        'eGFR(CKD-EPI 2009)': { short: '추정 사구체여과율', desc: 'CKD-EPI 2009 공식으로 계산한 콩팥 여과 기능 추정치입니다.' },
+        'IDMS-traceable MDRD-eGFR': { short: '추정 사구체여과율', desc: 'MDRD 공식으로 계산한 콩팥 여과 기능 추정치입니다.' },
+        'Uric acid': { short: '요산', desc: '퓨린 대사 후 생기는 노폐물(요산)의 혈중 농도를 재는 항목입니다.' },
+        'Sodium': { short: '나트륨', desc: '체내 수분·전해질 균형과 관련된 나트륨(Na) 농도를 재는 항목입니다.' },
+        'Potassium': { short: '칼륨', desc: '신경·근육 기능 등과 관련된 전해질(칼륨, K) 농도를 재는 항목입니다.' },
+        'Chloride': { short: '염소', desc: '체내 산-염기·전해질 균형과 관련된 염소(클로라이드, Cl) 농도입니다.' },
+        'Calcium (Ca)': { short: '칼슘', desc: '뼈·근육·신경 기능과 관련된 칼슘(Ca)의 혈중 농도를 재는 항목입니다.' },
+        'Phosphorus (P)': { short: '인', desc: '뼈와 에너지 대사에 관여하는 인(P)의 혈중 농도를 재는 항목입니다.' },
+        // ── 간 · 단백
+        'AST(GOT)': { short: '간효소', desc: '간세포 등에 많은 효소로, 간·근육 상태를 볼 때 함께 확인합니다.' },
+        'ALT(GPT)': { short: '간효소', desc: '주로 간세포에 있는 효소로, 간 상태를 볼 때 확인하는 항목입니다.' },
+        'γ-GTP': { short: '간·담도 효소', desc: '간과 담도에 많은 효소(감마-GTP)를 측정하는 항목입니다.' },
+        'Alkaline Phosphatase': { short: '알칼리성 인산분해효소', desc: '간·담도, 뼈 등에 있는 효소(ALP)를 측정하는 항목입니다.' },
+        'Total Bilirubin': { short: '총빌리루빈', desc: '적혈구가 분해되며 생기는 색소(빌리루빈)의 총량으로, 간·담도와 관련된 항목입니다.' },
+        'Total Protein': { short: '총단백', desc: '혈액 속 단백질의 총량을 재는 항목입니다.' },
+        'Albumin': { short: '알부민', desc: '혈액 단백질 중 가장 많은 알부민의 농도를 재는 항목입니다.' },
+        'CPK': { short: '크레아틴키나아제', desc: '주로 근육에 있는 효소(CPK/CK)로, 근육 관련 상태를 볼 때 확인합니다.' },
+        // ── 혈액(CBC)
+        'WBC': { short: '백혈구 수', desc: '혈액 일정 부피 안에 들어 있는 백혈구의 개수를 세는 항목입니다.' },
+        'RBC': { short: '적혈구 수', desc: '혈액 일정 부피 안에 들어 있는 적혈구의 개수를 세는 항목입니다.' },
+        'Hemoglobin': { short: '혈색소', desc: '적혈구 안에서 산소를 운반하는 단백질(혈색소)의 농도를 재는 항목입니다.' },
+        'Hematocrit': { short: '적혈구용적률', desc: '전체 혈액 부피에서 적혈구가 차지하는 비율을 재는 항목입니다.' },
+        'Platelet': { short: '혈소판 수', desc: '지혈에 관여하는 혈소판의 개수를 세는 항목입니다.' },
+        'MCV': { short: '평균적혈구용적', desc: '적혈구 한 개의 평균 크기(부피)를 나타내는 항목입니다.' },
+        'MCH': { short: '평균적혈구혈색소량', desc: '적혈구 한 개에 들어 있는 혈색소의 평균 양입니다.' },
+        'MCHC': { short: '평균적혈구혈색소농도', desc: '적혈구 부피 대비 혈색소의 평균 농도입니다.' },
+        'Segmented neutrophil': { short: '분엽핵 호중구', desc: '백혈구 중 성숙한 형태의 호중구가 차지하는 비율입니다.' },
+        'Neutrophil band': { short: '띠호중구', desc: '백혈구 중 아직 덜 성숙한 형태의 호중구가 차지하는 비율입니다.' },
+        'Lymphocyte': { short: '림프구', desc: '백혈구 중 림프구가 차지하는 비율입니다.' },
+        'Monocyte': { short: '단핵구', desc: '백혈구 중 단핵구가 차지하는 비율입니다.' },
+        'Eosinophil': { short: '호산구', desc: '백혈구 중 호산구가 차지하는 비율입니다.' },
+        'Basophil': { short: '호염기구', desc: '백혈구 중 호염기구가 차지하는 비율입니다.' },
+        // ── 종양표지자 · 기타
+        'AFP': { short: '알파태아단백', desc: '태아기에 주로 만들어지는 단백질(AFP)의 혈중 농도를 재는 종양표지자 항목입니다.' },
+        'CEA': { short: '암태아성항원', desc: '여러 조직에서 만들어지는 당단백(CEA)의 혈중 농도를 재는 종양표지자 항목입니다.' },
+        'CA19-9': { short: '종양표지자', desc: '주로 소화기 계통에서 확인하는 당쇄항원(CA19-9)을 측정하는 항목입니다.' },
+        'CA125': { short: '종양표지자', desc: '주로 난소·복막 관련으로 확인하는 당단백(CA125)을 측정하는 항목입니다.' },
+        'PSA': { short: '전립선특이항원', desc: '전립선에서 만들어지는 단백질(PSA)의 혈중 농도를 재는 항목입니다.' },
+        '25-OH vitamin D': { short: '비타민 D', desc: '체내 비타민 D의 저장 형태(25-하이드록시 비타민 D) 농도를 재는 항목입니다.' },
+        'Systolic blood viscosity': { short: '수축기 혈액점도', desc: '심장이 수축할 때처럼 혈류가 빠른 조건에서 혈액의 점성을 재는 항목입니다.' },
+        'Diastolic blood viscosity': { short: '이완기 혈액점도', desc: '심장이 이완할 때처럼 혈류가 느린 조건에서 혈액의 점성을 재는 항목입니다.' },
     };
-    function hlInfo(name) { return HL_ITEM_INFO[name] || null; }
+    const HL_INFO_LOOKUP = (() => {
+        const m = new Map();
+        for (const k of Object.keys(HL_ITEM_INFO)) m.set(hlNameKey(k), HL_ITEM_INFO[k]);
+        return m;
+    })();
+    // 원본 이름을 넣어도 정규화를 거쳐 설명을 찾는다
+    function hlInfo(name) { return HL_INFO_LOOKUP.get(hlNameKey(hlNormalizeName(name))) || null; }
 
     // 병원명 힌트 (텍스트에 있으면 우선 사용). 없으면 '병원/의원/센터' 휴리스틱.
     const HL_HOSPITALS = ['서울성모병원', '삼성서울병원', '서울아산병원', '세브란스병원', '분당서울대병원'];
@@ -1870,9 +1990,10 @@
     // ---------- 파싱 유틸 ----------
     const hlPad = n => String(n).padStart(2, '0');
     const hlNum = s => { const v = parseFloat(String(s).replace(/,/g, '')); return isNaN(v) ? null : v; };
+    // 표시용 이름. 사전에 없으면 원본을 공백만 정리해 그대로 돌려준다.
     function hlNormalizeName(name) {
-        const key = name.replace(/\s+/g, ' ').trim();
-        return HL_NAME_MAP[key] || HL_NAME_MAP[key.replace(/\s+/g, '')] || key;
+        const raw = String(name == null ? '' : name).replace(/\s+/g, ' ').trim();
+        return HL_NAME_LOOKUP.get(hlNameKey(raw)) || raw;
     }
     // 결과값: "105▲" → {value:105, abnormal:true, raw}. "6.6 미만" → value 6.6. 숫자 없으면 value null.
     function hlParseResult(raw) {
@@ -1881,7 +2002,26 @@
         const m = raw.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
         return { value: m ? parseFloat(m[0]) : null, raw, abnormal: /[▲▼↑↓]/.test(raw) };
     }
-    // 참고치: "70 ~ 99 mg/dl" → {refLow:70, refHigh:99, unit:'mg/dl'}. "<200 mg/dl","13.8 미만 IU/mL","ml/min/1.73㎡"(단위만) 처리.
+    // 참고치 문자열에서 단위만 남긴다.
+    // 결과지 컬럼이 어긋나 숫자가 앞 칸으로 빠지면 "미만 mg/dL" 처럼 비교어만 남는 경우가 있다.
+    // 앞뒤에 붙은 숫자·부등호·한글 비교어를 걷어내 단위 칸이 오염되지 않게 한다.
+    // ※ 단위 자체가 숫자로 시작하는 표기(예: "10^3/µL")는 건드리지 않도록,
+    //    숫자 뒤에 공백이 있거나 문자열이 끝날 때만 숫자를 제거한다.
+    function hlCleanUnit(raw) {
+        let u = String(raw == null ? '' : raw).trim();
+        let prev;
+        do {
+            prev = u;
+            u = u.replace(/^[\s~〜～\-–<>＜＞=≤≥]+/, '')          // 앞쪽 부등호·물결
+                 .replace(/^[\d.,]+(?=\s|$)/, '')                  // 앞쪽 숫자 (뒤에 공백/끝일 때만)
+                 .replace(/^(?:미만|이하|초과|이상|이내|사이)/, '')  // 앞쪽 한글 비교어
+                 .trim();
+        } while (u !== prev);
+        return u.replace(/(?:\s*(?:미만|이하|초과|이상|이내|사이))+$/, '').trim();
+    }
+    // 참고치: "70 ~ 99 mg/dl" → {refLow:70, refHigh:99, unit:'mg/dl'}.
+    //   "<200 mg/dl", "13.8 미만 IU/mL", "60 이상 mL/min/1.73 m2", "ml/min/1.73㎡"(단위만) 처리.
+    //   "0.0 %" 처럼 숫자 하나뿐이면 상·하한을 만들지 않고 단위만 취한다(원문은 refText에 남는다).
     function hlParseRef(raw) {
         let s = (raw || '').trim();
         let refLow = null, refHigh = null, unit = '', m;
@@ -1890,8 +2030,9 @@
         else if ((m = s.match(/^[>＞]\s*([\d.,]+)\s*(.*)$/))) { refLow = hlNum(m[1]); unit = m[2]; }
         else if ((m = s.match(/^([\d.,]+)\s*(?:미만|이하)\s*(.*)$/))) { refHigh = hlNum(m[1]); unit = m[2]; }
         else if ((m = s.match(/^([\d.,]+)\s*(?:초과|이상)\s*(.*)$/))) { refLow = hlNum(m[1]); unit = m[2]; }
+        else if ((m = s.match(/^[\d.,]+(?:\s+(.*))?$/))) { unit = m[1] || ''; }  // 숫자 하나뿐 — 상·하한 불명이라 만들지 않는다
         else { unit = s; }  // 참고치 없이 단위만 (예: ml/min/1.73㎡) 또는 빈값
-        return { refLow, refHigh, unit: unit.trim() };
+        return { refLow, refHigh, unit: hlCleanUnit(unit) };
     }
     function hlIsPersonalInfo(t) {
         const c = t.replace(/\s/g, '');
@@ -1946,7 +2087,7 @@
                 ? (ref.refLow != null && res.value < ref.refLow) || (ref.refHigh != null && res.value > ref.refHigh)
                 : res.abnormal;
             items.push({
-                name: hlNormalizeName(cols[0]), value: res.value, raw: res.raw,
+                name: cols[0].replace(/\s+/g, ' ').trim(), value: res.value, raw: res.raw,  // 결과지 원본 보존 — 정규화는 표시할 때만
                 unit: ref.unit || '', refLow: ref.refLow, refHigh: ref.refHigh,
                 refText: cols[2] || '', abnormal, parseFailed: res.value == null,
             });
@@ -2147,14 +2288,18 @@
             let body = '';
             if (type === 'blood') {
                 const rows = (r.items || []).map(i => {
-                    const inf = hlInfo(i.name);
+                    // 표시만 정규화한다. 저장된 i.name 은 건드리지 않는다.
+                    const orig = String(i.name == null ? '' : i.name).replace(/\s+/g, ' ').trim();
+                    const dn = hlNormalizeName(orig);
+                    const inf = hlInfo(dn);
                     const help = inf && inf.desc
                         ? ` <span class="hl-info" title="${hlAttr(inf.desc)}" onclick="hlToggleInfo(this)">?</span><span class="hl-info-desc" style="display:none">${hlEsc(inf.desc)}</span>`
                         : '';
+                    const nameTitle = (dn !== orig) ? ` title="결과지 원본: ${hlAttr(orig)}"` : '';
                     return `<tr class="${i.abnormal ? 'abnormal' : ''}">
-                    <td>${hlEsc(i.name)}${help}</td>
+                    <td${nameTitle}>${hlEsc(dn)}${help}</td>
                     <td class="hl-v">${hlEsc(i.value != null ? i.value : i.raw)}${i.abnormal ? ' <span class="hl-abn-mark">▲▼</span>' : ''}</td>
-                    <td>${hlEsc(i.unit)}</td><td>${hlEsc(i.refText)}</td></tr>`;
+                    <td>${hlEsc(hlDisplayUnit(i.unit))}</td><td>${hlEsc(i.refText)}</td></tr>`;
                 }).join('');
                 body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none">
                     <table class="hl-view-table"><thead><tr><th>항목</th><th>값</th><th>단위</th><th>참고치</th></tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -2181,7 +2326,7 @@
     function hlBloodItemNames(person) {
         const set = new Set();
         hlRecords.filter(r => r.person === person && (r.type || 'blood') === 'blood')
-            .forEach(r => (r.items || []).forEach(i => { if (i.value != null && i.name) set.add(i.name); }));
+            .forEach(r => (r.items || []).forEach(i => { if (i.value != null && i.name) set.add(hlNormalizeName(i.name)); }));
         return [...set].sort();
     }
     function hlRenderChart() {
@@ -2207,7 +2352,7 @@
         const itemName = sel.value;
         const pts = []; let refLow = null, refHigh = null, unit = '';
         hlRecords.filter(r => r.person === hlPerson && (r.type || 'blood') === 'blood')
-            .forEach(r => { const it = (r.items || []).find(x => x.name === itemName); if (it && it.value != null) { pts.push({ date: r.date, value: it.value }); if (it.refLow != null) refLow = it.refLow; if (it.refHigh != null) refHigh = it.refHigh; if (it.unit) unit = it.unit; } });
+            .forEach(r => { const it = (r.items || []).find(x => x.name && hlNormalizeName(x.name) === itemName); if (it && it.value != null) { pts.push({ date: r.date, value: it.value }); if (it.refLow != null) refLow = it.refLow; if (it.refHigh != null) refHigh = it.refHigh; if (it.unit) unit = hlDisplayUnit(it.unit); } });
         pts.sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
 
         if (!pts.length) { canvas.style.display = 'none'; statsEl.innerHTML = ''; msgEl.innerHTML = '<div class="a10-empty">이 항목의 수치가 없습니다.</div>'; return; }
