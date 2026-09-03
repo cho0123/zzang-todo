@@ -338,7 +338,7 @@
 
         /* ===================== 건강 기록 (health) =====================
            포인트 컬러: #0ca678 (그린) — 기존(ToDo 다크, After10 남색)과 구분 */
-        .hl-persons, .hl-views, .hl-types { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+        .hl-persons, .hl-views, .hl-types, .hl-ranges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
         .hl-views { margin-bottom: 16px; }
         .hl-chip {
             flex: none; width: auto; white-space: nowrap;
@@ -672,6 +672,11 @@
 
     <!-- 뷰: 수치 흐름 -->
     <div id="hlViewChart" style="display:none">
+        <div class="hl-ranges" id="hlChartRangeRow">
+            <button class="hl-chip range active" data-hrange="all" onclick="hlSetChartRange('all')">전체</button>
+            <button class="hl-chip range" data-hrange="3y" onclick="hlSetChartRange('3y')">3년</button>
+            <button class="hl-chip range" data-hrange="1y" onclick="hlSetChartRange('1y')">1년</button>
+        </div>
         <select id="hlChartItem" onchange="hlRenderChart()"></select>
         <div class="a10-chart-box"><canvas id="hlChart"></canvas></div>
         <div class="a10-chart-stats" id="hlChartStats"></div>
@@ -685,6 +690,9 @@
 
 <!-- 지표 흐름 차트용 (빌드 도구 없는 단일 HTML 유지) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- x축 time scale용 날짜 어댑터. cdnjs에는 이 패키지가 없어 jsDelivr을 쓴다.
+     로드에 실패해도 페이지는 그대로 뜨고, 차트만 예전처럼 등간격으로 그려진다(hlDateAdapterOk 참조). -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -1989,6 +1997,7 @@
     let hlType = 'blood';
     let hlEditId = null;
     let hlChartInstance = null;
+    let hlChartRange = 'all';   // 'all' | '3y' | '1y'
 
     // ---------- 파싱 유틸 ----------
     const hlPad = n => String(n).padStart(2, '0');
@@ -2332,6 +2341,38 @@
             .forEach(r => (r.items || []).forEach(i => { if (i.value != null && i.name) set.add(hlNormalizeName(i.name)); }));
         return [...set].sort();
     }
+    // 날짜 문자열(YYYY-MM-DD) → 그날 자정의 로컬 타임스탬프. 형식이 아니면 null.
+    // new Date('2026-07-02')는 UTC로 읽혀 하루 밀릴 수 있어 직접 만든다.
+    function hlDateTs(d) {
+        const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(d == null ? '' : d).trim());
+        return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : null;
+    }
+    // 날짜 어댑터(chartjs-adapter-date-fns)가 실제로 붙었는지 확인한다.
+    // 없으면 time scale이 예외를 던지므로, 미리 확인해 예전 방식(등간격)으로 그린다.
+    let hlDateAdapterState = null;
+    function hlDateAdapterOk() {
+        if (hlDateAdapterState !== null) return hlDateAdapterState;
+        try {
+            const A = (typeof Chart !== 'undefined') && Chart._adapters && Chart._adapters._date;
+            const inst = A ? new A({}) : null;
+            hlDateAdapterState = !!inst && typeof inst.parse === 'function' && typeof inst.parse(new Date()) === 'number';
+        } catch (e) { hlDateAdapterState = false; }
+        return hlDateAdapterState;
+    }
+    const HL_RANGE_LABEL = { '1y': '1년', '3y': '3년', 'all': '전체' };
+    // 선택한 기간의 시작 시각. '전체'면 null(자르지 않음).
+    function hlRangeCutoff() {
+        const t = new Date();
+        if (hlChartRange === '1y') return new Date(t.getFullYear() - 1, t.getMonth(), t.getDate()).getTime();
+        if (hlChartRange === '3y') return new Date(t.getFullYear() - 3, t.getMonth(), t.getDate()).getTime();
+        return null;
+    }
+    window.hlSetChartRange = function (v) {
+        hlChartRange = v;
+        document.querySelectorAll('[data-hrange]').forEach(b => b.classList.toggle('active', b.dataset.hrange === v));
+        hlRenderChart();
+    };
+
     function hlRenderChart() {
         const sel = document.getElementById('hlChartItem');
         const names = hlBloodItemNames(hlPerson);
@@ -2346,59 +2387,112 @@
         const canvas = document.getElementById('hlChart');
         const statsEl = document.getElementById('hlChartStats');
         const msgEl = document.getElementById('hlChartMsg');
+        const rangeRow = document.getElementById('hlChartRangeRow');
         if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
 
-        if (typeof Chart === 'undefined') { canvas.style.display = 'none'; statsEl.innerHTML = ''; msgEl.innerHTML = '<div class="a10-empty">차트 라이브러리를 불러오지 못했습니다.</div>'; return; }
-        if (!names.length) { canvas.style.display = 'none'; statsEl.innerHTML = ''; sel.style.display = 'none'; msgEl.innerHTML = `<div class="a10-empty">${hlPerson}의 혈액검사 수치가 없습니다.</div>`; return; }
+        if (typeof Chart === 'undefined') { canvas.style.display = 'none'; statsEl.innerHTML = ''; if (rangeRow) rangeRow.style.display = 'none'; msgEl.innerHTML = '<div class="a10-empty">차트 라이브러리를 불러오지 못했습니다.</div>'; return; }
+        if (!names.length) { canvas.style.display = 'none'; statsEl.innerHTML = ''; sel.style.display = 'none'; if (rangeRow) rangeRow.style.display = 'none'; msgEl.innerHTML = `<div class="a10-empty">${hlPerson}의 혈액검사 수치가 없습니다.</div>`; return; }
         sel.style.display = '';
+        if (rangeRow) rangeRow.style.display = '';
 
         const itemName = sel.value;
-        const pts = []; let refLow = null, refHigh = null, unit = '';
+        const all = []; let refLow = null, refHigh = null, unit = '';
         hlRecords.filter(r => r.person === hlPerson && (r.type || 'blood') === 'blood')
-            .forEach(r => { const it = (r.items || []).find(x => x.name && hlNormalizeName(x.name) === itemName); if (it && it.value != null) { pts.push({ date: r.date, value: it.value }); if (it.refLow != null) refLow = it.refLow; if (it.refHigh != null) refHigh = it.refHigh; if (it.unit) unit = hlDisplayUnit(it.unit); } });
-        pts.sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
+            .forEach(r => { const it = (r.items || []).find(x => x.name && hlNormalizeName(x.name) === itemName); if (it && it.value != null) { all.push({ date: r.date, ts: hlDateTs(r.date), value: it.value }); if (it.refLow != null) refLow = it.refLow; if (it.refHigh != null) refHigh = it.refHigh; if (it.unit) unit = hlDisplayUnit(it.unit); } });
+        all.sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
 
-        if (!pts.length) { canvas.style.display = 'none'; statsEl.innerHTML = ''; msgEl.innerHTML = '<div class="a10-empty">이 항목의 수치가 없습니다.</div>'; return; }
+        if (!all.length) { canvas.style.display = 'none'; statsEl.innerHTML = ''; msgEl.innerHTML = '<div class="a10-empty">이 항목의 수치가 없습니다.</div>'; return; }
+
+        // 기간 자르기 — 날짜를 못 읽은 기록은 버리지 않고 남긴다
+        const cutoff = hlRangeCutoff();
+        const pts = (cutoff == null) ? all : all.filter(p => p.ts == null || p.ts >= cutoff);
+        if (!pts.length) {
+            canvas.style.display = 'none'; statsEl.innerHTML = '';
+            msgEl.innerHTML = `<div class="a10-empty">최근 ${HL_RANGE_LABEL[hlChartRange] || ''} 안에는 이 항목의 기록이 없습니다.<br>‘전체’를 누르면 ${all.length}건이 있습니다.</div>`;
+            return;
+        }
         canvas.style.display = '';
+
+        // 실제 날짜 간격으로 그릴 수 있는 조건: 어댑터가 있고, 모든 기록의 날짜를 읽었을 때
+        const useTime = hlDateAdapterOk() && pts.every(p => p.ts != null);
 
         const labels = pts.map(p => (p.date || '').substring(2).replace(/-/g, '/'));
         const values = pts.map(p => p.value);
+        // time scale이면 {x:타임스탬프, y:값}, 아니면 예전처럼 값 배열
+        const mk = arr => useTime ? arr.map((v, i) => ({ x: pts[i].ts, y: v })) : arr;
+
         const datasets = [];
         // 참고치 배경 영역 (상·하한 둘 다 있을 때 밴드, 하나면 점선)
         if (refLow != null && refHigh != null) {
-            datasets.push({ label: '상한', data: values.map(() => refHigh), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: '+1', backgroundColor: 'rgba(12,166,120,0.10)' });
-            datasets.push({ label: '하한', data: values.map(() => refLow), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
+            datasets.push({ label: '상한', data: mk(values.map(() => refHigh)), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: '+1', backgroundColor: 'rgba(12,166,120,0.10)' });
+            datasets.push({ label: '하한', data: mk(values.map(() => refLow)), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
         } else if (refHigh != null) {
-            datasets.push({ label: '상한', data: values.map(() => refHigh), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
+            datasets.push({ label: '상한', data: mk(values.map(() => refHigh)), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
         } else if (refLow != null) {
-            datasets.push({ label: '하한', data: values.map(() => refLow), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
+            datasets.push({ label: '하한', data: mk(values.map(() => refLow)), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
         }
         const valueDsIndex = datasets.length;
         datasets.push({
-            label: itemName, data: values, borderColor: '#364fc7', backgroundColor: 'rgba(54,79,199,0.06)',
+            label: itemName, data: mk(values), borderColor: '#364fc7', backgroundColor: 'rgba(54,79,199,0.06)',
             pointBackgroundColor: pts.map(p => ((refLow != null && p.value < refLow) || (refHigh != null && p.value > refHigh)) ? '#e03131' : '#364fc7'),
             pointRadius: 4, pointHoverRadius: 6, tension: 0.2, fill: false,
         });
 
-        hlChartInstance = new Chart(canvas, {
-            type: 'line',
-            data: { labels, datasets },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { filter: c => c.datasetIndex === valueDsIndex, callbacks: { title: c => pts[c[0].dataIndex].date, label: c => `${itemName}: ${c.parsed.y}${unit ? ' ' + unit : ''}` } }
-                },
-                scales: { x: { grid: { display: false } } }
+        // x축: 단위(일/월/년)는 Chart.js가 기간을 보고 고르게 두고, 겹침만 막는다
+        const xScale = useTime
+            ? {
+                type: 'time',
+                time: { displayFormats: { day: 'MM/dd', week: 'yy/MM/dd', month: 'yy/MM', quarter: 'yy/MM', year: 'yyyy' } },
+                grid: { display: false },
+                ticks: { autoSkip: true, maxRotation: 0, maxTicksLimit: 8, font: { size: 11 } },
+              }
+            : { grid: { display: false } };
+        // 점이 하나뿐이거나 전부 같은 날이면 폭이 0이라 Chart.js가 밀리초 눈금을 만든다.
+        // 앞뒤로 보름씩 벌려 날짜 눈금이 나오게 한다.
+        if (useTime) {
+            const tMin = Math.min.apply(null, pts.map(p => p.ts));
+            const tMax = Math.max.apply(null, pts.map(p => p.ts));
+            if (tMin === tMax) {
+                const pad = 15 * 24 * 60 * 60 * 1000;
+                xScale.min = tMin - pad; xScale.max = tMax + pad;
+                xScale.time.unit = 'day';
             }
-        });
+        }
+
+        try {
+            hlChartInstance = new Chart(canvas, {
+                type: 'line',
+                data: { labels: useTime ? undefined : labels, datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { filter: c => c.datasetIndex === valueDsIndex, callbacks: { title: c => pts[c[0].dataIndex].date, label: c => `${itemName}: ${c.parsed.y}${unit ? ' ' + unit : ''}` } }
+                    },
+                    scales: { x: xScale }
+                }
+            });
+        } catch (e) {
+            console.error('차트 생성 실패:', e);
+            hlChartInstance = null;
+            canvas.style.display = 'none'; statsEl.innerHTML = '';
+            msgEl.innerHTML = '<div class="a10-empty">차트를 그리지 못했습니다.<br>새로고침 후에도 같으면 알려주세요.</div>';
+            return;
+        }
 
         const mn = Math.min(...values), mx = Math.max(...values), first = values[0], last = values[values.length - 1];
         let html = `<span>최소 <b>${mn}</b></span><span>최대 <b>${mx}</b></span>`;
         if (values.length >= 2 && first) { const chg = (last - first) / first * 100; html += `<span>변화 <b class="${chg > 0 ? 'up' : chg < 0 ? 'down' : ''}">${chg > 0 ? '+' : ''}${chg.toFixed(1)}%</b></span>`; }
         if (refLow != null || refHigh != null) html += `<span class="hl-ref">참고 ${refLow != null ? refLow : ''}~${refHigh != null ? refHigh : ''}${unit ? ' ' + unit : ''}</span>`;
+        if (cutoff != null && pts.length < all.length) html += `<span>${HL_RANGE_LABEL[hlChartRange]} ${pts.length}건 / 전체 ${all.length}건</span>`;
         statsEl.innerHTML = html;
-        msgEl.innerHTML = values.length === 1 ? '<div class="a10-hint">기록이 1건이라 흐름은 다음 기록부터 보입니다.</div>' : '';
+
+        const notes = [];
+        if (values.length === 1) notes.push('기록이 1건이라 흐름은 다음 기록부터 보입니다.');
+        if (!useTime) notes.push(hlDateAdapterOk()
+            ? '날짜를 읽지 못한 기록이 있어 예전처럼 등간격으로 그렸습니다.'
+            : '날짜 축 라이브러리를 불러오지 못해 등간격으로 그렸습니다. (간격이 실제 기간과 다릅니다)');
+        msgEl.innerHTML = notes.length ? `<div class="a10-hint">${notes.join('<br>')}</div>` : '';
     }
     window.hlRenderChart = hlRenderChart;
 
