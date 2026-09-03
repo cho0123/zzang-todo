@@ -1661,6 +1661,33 @@
         wrap.innerHTML = html;
     }
 
+    /* ===================== 차트 공통: 기간 내 최고/최저 강조 =====================
+       - 화면에 그려진 값 배열(values) 안에서 최고·최저값의 점을 다른 모양으로 표시한다.
+       - 최고: 위쪽 삼각형(주황 테두리) / 최저: 아래쪽 삼각형(파랑 테두리)
+       - 값이 하나뿐이거나 전부 같아 최고=최저인 점은 마름모(보라 테두리)로 구분한다.
+       - 기존 pointBackgroundColor(이상치 빨강 등)는 건드리지 않고, 테두리·모양·크기만 얹는다.
+    ============================================================== */
+    function chartExtremeOverlay(values, baseRadius, baseHoverRadius) {
+        const mx = Math.max(...values), mn = Math.min(...values);
+        const isMax = values.map(v => v === mx);
+        const isMin = values.map(v => v === mn);
+        const pointStyle = values.map((v, i) => (isMax[i] && isMin[i]) ? 'rectRot' : (isMax[i] || isMin[i]) ? 'triangle' : 'circle');
+        const pointRotation = values.map((v, i) => isMin[i] && !isMax[i] ? 180 : 0);
+        const pointBorderColor = values.map((v, i) =>
+            (isMax[i] && isMin[i]) ? '#7048e8' : isMax[i] ? '#f08c00' : isMin[i] ? '#1c7ed6' : 'transparent');
+        const pointBorderWidth = values.map((v, i) => (isMax[i] || isMin[i]) ? 2 : 0);
+        const pointRadius = values.map((v, i) => (isMax[i] || isMin[i]) ? baseRadius + 3 : baseRadius);
+        const pointHoverRadius = values.map((v, i) => (isMax[i] || isMin[i]) ? baseHoverRadius + 3 : baseHoverRadius);
+        return { isMax, isMin, pointStyle, pointRotation, pointBorderColor, pointBorderWidth, pointRadius, pointHoverRadius };
+    }
+    // 툴팁 라벨에 붙일 "이 기간 최고/최저" 문구
+    function chartExtremeNote(ext, i) {
+        if (ext.isMax[i] && ext.isMin[i]) return ' (이 기간 최고·최저)';
+        if (ext.isMax[i]) return ' (이 기간 최고)';
+        if (ext.isMin[i]) return ' (이 기간 최저)';
+        return '';
+    }
+
     /* ===================== 뷰4: 지표 흐름 (차트) =====================
        - a10Entries(탭 진입 시 1회 조회)를 재사용 → 추가 읽기 없음
        - 7종 단위가 달라 한 번에 하나만 그림, 값 없는 날은 건너뜀(0 채우기 X)
@@ -1754,6 +1781,8 @@
             return yearChanged ? `${e.ymd.substring(0, 4)}/${mmdd}` : mmdd;
         });
 
+        const ext = chartExtremeOverlay(values, 4, 6);
+
         a10ChartInstance = new Chart(canvas, {
             type: 'line',
             data: {
@@ -1761,7 +1790,10 @@
                 datasets: [{
                     label: cfg.label, data: values,
                     borderColor: '#364fc7', backgroundColor: 'rgba(54,79,199,0.08)',
-                    pointBackgroundColor: '#364fc7', pointRadius: 4, pointHoverRadius: 6,
+                    pointBackgroundColor: '#364fc7',
+                    pointBorderColor: ext.pointBorderColor, pointBorderWidth: ext.pointBorderWidth,
+                    pointStyle: ext.pointStyle, pointRotation: ext.pointRotation,
+                    pointRadius: ext.pointRadius, pointHoverRadius: ext.pointHoverRadius,
                     tension: 0.25, fill: true,
                 }]
             },
@@ -1772,7 +1804,7 @@
                     tooltip: {
                         callbacks: {
                             title: ctx => fullDates[ctx[0].dataIndex],
-                            label: ctx => `${cfg.label}: ${cfg.fmt(ctx.parsed.y)}`,
+                            label: ctx => `${cfg.label}: ${cfg.fmt(ctx.parsed.y)}${chartExtremeNote(ext, ctx.dataIndex)}`,
                         }
                     }
                 },
@@ -2466,10 +2498,14 @@
             datasets.push({ label: '하한', data: mk(values.map(() => refLow)), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
         }
         const valueDsIndex = datasets.length;
+        const ext = chartExtremeOverlay(values, 4, 6);
         datasets.push({
             label: itemName, data: mk(values), borderColor: '#364fc7', backgroundColor: 'rgba(54,79,199,0.06)',
             pointBackgroundColor: pts.map(p => ((refLow != null && p.value < refLow) || (refHigh != null && p.value > refHigh)) ? '#e03131' : '#364fc7'),
-            pointRadius: 4, pointHoverRadius: 6, tension: 0.2, fill: false,
+            pointBorderColor: ext.pointBorderColor, pointBorderWidth: ext.pointBorderWidth,
+            pointStyle: ext.pointStyle, pointRotation: ext.pointRotation,
+            pointRadius: ext.pointRadius, pointHoverRadius: ext.pointHoverRadius,
+            tension: 0.2, fill: false,
         });
 
         // x축: 단위(일/월/년)는 Chart.js가 기간을 보고 고르게 두고, 겹침만 막는다
@@ -2501,7 +2537,7 @@
                     responsive: true, maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { filter: c => c.datasetIndex === valueDsIndex, callbacks: { title: c => pts[c[0].dataIndex].date, label: c => `${itemName}: ${c.parsed.y}${unit ? ' ' + unit : ''}` } }
+                        tooltip: { filter: c => c.datasetIndex === valueDsIndex, callbacks: { title: c => pts[c[0].dataIndex].date, label: c => `${itemName}: ${c.parsed.y}${unit ? ' ' + unit : ''}${chartExtremeNote(ext, c.dataIndex)}` } }
                     },
                     scales: { x: xScale }
                 }
