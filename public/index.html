@@ -2335,11 +2335,45 @@
     }
 
     // ---------- 수치 흐름 (Chart.js 재사용) ----------
+    // 항목명 → 카테고리 (사전 기반)
+    function hlItemCategory(name) {
+        const cats = {
+            '갑상선': ['TSH', 'Free T4', 'T3 (Triiodothyronine)', 'Free T3', 'TSH Receptor Ab (TSI/TBII)', 'Anti Microsomal Ab (Anti TPO Ab)', 'Thyroglobulin Ab', 'TSI Bioassay', 'HbA1c'],
+            '당·지질': ['Glucose', 'HbA1c-IFCC', 'HbA1c-eAG', 'Total Cholesterol', 'Triglycerides', 'HDL-Cholesterol', 'LDL-Cholesterol', 'beta-hydroxybutyrate (ketone body)'],
+            '콩팥·전해질': ['Urea Nitrogen', 'Creatinine', 'eGFR(CKD-EPI 2021)', 'eGFR(CKD-EPI 2009)', 'IDMS-traceable MDRD-eGFR', 'Uric acid', 'Sodium', 'Potassium', 'Chloride', 'Calcium (Ca)', 'Phosphorus (P)'],
+            '간·단백': ['AST(GOT)', 'ALT(GPT)', 'γ-GTP', 'Alkaline Phosphatase', 'Total Bilirubin', 'Total Protein', 'Albumin', 'CPK'],
+            '혈액(CBC)': ['WBC', 'RBC', 'Hemoglobin', 'Hematocrit', 'Platelet', 'MCV', 'MCH', 'MCHC', 'Segmented neutrophil', 'Neutrophil band', 'Lymphocyte', 'Monocyte', 'Eosinophil', 'Basophil'],
+            '종양표지자·기타': ['AFP', 'CEA', 'CA19-9', 'CA125', 'PSA', '25-OH vitamin D', 'Systolic blood viscosity', 'Diastolic blood viscosity'],
+        };
+        for (const [cat, items] of Object.entries(cats)) if (items.includes(name)) return cat;
+        return null;
+    }
+    // 혈액검사 항목을 카테고리별·빈도순으로 정렬해 반환한다.
     function hlBloodItemNames(person) {
-        const set = new Set();
+        const count = new Map();  // 정규화된 항목명 → 카운트
         hlRecords.filter(r => r.person === person && (r.type || 'blood') === 'blood')
-            .forEach(r => (r.items || []).forEach(i => { if (i.value != null && i.name) set.add(hlNormalizeName(i.name)); }));
-        return [...set].sort();
+            .forEach(r => (r.items || []).forEach(i => {
+                if (i.value != null && i.name) {
+                    const norm = hlNormalizeName(i.name);
+                    count.set(norm, (count.get(norm) || 0) + 1);
+                }
+            }));
+        // 카테고리별로 그룹화
+        const CAT_ORDER = ['갑상선', '당·지질', '콩팥·전해질', '간·단백', '혈액(CBC)', '종양표지자·기타'];
+        const cats = new Map(CAT_ORDER.map(c => [c, []]));
+        count.forEach((cnt, name) => {
+            const cat = hlItemCategory(name) || '종양표지자·기타';
+            if (!cats.has(cat)) cats.set(cat, []);
+            cats.get(cat).push({ name, cnt });
+        });
+        // 각 카테고리를 빈도순(내림차순)으로 정렬
+        const result = [];
+        for (const cat of CAT_ORDER) {
+            const items = cats.get(cat) || [];
+            items.sort((a, b) => b.cnt - a.cnt || a.name.localeCompare(b.name, 'ko'));
+            result.push(...items.map(x => x.name));
+        }
+        return result;
     }
     // 날짜 문자열(YYYY-MM-DD) → 그날 자정의 로컬 타임스탬프. 형식이 아니면 null.
     // new Date('2026-07-02')는 UTC로 읽혀 하루 밀릴 수 있어 직접 만든다.
