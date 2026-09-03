@@ -291,6 +291,23 @@
         }
         .a10-empty { text-align: center; color: #adb5bd; font-size: 13px; line-height: 1.7; padding: 40px 10px; }
 
+        /* 지표 흐름 (차트) */
+        .a10-chart-metrics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+        .a10-chart-modes { display: flex; gap: 6px; margin-bottom: 8px; }
+        .a10-chart-ranges { display: flex; gap: 6px; margin-bottom: 14px; }
+        .a10-chip, .a10-chip2 {
+            flex: none; width: auto; white-space: nowrap;
+            padding: 7px 13px; border-radius: 20px; font-size: 12px; font-weight: 700;
+            background: #f1f3f5; color: #868e96; border: 1px solid #dee2e6; cursor: pointer;
+        }
+        .a10-chip:hover, .a10-chip2:hover { background: #e9ecef; }
+        .a10-chip.active, .a10-chip2.active { background: #364fc7; color: #fff; border-color: #364fc7; }
+        .a10-chart-box { position: relative; height: 300px; margin-bottom: 14px; }
+        .a10-chart-stats { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; font-size: 13px; color: #495057; }
+        .a10-chart-stats b { color: #212529; }
+        .a10-chart-stats .up { color: #e03131; }
+        .a10-chart-stats .down { color: #1c7ed6; }
+
         /* ===================== 로그인 게이트 ===================== */
         #loginScreen { width: 100%; max-width: 360px; margin-top: 8vh; }
         .login-card {
@@ -455,6 +472,7 @@
         <button class="a10-viewbtn active" data-view="write" onclick="switchAfter10View('write')">✍️ 오늘 쓰기</button>
         <button class="a10-viewbtn" data-view="timeline" onclick="switchAfter10View('timeline')">📜 전체 타임라인</button>
         <button class="a10-viewbtn" data-view="past" onclick="switchAfter10View('past')">🗓️ 과거의 오늘</button>
+        <button class="a10-viewbtn" data-view="chart" onclick="switchAfter10View('chart')">📈 지표 흐름</button>
     </div>
 
     <!-- 뷰 1: 오늘 쓰기 -->
@@ -492,10 +510,39 @@
         <div id="a10Past"></div>
     </div>
 
+    <!-- 뷰 4: 지표 흐름 -->
+    <div id="a10ViewChart" style="display:none">
+        <div class="a10-concept">일지에 기록된 날의 지표 흐름</div>
+
+        <!-- 지표 선택 (7종) -->
+        <div class="a10-chart-metrics" id="a10ChartMetrics"></div>
+
+        <!-- 기간 모드 -->
+        <div class="a10-chart-modes">
+            <button class="a10-chip active" data-cmode="range" onclick="a10SetChartMode('range')">📅 연속 구간</button>
+            <button class="a10-chip" data-cmode="anniv" onclick="a10SetChartMode('anniv')">🗓️ 매년 같은 날</button>
+        </div>
+
+        <!-- 연속 구간 세부 (range 모드에서만) -->
+        <div class="a10-chart-ranges" id="a10ChartRanges">
+            <button class="a10-chip2 active" data-crange="1m" onclick="a10SetChartRange('1m')">1개월</button>
+            <button class="a10-chip2" data-crange="3m" onclick="a10SetChartRange('3m')">3개월</button>
+            <button class="a10-chip2" data-crange="1y" onclick="a10SetChartRange('1y')">1년</button>
+            <button class="a10-chip2" data-crange="all" onclick="a10SetChartRange('all')">전체</button>
+        </div>
+
+        <div class="a10-chart-box"><canvas id="a10Chart"></canvas></div>
+        <div class="a10-chart-stats" id="a10ChartStats"></div>
+        <div id="a10ChartMsg"></div>
+    </div>
+
 </div>
 <!-- ===== /After10 탭 ===== -->
 
 </div>
+
+<!-- 지표 흐름 차트용 (빌드 도구 없는 단일 HTML 유지) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -1164,7 +1211,7 @@
 
     // After10 내부 뷰 전환
     window.switchAfter10View = function(view) {
-        const views = { write: 'a10ViewWrite', timeline: 'a10ViewTimeline', past: 'a10ViewPast' };
+        const views = { write: 'a10ViewWrite', timeline: 'a10ViewTimeline', past: 'a10ViewPast', chart: 'a10ViewChart' };
         Object.keys(views).forEach(k => {
             document.getElementById(views[k]).style.display = (k === view) ? 'block' : 'none';
         });
@@ -1173,6 +1220,7 @@
         });
         if (view === 'timeline') a10RenderTimeline();
         if (view === 'past') a10RenderPast();
+        if (view === 'chart') a10RenderChart();
     };
 
     // Firestore에서 일지 전체 조회 (구독 아님)
@@ -1189,6 +1237,7 @@
             a10FillWriteForm(a10CurrentDate || todayStr());
             if (document.getElementById('a10ViewTimeline').style.display !== 'none') a10RenderTimeline();
             if (document.getElementById('a10ViewPast').style.display !== 'none') a10RenderPast();
+            if (document.getElementById('a10ViewChart').style.display !== 'none') a10RenderChart();
         } catch (e) {
             console.error('일지 불러오기 실패:', e);
         }
@@ -1458,6 +1507,147 @@
             html += '<div class="a10-hint">내년 오늘, 이 아래에 기록이 하나 더 쌓입니다.</div>';
         }
         wrap.innerHTML = html;
+    }
+
+    /* ===================== 뷰4: 지표 흐름 (차트) =====================
+       - a10Entries(탭 진입 시 1회 조회)를 재사용 → 추가 읽기 없음
+       - 7종 단위가 달라 한 번에 하나만 그림, 값 없는 날은 건너뜀(0 채우기 X)
+    ============================================================== */
+    const A10_METRICS = {
+        usdkrw: { label: '원/달러',        dec: 2, fmt: v => a10FmtNum(v, 2) },
+        jpykrw: { label: '원/엔',          dec: 2, fmt: v => a10FmtNum(v, 2) },
+        kospi:  { label: '코스피',         dec: 2, fmt: v => a10FmtNum(v, 2) },
+        spx:    { label: 'S&P500',         dec: 2, fmt: v => a10FmtNum(v, 2) },
+        ndq:    { label: '나스닥',         dec: 2, fmt: v => a10FmtNum(v, 2) },
+        gold:   { label: '금(USD/oz)',     dec: 2, fmt: v => '$' + a10FmtNum(v, 2) },
+        btc:    { label: '비트코인(USD)',  dec: 0, fmt: v => '$' + a10FmtNum(v, 0) },
+    };
+    let a10ChartMetric = 'usdkrw';   // 기본: 원/달러
+    let a10ChartMode = 'range';      // 'range' | 'anniv'
+    let a10ChartRange = '1m';        // '1m' | '3m' | '1y' | 'all'
+    let a10ChartInstance = null;
+
+    window.a10SetChartMetric = function(k) { a10ChartMetric = k; a10RenderChart(); };
+    window.a10SetChartMode   = function(m) { a10ChartMode = m; a10RenderChart(); };
+    window.a10SetChartRange  = function(r) { a10ChartRange = r; a10RenderChart(); };
+
+    // Date → YYYY-MM-DD (로컬)
+    function a10DateToYmd(d) {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    // 현재 선택에 맞는 데이터 포인트 목록 (오름차순)
+    function a10ChartData() {
+        const metric = a10ChartMetric;
+        let items = a10Entries
+            .filter(e => e.market && e.market[metric] != null)
+            .map(e => ({ ymd: e.id, value: e.market[metric] }));
+
+        if (a10ChartMode === 'anniv') {
+            const md = todayStr().substring(5);                 // 오늘의 MM-DD
+            items = items.filter(e => e.ymd.substring(5) === md);
+        } else if (a10ChartRange !== 'all') {
+            const days = a10ChartRange === '1m' ? 30 : a10ChartRange === '3m' ? 92 : 365;
+            const cut = new Date(); cut.setHours(0, 0, 0, 0); cut.setDate(cut.getDate() - days);
+            const cutStr = a10DateToYmd(cut);
+            items = items.filter(e => e.ymd >= cutStr);
+        }
+        items.sort((a, b) => a.ymd < b.ymd ? -1 : a.ymd > b.ymd ? 1 : 0);
+        return items;
+    }
+
+    // 지표 선택 버튼 렌더 (active 반영)
+    function a10BuildMetricBtns() {
+        document.getElementById('a10ChartMetrics').innerHTML = Object.keys(A10_METRICS).map(k =>
+            `<button class="a10-chip2${k === a10ChartMetric ? ' active' : ''}" onclick="a10SetChartMetric('${k}')">${A10_METRICS[k].label}</button>`
+        ).join('');
+    }
+
+    function a10RenderChart() {
+        // 컨트롤 상태 갱신
+        a10BuildMetricBtns();
+        document.querySelectorAll('[data-cmode]').forEach(b => b.classList.toggle('active', b.dataset.cmode === a10ChartMode));
+        document.querySelectorAll('[data-crange]').forEach(b => b.classList.toggle('active', b.dataset.crange === a10ChartRange));
+        document.getElementById('a10ChartRanges').style.display = (a10ChartMode === 'range') ? 'flex' : 'none';
+
+        const msgEl = document.getElementById('a10ChartMsg');
+        const statsEl = document.getElementById('a10ChartStats');
+        const canvas = document.getElementById('a10Chart');
+        const cfg = A10_METRICS[a10ChartMetric];
+
+        if (a10ChartInstance) { a10ChartInstance.destroy(); a10ChartInstance = null; }
+
+        if (typeof Chart === 'undefined') {
+            canvas.style.display = 'none'; statsEl.innerHTML = '';
+            msgEl.innerHTML = '<div class="a10-empty">차트 라이브러리를 불러오지 못했습니다.<br>네트워크 확인 후 다시 시도해주세요.</div>';
+            return;
+        }
+
+        const items = a10ChartData();
+        if (!items.length) {
+            canvas.style.display = 'none'; statsEl.innerHTML = '';
+            msgEl.innerHTML = `<div class="a10-empty">표시할 <b>${cfg.label}</b> 데이터가 없습니다.<br>일지를 저장하면 지표가 쌓입니다.</div>`;
+            return;
+        }
+        canvas.style.display = '';
+
+        const fullDates = items.map(e => e.ymd);
+        const values = items.map(e => e.value);
+        // 라벨: anniv는 연도. range는 MM/DD 기본,
+        // 단 앞 점과 연도가 바뀌는 지점만 YYYY/MM/DD로 표기(한 해 안이면 전부 MM/DD).
+        const labels = items.map((e, i) => {
+            if (a10ChartMode === 'anniv') return e.ymd.substring(0, 4) + '년';
+            const mmdd = e.ymd.substring(5).replace('-', '/');
+            const yearChanged = i > 0 && e.ymd.substring(0, 4) !== items[i - 1].ymd.substring(0, 4);
+            return yearChanged ? `${e.ymd.substring(0, 4)}/${mmdd}` : mmdd;
+        });
+
+        a10ChartInstance = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: cfg.label, data: values,
+                    borderColor: '#364fc7', backgroundColor: 'rgba(54,79,199,0.08)',
+                    pointBackgroundColor: '#364fc7', pointRadius: 4, pointHoverRadius: 6,
+                    tension: 0.25, fill: true,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: ctx => fullDates[ctx[0].dataIndex],
+                            label: ctx => `${cfg.label}: ${cfg.fmt(ctx.parsed.y)}`,
+                        }
+                    }
+                },
+                scales: {
+                    y: { ticks: { callback: v => cfg.fmt(v) } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+
+        // 최소/최대/변화율
+        const min = Math.min(...values), max = Math.max(...values);
+        const first = values[0], last = values[values.length - 1];
+        let html = `<span>최소 <b>${cfg.fmt(min)}</b></span><span>최대 <b>${cfg.fmt(max)}</b></span>`;
+        if (values.length >= 2 && first) {
+            const chg = (last - first) / first * 100;
+            const cls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
+            html += `<span>변화 <b class="${cls}">${chg > 0 ? '+' : ''}${chg.toFixed(2)}%</b></span>`;
+        }
+        statsEl.innerHTML = html;
+
+        // 매년 같은 날 모드에서 1개뿐이면 안내
+        if (a10ChartMode === 'anniv' && items.length === 1) {
+            msgEl.innerHTML = '<div class="a10-hint">아직 한 해치 기록뿐이에요.<br>내년부터 비교가 가능해집니다.</div>';
+        } else {
+            msgEl.innerHTML = '';
+        }
     }
 
     // 타임라인 항목 클릭 → 해당 날짜를 작성 폼으로
