@@ -307,6 +307,8 @@
         .a10-chart-stats b { color: #212529; }
         .a10-chart-stats .up { color: #e03131; }
         .a10-chart-stats .down { color: #1c7ed6; }
+        .hl-chart-detail { margin-top: 12px; padding: 12px 14px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; font-size: 13px; line-height: 1.7; color: #495057; }
+        .hl-chart-detail b { display: block; margin-bottom: 4px; color: #212529; font-size: 13px; }
 
         /* ===================== 로그인 게이트 ===================== */
         #loginScreen { width: 100%; max-width: 360px; margin-top: 8vh; }
@@ -681,6 +683,7 @@
         <div class="a10-chart-box"><canvas id="hlChart"></canvas></div>
         <div class="a10-chart-stats" id="hlChartStats"></div>
         <div id="hlChartMsg"></div>
+        <div class="hl-chart-detail" id="hlChartDetail" style="display:none"></div>
     </div>
 
 </div>
@@ -1945,69 +1948,69 @@
     //    사전에 없는 항목은 설명 없이 그대로 표시(오류 없음). 항목은 여기 계속 추가.
     const HL_ITEM_INFO = {
         // ── 갑상선
-        'TSH': { short: '갑상선자극호르몬', desc: '뇌하수체에서 분비되어 갑상선을 자극하는 호르몬(TSH)을 재는 항목입니다.' },
-        'Free T4': { short: '유리 T4', desc: '혈액 속에서 단백질과 결합하지 않은 갑상선호르몬(T4)의 양을 재는 항목입니다.' },
-        'Free T3': { short: '유리 T3', desc: '혈액 속에서 단백질과 결합하지 않은 갑상선호르몬(T3)의 양을 재는 항목입니다.' },
-        'T3 (Triiodothyronine)': { short: 'T3', desc: '갑상선에서 분비되는 호르몬의 하나(삼요오드티로닌, T3)를 측정하는 항목입니다.' },
-        'Anti Microsomal Ab (Anti TPO Ab)': { short: '갑상선항체', desc: '갑상선 세포의 효소(TPO)에 대한 자가항체로, 갑상선 자가면역 여부를 볼 때 확인하는 항목입니다.' },
-        'Thyroglobulin Ab': { short: '갑상선항체', desc: '갑상선 단백질(티로글로불린)에 대한 자가항체를 측정하는 항목입니다.' },
-        'TSH Receptor Ab (TSI/TBII)': { short: 'TSH수용체항체', desc: '갑상선의 TSH 수용체에 대한 자가항체를 측정하는 항목입니다.' },
-        'TSI Bioassay': { short: '갑상선자극항체', desc: '갑상선을 자극하는 항체의 활성을 세포 반응으로 측정하는 항목입니다.' },
+        'TSH': { short: '갑상선자극호르몬', desc: '뇌하수체에서 분비되어 갑상선을 자극하는 호르몬(TSH)을 재는 항목입니다.', detail: "뇌하수체가 갑상선을 자극하려고 내보내는 호르몬입니다. 갑상선호르몬 양에 따라 되먹임으로 오르내리며, 채혈 시간대·스트레스·일부 약물에도 영향을 받습니다." },
+        'Free T4': { short: '유리 T4', desc: '혈액 속에서 단백질과 결합하지 않은 갑상선호르몬(T4)의 양을 재는 항목입니다.', detail: "갑상선이 만드는 호르몬 T4 가운데 단백질에 붙지 않아 실제로 작용하는 몫을 잰 값입니다. 갑상선의 호르몬 생산량과 관련 약물에 영향을 받습니다." },
+        'Free T3': { short: '유리 T3', desc: '혈액 속에서 단백질과 결합하지 않은 갑상선호르몬(T3)의 양을 재는 항목입니다.', detail: "갑상선호르몬 T3 가운데 단백질에 붙지 않은 활성 몫을 잰 값입니다. 몸 상태나 다른 질환, 관련 약물에 따라 달라질 수 있습니다." },
+        'T3 (Triiodothyronine)': { short: 'T3', desc: '갑상선에서 분비되는 호르몬의 하나(삼요오드티로닌, T3)를 측정하는 항목입니다.', detail: "갑상선이 내보내는 호르몬 T3의 혈중 양을 잰 값입니다. 단백질과 결합한 것까지 포함하며, 갑상선 활동과 몸 상태에 영향을 받습니다." },
+        'Anti Microsomal Ab (Anti TPO Ab)': { short: '갑상선항체', desc: '갑상선 세포의 효소(TPO)에 대한 자가항체로, 갑상선 자가면역 여부를 볼 때 확인하는 항목입니다.', detail: "갑상선 효소(TPO)를 상대로 몸이 만든 자가항체의 양입니다. 갑상선을 향한 자가면역 반응 여부를 살필 때 함께 봅니다." },
+        'Thyroglobulin Ab': { short: '갑상선항체', desc: '갑상선 단백질(티로글로불린)에 대한 자가항체를 측정하는 항목입니다.', detail: "갑상선 단백질(티로글로불린)을 상대로 만들어진 자가항체의 양입니다. 갑상선 자가면역과 관련해 함께 확인하는 항목입니다." },
+        'TSH Receptor Ab (TSI/TBII)': { short: 'TSH수용체항체', desc: '갑상선의 TSH 수용체에 대한 자가항체를 측정하는 항목입니다.', detail: "갑상선의 TSH 수용체에 달라붙는 자가항체의 양입니다. 이 수용체를 자극하거나 막는 항체가 있는지 볼 때 확인합니다." },
+        'TSI Bioassay': { short: '갑상선자극항체', desc: '갑상선을 자극하는 항체의 활성을 세포 반응으로 측정하는 항목입니다.', detail: "갑상선을 자극하는 항체가 실제로 세포를 얼마나 자극하는지 활성으로 잰 값입니다. 항체의 존재뿐 아니라 작용 세기를 보는 검사입니다." },
         // ── 당 · 지질
-        'Glucose': { short: '혈당', desc: '혈액 속 포도당 농도로, 보통 공복 상태에서 측정합니다.' },
-        'HbA1c': { short: '당화혈색소', desc: '포도당과 결합한 혈색소의 비율로, 최근 2~3개월의 평균적인 혈당 상태를 반영하는 항목입니다.' },
-        'HbA1c-IFCC': { short: '당화혈색소(IFCC)', desc: '같은 당화혈색소를 IFCC 국제표준 방식으로 나타낸 값으로, 단위가 mmol/mol입니다.' },
-        'HbA1c-eAG': { short: '추정 평균혈당', desc: '당화혈색소 값을 평균 혈당(mg/dL)으로 환산한 수치입니다.' },
-        'Total Cholesterol': { short: '총콜레스테롤', desc: '혈액 속 콜레스테롤의 총량을 재는 항목입니다.' },
-        'Triglycerides': { short: '중성지방', desc: '혈액 속 지방 성분으로, 식사 영향을 크게 받아 공복 채혈이 기본입니다.' },
-        'HDL-Cholesterol': { short: 'HDL콜레스테롤', desc: '콜레스테롤을 운반하는 지단백의 하나(HDL)에 실린 콜레스테롤을 재는 항목입니다.' },
-        'LDL-Cholesterol': { short: 'LDL콜레스테롤', desc: '콜레스테롤을 운반하는 지단백의 하나(LDL)에 실린 콜레스테롤을 재는 항목입니다.' },
-        'beta-hydroxybutyrate (ketone body)': { short: '케톤체', desc: '지방이 분해될 때 생기는 케톤체의 하나(베타-하이드록시부티르산)를 측정하는 항목입니다.' },
+        'Glucose': { short: '혈당', desc: '혈액 속 포도당 농도로, 보통 공복 상태에서 측정합니다.', detail: "혈액 속 포도당의 농도입니다. 식사·공복 시간, 운동, 스트레스에 크게 영향을 받아 보통 공복 상태에서 측정합니다." },
+        'HbA1c': { short: '당화혈색소', desc: '포도당과 결합한 혈색소의 비율로, 최근 2~3개월의 평균적인 혈당 상태를 반영하는 항목입니다.', detail: "포도당이 달라붙은 혈색소의 비율로, 최근 2~3개월 혈당의 평균 경향을 반영합니다. 그날의 식사에는 거의 영향받지 않는 대신 적혈구 수명과 관련됩니다." },
+        'HbA1c-IFCC': { short: '당화혈색소(IFCC)', desc: '같은 당화혈색소를 IFCC 국제표준 방식으로 나타낸 값으로, 단위가 mmol/mol입니다.', detail: "당화혈색소를 IFCC 국제표준 단위(mmol/mol)로 나타낸 값으로, 재는 대상은 일반 당화혈색소와 같습니다." },
+        'HbA1c-eAG': { short: '추정 평균혈당', desc: '당화혈색소 값을 평균 혈당(mg/dL)으로 환산한 수치입니다.', detail: "당화혈색소 값을 평균 혈당(mg/dL)으로 환산해 이해하기 쉽게 바꾼 수치입니다." },
+        'Total Cholesterol': { short: '총콜레스테롤', desc: '혈액 속 콜레스테롤의 총량을 재는 항목입니다.', detail: "혈액 속 콜레스테롤을 모두 합한 양입니다. 식습관·체질·유전, 그리고 여러 종류의 지단백 양에 함께 영향을 받습니다." },
+        'Triglycerides': { short: '중성지방', desc: '혈액 속 지방 성분으로, 식사 영향을 크게 받아 공복 채혈이 기본입니다.', detail: "혈액 속 지방 성분입니다. 식사와 음주에 크게 영향받아 공복 채혈이 기본입니다." },
+        'HDL-Cholesterol': { short: 'HDL콜레스테롤', desc: '콜레스테롤을 운반하는 지단백의 하나(HDL)에 실린 콜레스테롤을 재는 항목입니다.', detail: "콜레스테롤을 조직에서 간으로 회수하는 지단백(HDL)에 실린 콜레스테롤 양입니다. 생활 습관과 체질에 영향을 받습니다." },
+        'LDL-Cholesterol': { short: 'LDL콜레스테롤', desc: '콜레스테롤을 운반하는 지단백의 하나(LDL)에 실린 콜레스테롤을 재는 항목입니다.', detail: "콜레스테롤을 조직으로 운반하는 지단백(LDL)에 실린 콜레스테롤 양입니다. 식습관·체질·유전의 영향을 받으며 계산식으로 구하기도 합니다." },
+        'beta-hydroxybutyrate (ketone body)': { short: '케톤체', desc: '지방이 분해될 때 생기는 케톤체의 하나(베타-하이드록시부티르산)를 측정하는 항목입니다.', detail: "몸이 지방을 에너지로 쓸 때 생기는 케톤체의 하나입니다. 공복·저탄수 식사·심한 운동 등 에너지 대사 상태에 영향을 받습니다." },
         // ── 콩팥 · 전해질
-        'Urea Nitrogen': { short: '요소질소', desc: '단백질 대사 후 생기는 노폐물(요소질소)의 혈중 농도를 재는 항목입니다.' },
-        'Creatinine': { short: '크레아티닌', desc: '근육 대사 후 생기는 노폐물로, 콩팥 기능을 볼 때 함께 확인합니다.' },
-        'eGFR(CKD-EPI 2021)': { short: '추정 사구체여과율', desc: '크레아티닌 값으로 콩팥의 여과 기능을 추정한 수치(CKD-EPI 2021 공식)입니다.' },
-        'eGFR(CKD-EPI 2009)': { short: '추정 사구체여과율', desc: 'CKD-EPI 2009 공식으로 계산한 콩팥 여과 기능 추정치입니다.' },
-        'IDMS-traceable MDRD-eGFR': { short: '추정 사구체여과율', desc: 'MDRD 공식으로 계산한 콩팥 여과 기능 추정치입니다.' },
-        'Uric acid': { short: '요산', desc: '퓨린 대사 후 생기는 노폐물(요산)의 혈중 농도를 재는 항목입니다.' },
-        'Sodium': { short: '나트륨', desc: '체내 수분·전해질 균형과 관련된 나트륨(Na) 농도를 재는 항목입니다.' },
-        'Potassium': { short: '칼륨', desc: '신경·근육 기능 등과 관련된 전해질(칼륨, K) 농도를 재는 항목입니다.' },
-        'Chloride': { short: '염소', desc: '체내 산-염기·전해질 균형과 관련된 염소(클로라이드, Cl) 농도입니다.' },
-        'Calcium (Ca)': { short: '칼슘', desc: '뼈·근육·신경 기능과 관련된 칼슘(Ca)의 혈중 농도를 재는 항목입니다.' },
-        'Phosphorus (P)': { short: '인', desc: '뼈와 에너지 대사에 관여하는 인(P)의 혈중 농도를 재는 항목입니다.' },
+        'Urea Nitrogen': { short: '요소질소', desc: '단백질 대사 후 생기는 노폐물(요소질소)의 혈중 농도를 재는 항목입니다.', detail: "단백질을 쓰고 남은 노폐물(요소질소)의 혈중 농도입니다. 콩팥의 배설, 단백질 섭취량, 수분 상태에 영향을 받습니다." },
+        'Creatinine': { short: '크레아티닌', desc: '근육 대사 후 생기는 노폐물로, 콩팥 기능을 볼 때 함께 확인합니다.', detail: "근육을 쓰고 나오는 노폐물로, 콩팥이 걸러 내보냅니다. 콩팥의 배설 기능과 근육량에 영향을 받습니다." },
+        'eGFR(CKD-EPI 2021)': { short: '추정 사구체여과율', desc: '크레아티닌 값으로 콩팥의 여과 기능을 추정한 수치(CKD-EPI 2021 공식)입니다.', detail: "크레아티닌 값에 나이·성별을 넣어 콩팥의 여과 능력을 추정한 수치입니다(CKD-EPI 2021 공식). 크레아티닌에 영향을 주는 요인이 함께 반영됩니다." },
+        'eGFR(CKD-EPI 2009)': { short: '추정 사구체여과율', desc: 'CKD-EPI 2009 공식으로 계산한 콩팥 여과 기능 추정치입니다.', detail: "콩팥의 여과 능력을 추정한 수치로, CKD-EPI 2009 공식을 씁니다. 계산식만 다를 뿐 크레아티닌을 바탕으로 합니다." },
+        'IDMS-traceable MDRD-eGFR': { short: '추정 사구체여과율', desc: 'MDRD 공식으로 계산한 콩팥 여과 기능 추정치입니다.', detail: "콩팥의 여과 능력을 추정한 수치로, MDRD 공식을 씁니다. 역시 크레아티닌을 바탕으로 계산합니다." },
+        'Uric acid': { short: '요산', desc: '퓨린 대사 후 생기는 노폐물(요산)의 혈중 농도를 재는 항목입니다.', detail: "퓨린이라는 성분을 쓰고 남은 노폐물(요산)의 혈중 농도입니다. 음식·음주와 콩팥의 배설에 영향을 받습니다." },
+        'Sodium': { short: '나트륨', desc: '체내 수분·전해질 균형과 관련된 나트륨(Na) 농도를 재는 항목입니다.', detail: "몸의 수분·전해질 균형을 좌우하는 나트륨(Na)의 농도입니다. 수분 섭취와 배설, 호르몬 조절에 영향을 받습니다." },
+        'Potassium': { short: '칼륨', desc: '신경·근육 기능 등과 관련된 전해질(칼륨, K) 농도를 재는 항목입니다.', detail: "신경·근육, 특히 심장 기능과 관련된 전해질(칼륨, K)의 농도입니다. 콩팥 배설, 식사, 채혈·용혈 상태에 영향을 받습니다." },
+        'Chloride': { short: '염소', desc: '체내 산-염기·전해질 균형과 관련된 염소(클로라이드, Cl) 농도입니다.', detail: "몸의 산-염기와 전해질 균형에 관여하는 염소(Cl)의 농도입니다. 수분 상태·나트륨 균형과 함께 움직이는 경향이 있습니다." },
+        'Calcium (Ca)': { short: '칼슘', desc: '뼈·근육·신경 기능과 관련된 칼슘(Ca)의 혈중 농도를 재는 항목입니다.', detail: "뼈·근육·신경 기능에 관여하는 칼슘(Ca)의 혈중 농도입니다. 혈액 단백질(알부민) 양과 여러 호르몬의 영향을 받습니다." },
+        'Phosphorus (P)': { short: '인', desc: '뼈와 에너지 대사에 관여하는 인(P)의 혈중 농도를 재는 항목입니다.', detail: "뼈와 에너지 대사에 쓰이는 인(P)의 혈중 농도입니다. 식사, 콩팥의 배설, 관련 호르몬에 영향을 받습니다." },
         // ── 간 · 단백
-        'AST(GOT)': { short: '간효소', desc: '간세포 등에 많은 효소로, 간·근육 상태를 볼 때 함께 확인합니다.' },
-        'ALT(GPT)': { short: '간효소', desc: '주로 간세포에 있는 효소로, 간 상태를 볼 때 확인하는 항목입니다.' },
-        'γ-GTP': { short: '간·담도 효소', desc: '간과 담도에 많은 효소(감마-GTP)를 측정하는 항목입니다.' },
-        'Alkaline Phosphatase': { short: '알칼리성 인산분해효소', desc: '간·담도, 뼈 등에 있는 효소(ALP)를 측정하는 항목입니다.' },
-        'Total Bilirubin': { short: '총빌리루빈', desc: '적혈구가 분해되며 생기는 색소(빌리루빈)의 총량으로, 간·담도와 관련된 항목입니다.' },
-        'Total Protein': { short: '총단백', desc: '혈액 속 단백질의 총량을 재는 항목입니다.' },
-        'Albumin': { short: '알부민', desc: '혈액 단백질 중 가장 많은 알부민의 농도를 재는 항목입니다.' },
-        'CPK': { short: '크레아틴키나아제', desc: '주로 근육에 있는 효소(CPK/CK)로, 근육 관련 상태를 볼 때 확인합니다.' },
+        'AST(GOT)': { short: '간효소', desc: '간세포 등에 많은 효소로, 간·근육 상태를 볼 때 함께 확인합니다.', detail: "간·근육·심장 등 여러 세포 안에 있는 효소로, 세포가 손상되면 혈액으로 새어 나옵니다. 간뿐 아니라 근육 상태에도 영향을 받습니다." },
+        'ALT(GPT)': { short: '간효소', desc: '주로 간세포에 있는 효소로, 간 상태를 볼 때 확인하는 항목입니다.', detail: "주로 간세포 안에 있는 효소로, 간세포가 손상되면 혈액으로 나옵니다. 그래서 간 상태를 볼 때 특히 눈여겨보는 항목입니다." },
+        'γ-GTP': { short: '간·담도 효소', desc: '간과 담도에 많은 효소(감마-GTP)를 측정하는 항목입니다.', detail: "간과 담도에 많은 효소(감마-GTP)입니다. 음주와 일부 약물, 담도 상태에 영향을 받는 것으로 알려져 있습니다." },
+        'Alkaline Phosphatase': { short: '알칼리성 인산분해효소', desc: '간·담도, 뼈 등에 있는 효소(ALP)를 측정하는 항목입니다.', detail: "간·담도와 뼈 등에 있는 효소(ALP)입니다. 담도 상태와 뼈의 대사, 성장기·임신 같은 생리 상태에 영향을 받습니다." },
+        'Total Bilirubin': { short: '총빌리루빈', desc: '적혈구가 분해되며 생기는 색소(빌리루빈)의 총량으로, 간·담도와 관련된 항목입니다.', detail: "적혈구가 수명을 다해 분해될 때 생기는 색소(빌리루빈)의 총량입니다. 간의 처리와 담도 배출, 적혈구 분해량에 영향을 받습니다." },
+        'Total Protein': { short: '총단백', desc: '혈액 속 단백질의 총량을 재는 항목입니다.', detail: "혈액 속 단백질을 모두 합한 양으로, 알부민과 글로불린이 주를 이룹니다. 영양·수분 상태와 간·콩팥 기능에 영향을 받습니다." },
+        'Albumin': { short: '알부민', desc: '혈액 단백질 중 가장 많은 알부민의 농도를 재는 항목입니다.', detail: "혈액 단백질 중 가장 많은 알부민의 농도입니다. 간에서 만들어지며 영양·수분 상태와 간 기능에 영향을 받습니다." },
+        'CPK': { short: '크레아틴키나아제', desc: '주로 근육에 있는 효소(CPK/CK)로, 근육 관련 상태를 볼 때 확인합니다.', detail: "주로 근육에 있는 효소(CPK/CK)로, 근육이 손상되면 혈액으로 나옵니다. 심한 운동이나 근육 상태에 영향을 받습니다." },
         // ── 혈액(CBC)
-        'WBC': { short: '백혈구 수', desc: '혈액 일정 부피 안에 들어 있는 백혈구의 개수를 세는 항목입니다.' },
-        'RBC': { short: '적혈구 수', desc: '혈액 일정 부피 안에 들어 있는 적혈구의 개수를 세는 항목입니다.' },
-        'Hemoglobin': { short: '혈색소', desc: '적혈구 안에서 산소를 운반하는 단백질(혈색소)의 농도를 재는 항목입니다.' },
-        'Hematocrit': { short: '적혈구용적률', desc: '전체 혈액 부피에서 적혈구가 차지하는 비율을 재는 항목입니다.' },
-        'Platelet': { short: '혈소판 수', desc: '지혈에 관여하는 혈소판의 개수를 세는 항목입니다.' },
-        'MCV': { short: '평균적혈구용적', desc: '적혈구 한 개의 평균 크기(부피)를 나타내는 항목입니다.' },
-        'MCH': { short: '평균적혈구혈색소량', desc: '적혈구 한 개에 들어 있는 혈색소의 평균 양입니다.' },
-        'MCHC': { short: '평균적혈구혈색소농도', desc: '적혈구 부피 대비 혈색소의 평균 농도입니다.' },
-        'Segmented neutrophil': { short: '분엽핵 호중구', desc: '백혈구 중 성숙한 형태의 호중구가 차지하는 비율입니다.' },
-        'Neutrophil band': { short: '띠호중구', desc: '백혈구 중 아직 덜 성숙한 형태의 호중구가 차지하는 비율입니다.' },
-        'Lymphocyte': { short: '림프구', desc: '백혈구 중 림프구가 차지하는 비율입니다.' },
-        'Monocyte': { short: '단핵구', desc: '백혈구 중 단핵구가 차지하는 비율입니다.' },
-        'Eosinophil': { short: '호산구', desc: '백혈구 중 호산구가 차지하는 비율입니다.' },
-        'Basophil': { short: '호염기구', desc: '백혈구 중 호염기구가 차지하는 비율입니다.' },
+        'WBC': { short: '백혈구 수', desc: '혈액 일정 부피 안에 들어 있는 백혈구의 개수를 세는 항목입니다.', detail: "혈액 일정 부피 안의 백혈구 개수입니다. 감염·염증, 스트레스, 하루 중 시간대에도 영향을 받습니다." },
+        'RBC': { short: '적혈구 수', desc: '혈액 일정 부피 안에 들어 있는 적혈구의 개수를 세는 항목입니다.', detail: "혈액 일정 부피 안의 적혈구 개수입니다. 수분 상태, 빈혈 여부, 채혈 조건에 영향을 받습니다." },
+        'Hemoglobin': { short: '혈색소', desc: '적혈구 안에서 산소를 운반하는 단백질(혈색소)의 농도를 재는 항목입니다.', detail: "적혈구 안에서 산소를 나르는 단백질(혈색소)의 농도입니다. 적혈구 수와 수분 상태에 영향을 받습니다." },
+        'Hematocrit': { short: '적혈구용적률', desc: '전체 혈액 부피에서 적혈구가 차지하는 비율을 재는 항목입니다.', detail: "전체 혈액 부피에서 적혈구가 차지하는 비율입니다. 적혈구 수와 크기, 수분 상태에 영향을 받습니다." },
+        'Platelet': { short: '혈소판 수', desc: '지혈에 관여하는 혈소판의 개수를 세는 항목입니다.', detail: "지혈에 관여하는 혈소판의 개수입니다. 골수의 생산과 소모, 채혈 과정의 응집에도 영향을 받습니다." },
+        'MCV': { short: '평균적혈구용적', desc: '적혈구 한 개의 평균 크기(부피)를 나타내는 항목입니다.', detail: "적혈구 한 개의 평균 크기(부피)입니다. 적혈구가 만들어지는 과정과 관련된 여러 요인에 영향을 받습니다." },
+        'MCH': { short: '평균적혈구혈색소량', desc: '적혈구 한 개에 들어 있는 혈색소의 평균 양입니다.', detail: "적혈구 한 개에 담긴 혈색소의 평균 양입니다. 적혈구 크기·혈색소 농도와 함께 해석하는 값입니다." },
+        'MCHC': { short: '평균적혈구혈색소농도', desc: '적혈구 부피 대비 혈색소의 평균 농도입니다.', detail: "적혈구 부피에 견준 혈색소의 평균 농도입니다. 다른 적혈구 지표와 묶어서 보는 계산 값입니다." },
+        'Segmented neutrophil': { short: '분엽핵 호중구', desc: '백혈구 중 성숙한 형태의 호중구가 차지하는 비율입니다.', detail: "백혈구 중 성숙한 호중구가 차지하는 비율입니다. 감염·염증 등 몸의 방어 반응 상태에 영향을 받습니다." },
+        'Neutrophil band': { short: '띠호중구', desc: '백혈구 중 아직 덜 성숙한 형태의 호중구가 차지하는 비율입니다.', detail: "아직 덜 성숙한 형태의 호중구(띠호중구) 비율입니다. 호중구가 빠르게 만들어질 때 늘어나는 경향이 있습니다." },
+        'Lymphocyte': { short: '림프구', desc: '백혈구 중 림프구가 차지하는 비율입니다.', detail: "백혈구 중 림프구가 차지하는 비율입니다. 면역 반응이나 감염 종류, 몸 상태에 영향을 받습니다." },
+        'Monocyte': { short: '단핵구', desc: '백혈구 중 단핵구가 차지하는 비율입니다.', detail: "백혈구 중 단핵구가 차지하는 비율입니다. 염증·감염의 경과 등에 따라 달라질 수 있습니다." },
+        'Eosinophil': { short: '호산구', desc: '백혈구 중 호산구가 차지하는 비율입니다.', detail: "백혈구 중 호산구가 차지하는 비율입니다. 알레르기 반응이나 일부 감염과 관련이 있는 것으로 알려져 있습니다." },
+        'Basophil': { short: '호염기구', desc: '백혈구 중 호염기구가 차지하는 비율입니다.', detail: "백혈구 중 가장 적은 호염기구의 비율입니다. 알레르기·염증 반응과 관련이 있는 세포입니다." },
         // ── 종양표지자 · 기타
-        'AFP': { short: '알파태아단백', desc: '태아기에 주로 만들어지는 단백질(AFP)의 혈중 농도를 재는 종양표지자 항목입니다.' },
-        'CEA': { short: '암태아성항원', desc: '여러 조직에서 만들어지는 당단백(CEA)의 혈중 농도를 재는 종양표지자 항목입니다.' },
-        'CA19-9': { short: '종양표지자', desc: '주로 소화기 계통에서 확인하는 당쇄항원(CA19-9)을 측정하는 항목입니다.' },
-        'CA125': { short: '종양표지자', desc: '주로 난소·복막 관련으로 확인하는 당단백(CA125)을 측정하는 항목입니다.' },
-        'PSA': { short: '전립선특이항원', desc: '전립선에서 만들어지는 단백질(PSA)의 혈중 농도를 재는 항목입니다.' },
-        '25-OH vitamin D': { short: '비타민 D', desc: '체내 비타민 D의 저장 형태(25-하이드록시 비타민 D) 농도를 재는 항목입니다.' },
-        'Systolic blood viscosity': { short: '수축기 혈액점도', desc: '심장이 수축할 때처럼 혈류가 빠른 조건에서 혈액의 점성을 재는 항목입니다.' },
-        'Diastolic blood viscosity': { short: '이완기 혈액점도', desc: '심장이 이완할 때처럼 혈류가 느린 조건에서 혈액의 점성을 재는 항목입니다.' },
+        'AFP': { short: '알파태아단백', desc: '태아기에 주로 만들어지는 단백질(AFP)의 혈중 농도를 재는 종양표지자 항목입니다.', detail: "주로 태아기에 만들어지는 단백질(AFP)의 혈중 농도로, 종양표지자의 하나입니다. 간 상태나 임신 등 여러 조건에도 영향을 받을 수 있습니다." },
+        'CEA': { short: '암태아성항원', desc: '여러 조직에서 만들어지는 당단백(CEA)의 혈중 농도를 재는 종양표지자 항목입니다.', detail: "여러 조직에서 만들어지는 당단백(CEA)의 혈중 농도로, 종양표지자의 하나입니다. 흡연 같은 종양 외 요인에도 영향을 받을 수 있습니다." },
+        'CA19-9': { short: '종양표지자', desc: '주로 소화기 계통에서 확인하는 당쇄항원(CA19-9)을 측정하는 항목입니다.', detail: "주로 소화기 계통과 관련해 보는 당쇄항원(CA19-9)입니다. 종양표지자의 하나이며 담도 상태 등 다른 요인에도 영향을 받을 수 있습니다." },
+        'CA125': { short: '종양표지자', desc: '주로 난소·복막 관련으로 확인하는 당단백(CA125)을 측정하는 항목입니다.', detail: "주로 난소·복막 관련으로 보는 당단백(CA125)입니다. 종양표지자의 하나이며 생리주기 등 여러 생리적 조건에도 영향을 받을 수 있습니다." },
+        'PSA': { short: '전립선특이항원', desc: '전립선에서 만들어지는 단백질(PSA)의 혈중 농도를 재는 항목입니다.', detail: "전립선에서 만들어지는 단백질(PSA)의 혈중 농도입니다. 전립선의 크기나 자극 등 여러 조건에도 영향을 받을 수 있습니다." },
+        '25-OH vitamin D': { short: '비타민 D', desc: '체내 비타민 D의 저장 형태(25-하이드록시 비타민 D) 농도를 재는 항목입니다.', detail: "몸에 저장된 형태의 비타민 D(25-하이드록시 비타민 D) 농도로, 비타민 D 상태를 대표합니다. 햇빛 노출, 식사, 계절에 영향을 받습니다." },
+        'Systolic blood viscosity': { short: '수축기 혈액점도', desc: '심장이 수축할 때처럼 혈류가 빠른 조건에서 혈액의 점성을 재는 항목입니다.', detail: "혈류가 빠른 조건(수축기)에서 혈액이 얼마나 끈끈한지 잰 값입니다. 적혈구 비율과 수분 상태 등에 영향을 받습니다." },
+        'Diastolic blood viscosity': { short: '이완기 혈액점도', desc: '심장이 이완할 때처럼 혈류가 느린 조건에서 혈액의 점성을 재는 항목입니다.', detail: "혈류가 느린 조건(이완기)에서 혈액의 점성을 잰 값입니다. 느린 흐름에서 적혈구가 뭉치는 정도 등에 영향을 받습니다." },
     };
     const HL_INFO_LOOKUP = (() => {
         const m = new Map();
@@ -2454,14 +2457,22 @@
         const statsEl = document.getElementById('hlChartStats');
         const msgEl = document.getElementById('hlChartMsg');
         const rangeRow = document.getElementById('hlChartRangeRow');
+        const detailEl = document.getElementById('hlChartDetail');
         if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
 
-        if (typeof Chart === 'undefined') { canvas.style.display = 'none'; statsEl.innerHTML = ''; if (rangeRow) rangeRow.style.display = 'none'; msgEl.innerHTML = '<div class="a10-empty">차트 라이브러리를 불러오지 못했습니다.</div>'; return; }
-        if (!names.length) { canvas.style.display = 'none'; statsEl.innerHTML = ''; sel.style.display = 'none'; if (rangeRow) rangeRow.style.display = 'none'; msgEl.innerHTML = `<div class="a10-empty">${hlPerson}의 혈액검사 수치가 없습니다.</div>`; return; }
+        if (typeof Chart === 'undefined') { canvas.style.display = 'none'; statsEl.innerHTML = ''; if (rangeRow) rangeRow.style.display = 'none'; if (detailEl) detailEl.style.display = 'none'; msgEl.innerHTML = '<div class="a10-empty">차트 라이브러리를 불러오지 못했습니다.</div>'; return; }
+        if (!names.length) { canvas.style.display = 'none'; statsEl.innerHTML = ''; sel.style.display = 'none'; if (rangeRow) rangeRow.style.display = 'none'; if (detailEl) detailEl.style.display = 'none'; msgEl.innerHTML = `<div class="a10-empty">${hlPerson}의 혈액검사 수치가 없습니다.</div>`; return; }
         sel.style.display = '';
         if (rangeRow) rangeRow.style.display = '';
 
         const itemName = sel.value;
+        // 선택 항목 상세 설명 (detail 우선, 없으면 desc, 둘 다 없으면 숨김)
+        if (detailEl) {
+            const inf = hlInfo(itemName);
+            const text = inf && (inf.detail || inf.desc);
+            if (text) { detailEl.innerHTML = `<b>${hlEsc(itemName)}</b>${hlEsc(text)}`; detailEl.style.display = ''; }
+            else { detailEl.innerHTML = ''; detailEl.style.display = 'none'; }
+        }
         const all = []; let refLow = null, refHigh = null, unit = '';
         hlRecords.filter(r => r.person === hlPerson && (r.type || 'blood') === 'blood')
             .forEach(r => { const it = (r.items || []).find(x => x.name && hlNormalizeName(x.name) === itemName); if (it && it.value != null) { all.push({ date: r.date, ts: hlDateTs(r.date), value: it.value }); if (it.refLow != null) refLow = it.refLow; if (it.refHigh != null) refHigh = it.refHigh; if (it.unit) unit = hlDisplayUnit(it.unit); } });
