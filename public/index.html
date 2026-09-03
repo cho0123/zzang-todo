@@ -1236,9 +1236,15 @@
         if (m.btc    != null) parts.push(`BTC <b>$${a10FmtNum(m.btc, 0)}</b>`);
         if (!parts.length) return '';
 
-        // 기준일이 요청일과 다르면(주말/공휴일) 표시, 출처는 title로
-        const basis = (m.stale && m.basisDate) ? ` <span class="a10-basis">(${m.basisDate} 기준)</span>` : '';
-        const src = m.source ? `출처 ${m.source}${m.basisDate ? ' · 기준일 ' + m.basisDate : ''}` : '';
+        // 기준일 항상 표시. 요청일과 다르면(주말/공휴일 등 직전 거래일) 그 사실도 표기.
+        let basis = '';
+        if (m.basisDate) {
+            const diff = m.stale && m.requestedDate && m.requestedDate !== m.basisDate;
+            basis = diff
+                ? ` <span class="a10-basis">(요청 ${m.requestedDate} → ${m.basisDate} 기준)</span>`
+                : ` <span class="a10-basis">(${m.basisDate} 기준)</span>`;
+        }
+        const src = m.source ? `출처 ${m.source}${m.v ? ' v' + m.v : ''}${m.basisDate ? ' · 기준일 ' + m.basisDate : ''}` : '';
         return `<div class="a10-market" title="${src}">📊 ${parts.join(' · ')}${basis}</div>`;
     }
 

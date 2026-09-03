@@ -38,8 +38,9 @@ function roundVal(key, v) {
   return Math.round(v * 100) / 100;                   // 나머지 소수 2자리
 }
 
-// 한 심볼의 '요청일 이하 마지막 거래일 종가' 조회
-async function fetchOne(yahooSym, targetEpoch) {
+// 한 심볼의 시계열(요청일 이하, 종가가 있는 날들) 반환.
+// 반환: [{ ymd:"YYYY-MM-DD", close:number }, ...] 오름차순
+async function fetchSeries(yahooSym, targetEpoch) {
   const period1 = targetEpoch - 14 * DAY;   // 넉넉히 14일 전부터 (연휴 대비)
   const period2 = targetEpoch + DAY;        // 요청일 포함
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}` +
@@ -67,15 +68,16 @@ async function fetchOne(yahooSym, targetEpoch) {
                  r.indicators.quote[0].close;
   if (!ts || !closes) throw new Error("no data");
 
-  // 요청일(그 날 끝) 이하에서 종가가 있는 마지막 인덱스 선택
+  // 요청일(그 날 끝) 이하에서 종가가 있는 날만 (UTC 날짜로 비교해 심볼 간 타임존 차이 제거)
   const cutoff = targetEpoch + DAY;
-  let picked = -1;
+  const points = [];
   for (let i = 0; i < ts.length; i++) {
-    if (ts[i] < cutoff && closes[i] != null) picked = i;
+    if (ts[i] < cutoff && closes[i] != null) {
+      points.push({ ymd: epochToYmd(ts[i]), close: closes[i] });
+    }
   }
-  if (picked === -1) throw new Error("no close in range");
-
-  return { value: closes[picked], basisEpoch: ts[picked] };
+  if (!points.length) throw new Error("no close in range");
+  return points;
 }
 
 exports.handler = async (event) => {
@@ -88,29 +90,41 @@ exports.handler = async (event) => {
   const keys = Object.keys(SYMBOLS);
   // 병렬 조회 — 일부 실패해도 나머지는 유지 (전체 실패 처리 금지)
   const settled = await Promise.allSettled(
-    keys.map(k => fetchOne(SYMBOLS[k], targetEpoch))
+    keys.map(k => fetchSeries(SYMBOLS[k], targetEpoch))
   );
 
-  const market = { source: SOURCE, requestedDate: date };
+  // v:2 — 모든 값이 '하나의 공통 기준일'에서 오도록 통일한 포맷 (기존 데이터엔 이 필드가 없음)
+  const market = { source: SOURCE, v: 2, requestedDate: date };
   const errors = {};
-  // 대표 기준일 = 가장 오래된(=직전 거래일) 기준일.
-  // 비트코인 등 주말에도 거래되는 지표가 섞여도, 주식·환율이 직전 거래일로
-  // 폴백되면 그 날짜가 대표 기준일이 되어 stale이 올바르게 표시된다.
-  let basisEpochMin = null;
 
+  // 1단계: 각 심볼의 시계열 확보 + '공통 기준일' 확정.
+  // 공통 기준일 = 모든 심볼이 데이터를 가진 마지막 거래일 = 각 심볼 마지막날의 최솟값(min).
+  const seriesByKey = {};
+  let basisDate = null;
   settled.forEach((res, i) => {
     const k = keys[i];
     if (res.status === "fulfilled") {
-      market[k] = roundVal(k, res.value.value);
-      if (basisEpochMin == null || res.value.basisEpoch < basisEpochMin) {
-        basisEpochMin = res.value.basisEpoch;
-      }
+      seriesByKey[k] = res.value;
+      const lastYmd = res.value[res.value.length - 1].ymd;
+      if (basisDate == null || lastYmd < basisDate) basisDate = lastYmd;
     } else {
       errors[k] = String((res.reason && res.reason.message) || res.reason);
     }
   });
 
-  market.basisDate = basisEpochMin ? epochToYmd(basisEpochMin) : date;
+  // 2단계: 모든 심볼 값을 '공통 기준일 이하 마지막 종가'로 재선택 → 전 값이 같은 날짜.
+  if (basisDate) {
+    for (const k of Object.keys(seriesByKey)) {
+      let chosen = null;
+      for (const p of seriesByKey[k]) {
+        if (p.ymd <= basisDate) chosen = p;
+      }
+      if (chosen) market[k] = roundVal(k, chosen.close);
+      else errors[k] = `기준일(${basisDate}) 이전 데이터 없음`;
+    }
+  }
+
+  market.basisDate = basisDate || date;
   // 요청일과 기준일이 다르면(주말/공휴일 등 직전 거래일 사용) 표시
   market.stale = market.basisDate !== date;
   if (Object.keys(errors).length) market.errors = errors;
