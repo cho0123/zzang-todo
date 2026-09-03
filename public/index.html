@@ -335,6 +335,70 @@
             background: rgba(255,255,255,0.92); color: #868e96; font-size: 12px; font-weight: 700;
         }
         #logoutBtn:hover { background: #f1f3f5; color: #495057; }
+
+        /* ===================== 건강 기록 (health) =====================
+           포인트 컬러: #0ca678 (그린) — 기존(ToDo 다크, After10 남색)과 구분 */
+        .hl-persons, .hl-views, .hl-types { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+        .hl-views { margin-bottom: 16px; }
+        .hl-chip {
+            flex: none; width: auto; white-space: nowrap;
+            padding: 8px 15px; border-radius: 20px; font-size: 13px; font-weight: 700;
+            background: #f1f3f5; color: #868e96; border: 1px solid #dee2e6; cursor: pointer;
+        }
+        .hl-chip:hover { background: #e9ecef; }
+        .hl-chip.active { background: #0ca678; color: #fff; border-color: #0ca678; }
+        .hl-chip.person.active { background: #364fc7; border-color: #364fc7; }  /* 인물은 남색으로 구분 */
+
+        .hl-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+        .hl-meta input[type="date"] { flex: 0 1 180px; }
+        .hl-meta input[type="text"] { flex: 1; min-width: 140px; }
+
+        #hlPaste, #hlNote { width: 100%; min-height: 140px; padding: 14px; box-sizing: border-box;
+            border: 1px solid #e1e4e8; border-radius: 8px; font-family: inherit; font-size: 14px; line-height: 1.6; resize: vertical; }
+        #hlPaste:focus, #hlNote:focus { outline: none; border-color: #0ca678; }
+
+        .hl-btnrow { display: flex; gap: 8px; margin: 10px 0; }
+        .hl-analyze-btn { background: #0ca678; flex: none; padding: 11px 20px; }
+        .hl-save-btn { background: #0ca678; flex: 1; }
+        .hl-save-btn.saved { background: #40c057; }
+        .hl-sub-btn { background: #868e96; flex: none; padding: 12px 16px; }
+        .hl-save-msg { text-align: center; font-size: 13px; font-weight: 600; color: #0ca678; min-height: 18px; }
+        .hl-parse-info { font-size: 12px; color: #868e96; margin: 6px 0 10px; }
+
+        /* 항목 편집 표 */
+        .hl-items-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 8px; }
+        .hl-items-table th { background: #f1f3f5; color: #495057; font-weight: 700; padding: 6px 4px; border: 1px solid #e1e4e8; }
+        .hl-items-table td { border: 1px solid #e9ecef; padding: 2px; }
+        .hl-items-table input { width: 100%; border: none; padding: 6px 4px; font-size: 12px; box-sizing: border-box; background: transparent; }
+        .hl-items-table input:focus { outline: 1px solid #0ca678; background: #fff; }
+        .hl-items-table tr.abnormal td { background: #fff0f0; }
+        .hl-items-table tr.failed td { background: #fff9db; }
+        .hl-items-table .hl-del { color: #fa5252; cursor: pointer; text-align: center; font-weight: 800; }
+        .hl-col-name { width: 26%; } .hl-col-val { width: 16%; } .hl-col-unit { width: 16%; } .hl-col-ref { width: 32%; } .hl-col-x { width: 6%; }
+        .hl-addrow-btn { background: #f1f3f5; color: #495057; border: 1px dashed #ced4da; flex: none; padding: 8px 14px; font-size: 12px; }
+
+        /* 기록 목록 */
+        .hl-rec { background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 14px 15px; margin-bottom: 10px; }
+        .hl-rec-head { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .hl-rec-date { font-size: 14px; font-weight: 800; color: #212529; }
+        .hl-rec-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; color: #fff; }
+        .hl-badge-blood { background: #e03131; } .hl-badge-endoscopy { background: #7048e8; } .hl-badge-other { background: #868e96; }
+        .hl-rec-hosp { font-size: 12px; color: #868e96; }
+        .hl-rec-ab { margin-left: auto; font-size: 11px; font-weight: 700; color: #e03131; }
+        .hl-rec-actions { display: flex; gap: 6px; margin-top: 10px; }
+        .hl-mini-btn { flex: none; width: auto; padding: 5px 12px; font-size: 12px; border-radius: 6px; }
+        .hl-mini-edit { background: #364fc7; } .hl-mini-del { background: #fa5252; }
+        .hl-rec-note { font-size: 13px; color: #495057; line-height: 1.6; white-space: pre-wrap; margin-top: 8px; }
+        .hl-rec-body { margin-top: 10px; }
+        .hl-view-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .hl-view-table th { background: #f8f9fa; color: #868e96; font-weight: 700; padding: 5px 6px; text-align: left; border-bottom: 1px solid #e9ecef; }
+        .hl-view-table td { padding: 5px 6px; border-bottom: 1px solid #f1f3f5; }
+        .hl-view-table tr.abnormal td { background: #fff0f0; }
+        .hl-view-table tr.abnormal .hl-v { color: #e03131; font-weight: 800; }
+        .hl-abn-mark { color: #e03131; font-weight: 800; }
+
+        #hlChartItem { width: 100%; margin-bottom: 12px; }
+        .hl-ref { color: #0ca678 !important; }
     </style>
 </head>
 <body>
@@ -363,6 +427,7 @@
     <div class="tab-group">
         <button class="tab-btn active" data-tab="todo" onclick="switchTab('todo')">📋 ToDo</button>
         <button class="tab-btn" data-tab="after10" onclick="switchTab('after10')">⏳ After10</button>
+        <button class="tab-btn" data-tab="health" onclick="switchTab('health')">🩺 건강</button>
     </div>
 
 <!-- ===== ToDo 탭 (기존 화면 전체) ===== -->
@@ -538,6 +603,73 @@
 
 </div>
 <!-- ===== /After10 탭 ===== -->
+
+<!-- ===== 건강 탭 ===== -->
+<div id="healthTab" style="display:none">
+
+    <!-- 인물 전환 -->
+    <div class="hl-persons" id="hlPersons">
+        <button class="hl-chip person active" data-person="짱구" onclick="hlSetPerson('짱구')">🧒 짱구</button>
+        <button class="hl-chip person" data-person="쌤" onclick="hlSetPerson('쌤')">👩‍🏫 쌤</button>
+    </div>
+
+    <!-- 뷰 전환 -->
+    <div class="hl-views">
+        <button class="hl-chip view active" data-hview="input" onclick="hlSetView('input')">✍️ 기록 입력</button>
+        <button class="hl-chip view" data-hview="list" onclick="hlSetView('list')">📋 기록 목록</button>
+        <button class="hl-chip view" data-hview="chart" onclick="hlSetView('chart')">📈 수치 흐름</button>
+    </div>
+
+    <!-- 뷰: 기록 입력 -->
+    <div id="hlViewInput">
+        <div class="hl-types">
+            <button class="hl-chip type active" data-htype="blood" onclick="hlSetType('blood')">🩸 혈액검사</button>
+            <button class="hl-chip type" data-htype="endoscopy" onclick="hlSetType('endoscopy')">🔬 내시경</button>
+            <button class="hl-chip type" data-htype="other" onclick="hlSetType('other')">📄 기타</button>
+        </div>
+
+        <div class="hl-meta">
+            <input type="date" id="hlDate">
+            <input type="text" id="hlHospital" placeholder="병원명 (선택)">
+        </div>
+
+        <!-- 혈액검사: 붙여넣기 → 분석 → 편집 표 -->
+        <div id="hlBloodInput">
+            <textarea id="hlPaste" placeholder="검사지 텍스트를 통째로 붙여넣고 [분석]을 누르세요.&#10;(자동 인식이 완벽하지 않으니 아래 표에서 확인·수정한 뒤 저장하세요.)"></textarea>
+            <div class="hl-btnrow">
+                <button id="hlParseBtn" class="hl-analyze-btn">🔎 분석</button>
+            </div>
+            <div id="hlParseInfo" class="hl-parse-info"></div>
+            <div id="hlItemsWrap"></div>
+        </div>
+
+        <!-- 내시경/기타: 소견만 -->
+        <div id="hlNoteInput" style="display:none">
+            <textarea id="hlNote" placeholder="소견 텍스트를 입력하세요."></textarea>
+        </div>
+
+        <div class="hl-btnrow">
+            <button id="hlSaveBtn" class="hl-save-btn">저장</button>
+            <button id="hlCancelEdit" class="hl-sub-btn" style="display:none">수정취소</button>
+        </div>
+        <div id="hlSaveMsg" class="hl-save-msg"></div>
+    </div>
+
+    <!-- 뷰: 기록 목록 -->
+    <div id="hlViewList" style="display:none">
+        <div id="hlList"></div>
+    </div>
+
+    <!-- 뷰: 수치 흐름 -->
+    <div id="hlViewChart" style="display:none">
+        <select id="hlChartItem" onchange="hlRenderChart()"></select>
+        <div class="a10-chart-box"><canvas id="hlChart"></canvas></div>
+        <div class="a10-chart-stats" id="hlChartStats"></div>
+        <div id="hlChartMsg"></div>
+    </div>
+
+</div>
+<!-- ===== /건강 탭 ===== -->
 
 </div>
 
@@ -1203,10 +1335,12 @@
     window.switchTab = function(tab) {
         document.getElementById('todoTab').style.display = (tab === 'todo') ? 'block' : 'none';
         document.getElementById('after10Tab').style.display = (tab === 'after10') ? 'block' : 'none';
+        document.getElementById('healthTab').style.display = (tab === 'health') ? 'block' : 'none';
         document.querySelectorAll('.tab-btn').forEach(b => {
             b.classList.toggle('active', b.dataset.tab === tab);
         });
         if (tab === 'after10') a10LoadEntries();
+        if (tab === 'health') hlLoad();
     };
 
     // After10 내부 뷰 전환
@@ -1665,6 +1799,403 @@
 
     // 초기 상태: ToDo 탭 / 오늘 날짜 표시 (데이터는 탭 진입 시 조회)
     a10FillWriteForm(todayStr());
+
+    /* ===================== 건강 기록 (health) =====================
+       기존 tasks/diary와 독립. 컬렉션 "health". 탭 진입 시 1회 조회 후 재사용.
+    ============================================================== */
+    const HEALTH_COLLECTION = "health";
+
+    // 항목명 정규화 사전 — 병원마다 표기가 달라 여기서 통일 (쉽게 추가)
+    const HL_NAME_MAP = {
+        'GOT': 'AST(GOT)', 'AST': 'AST(GOT)', 'AST(GOT)': 'AST(GOT)',
+        'GPT': 'ALT(GPT)', 'ALT': 'ALT(GPT)', 'ALT(GPT)': 'ALT(GPT)',
+        'r-GTP': 'γ-GTP', 'γ-GTP': 'γ-GTP', 'GGT': 'γ-GTP',
+        'T-Chol': 'Total Cholesterol', 'Total Cholesterol': 'Total Cholesterol', '총콜레스테롤': 'Total Cholesterol',
+        'TG': 'Triglyceride', '중성지방': 'Triglyceride',
+        'FBS': 'Glucose', 'Glucose': 'Glucose', '공복혈당': 'Glucose',
+        'HbA1c': 'HbA1c', '당화혈색소': 'HbA1c',
+        'Hb': 'Hemoglobin', 'Hemoglobin': 'Hemoglobin', '혈색소': 'Hemoglobin',
+    };
+    // 병원명 힌트 (텍스트에 있으면 우선 사용). 없으면 '병원/의원/센터' 휴리스틱.
+    const HL_HOSPITALS = ['서울성모병원', '삼성서울병원', '서울아산병원', '세브란스병원', '분당서울대병원'];
+
+    let hlRecords = [];
+    let hlPerson = '짱구';
+    let hlView = 'input';
+    let hlType = 'blood';
+    let hlEditId = null;
+    let hlChartInstance = null;
+
+    // ---------- 파싱 유틸 ----------
+    const hlPad = n => String(n).padStart(2, '0');
+    const hlNum = s => { const v = parseFloat(String(s).replace(/,/g, '')); return isNaN(v) ? null : v; };
+    function hlNormalizeName(name) {
+        const key = name.replace(/\s+/g, ' ').trim();
+        return HL_NAME_MAP[key] || HL_NAME_MAP[key.replace(/\s+/g, '')] || key;
+    }
+    // 결과값: "105▲" → {value:105, abnormal:true, raw}. "6.6 미만" → value 6.6. 숫자 없으면 value null.
+    function hlParseResult(raw) {
+        raw = (raw || '').trim();
+        const abnormal = /[▲▼↑↓]/.test(raw) || /[HL]$/.test(raw.replace(/\s/g, '')) && /\d/.test(raw);
+        const m = raw.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+        return { value: m ? parseFloat(m[0]) : null, raw, abnormal: /[▲▼↑↓]/.test(raw) };
+    }
+    // 참고치: "70 ~ 99 mg/dl" → {refLow:70, refHigh:99, unit:'mg/dl'}. "<200 mg/dl","13.8 미만 IU/mL","ml/min/1.73㎡"(단위만) 처리.
+    function hlParseRef(raw) {
+        let s = (raw || '').trim();
+        let refLow = null, refHigh = null, unit = '', m;
+        if ((m = s.match(/^([\d.,]+)\s*[~〜～\-–]\s*([\d.,]+)\s*(.*)$/))) { refLow = hlNum(m[1]); refHigh = hlNum(m[2]); unit = m[3]; }
+        else if ((m = s.match(/^[<＜]\s*([\d.,]+)\s*(.*)$/))) { refHigh = hlNum(m[1]); unit = m[2]; }
+        else if ((m = s.match(/^[>＞]\s*([\d.,]+)\s*(.*)$/))) { refLow = hlNum(m[1]); unit = m[2]; }
+        else if ((m = s.match(/^([\d.,]+)\s*(?:미만|이하)\s*(.*)$/))) { refHigh = hlNum(m[1]); unit = m[2]; }
+        else if ((m = s.match(/^([\d.,]+)\s*(?:초과|이상)\s*(.*)$/))) { refLow = hlNum(m[1]); unit = m[2]; }
+        else { unit = s; }  // 참고치 없이 단위만 (예: ml/min/1.73㎡) 또는 빈값
+        return { refLow, refHigh, unit: unit.trim() };
+    }
+    function hlIsPersonalInfo(t) {
+        const c = t.replace(/\s/g, '');
+        return /(성명|이름|환자명|생년월일|주민등록|등록번호|차트번호|수진자|나이|성별|병록번호)/.test(c);
+    }
+    function hlIsHeaderOrNote(t) {
+        const c = t.replace(/\s/g, '');
+        if (/^(검사항목|결과|참고치|참고범위|검사자|확인자|접수일자|보고일시|단위|검사명|판정|정상범위|비고)$/.test(c)) return true;
+        // 처방/보고 등 메타 라인
+        if (/^(처방일자|보고일자|접수번호|검체|채취일)/.test(c)) return true;
+        return false;
+    }
+    // 첫 컬럼이 헤더 단어인 행(여러 컬럼이 붙은 헤더 행) 판별
+    function hlIsHeaderCol(s) {
+        const c = (s || '').replace(/\s/g, '');
+        return /^(검사항목|검사명|항목|결과|참고치|참고범위|참고|검사자|확인자|접수일자|보고일시|단위|판정|정상범위|비고)$/.test(c);
+    }
+    function hlLooksLikeItemName(s) {
+        if (!/[A-Za-z가-힣]/.test(s)) return false;      // 글자 없음(숫자·날짜) → 아님
+        if (/^\d{4}[-.\/]\d{1,2}/.test(s)) return false;  // 날짜
+        if (s.length > 40) return false;
+        return true;
+    }
+
+    // ★ 혈액검사 파서 — 규칙은 여기 한 곳에 모아 확장 (병원별 보정 용이)
+    function hlParseBloodTest(text) {
+        const lines = (text || '').split(/\r?\n/);
+        let date = '', hospital = '';
+        const items = [];
+        let dropped = 0;
+
+        // 날짜: 채취일시/채취일자 우선 (처방일자 아님)
+        const dm = text.match(/채취일[시자][^\d]*(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})/);
+        if (dm) date = `${dm[1]}-${hlPad(dm[2])}-${hlPad(dm[3])}`;
+
+        // 병원
+        for (const h of HL_HOSPITALS) { if (text.includes(h)) { hospital = h; break; } }
+        if (!hospital) { const hm = text.match(/([가-힣A-Za-z]{2,}(?:대학교병원|병원|의원|클리닉|검진센터|센터|의료원))/); if (hm) hospital = hm[1]; }
+
+        for (const line of lines) {
+            const t = line.trim();
+            if (!t) continue;
+            if (hlIsPersonalInfo(t) || hlIsHeaderOrNote(t)) continue;
+            // 컬럼 분리: 탭 또는 2칸 이상 공백 (항목명/결과/참고치/검사자/확인자/접수일자/보고일시)
+            const cols = t.split(/\t+| {2,}/).map(c => c.trim()).filter(Boolean);
+            if (cols.length < 2) continue;               // 항목+결과 최소
+            if (hlIsHeaderCol(cols[0])) continue;        // 여러 컬럼이 붙은 헤더 행 제외
+            if (!hlLooksLikeItemName(cols[0])) { dropped++; continue; }
+            const res = hlParseResult(cols[1]);
+            const ref = cols[2] ? hlParseRef(cols[2]) : { refLow: null, refHigh: null, unit: '' };
+            const abnormal = (res.value != null && (ref.refLow != null || ref.refHigh != null))
+                ? (ref.refLow != null && res.value < ref.refLow) || (ref.refHigh != null && res.value > ref.refHigh)
+                : res.abnormal;
+            items.push({
+                name: hlNormalizeName(cols[0]), value: res.value, raw: res.raw,
+                unit: ref.unit || '', refLow: ref.refLow, refHigh: ref.refHigh,
+                refText: cols[2] || '', abnormal, parseFailed: res.value == null,
+            });
+        }
+        return { date, hospital, items, dropped };
+    }
+
+    // ---------- 조회/전환 ----------
+    async function hlFetch() {
+        const snap = await getDocs(collection(db, HEALTH_COLLECTION));
+        hlRecords = [];
+        snap.forEach(d => hlRecords.push({ id: d.id, ...d.data() }));
+    }
+    async function hlLoad() {
+        try { await hlFetch(); hlRefreshView(); }
+        catch (e) { console.error('건강기록 조회 실패:', e); }
+    }
+    function hlRefreshView() {
+        if (hlView === 'list') hlRenderList();
+        if (hlView === 'chart') hlRenderChart();
+    }
+
+    window.hlSetPerson = function(p) {
+        hlPerson = p;
+        document.querySelectorAll('[data-person]').forEach(b => b.classList.toggle('active', b.dataset.person === p));
+        hlRefreshView();
+    };
+    window.hlSetView = function(v) {
+        hlView = v;
+        const map = { input: 'hlViewInput', list: 'hlViewList', chart: 'hlViewChart' };
+        Object.keys(map).forEach(k => document.getElementById(map[k]).style.display = (k === v) ? 'block' : 'none');
+        document.querySelectorAll('[data-hview]').forEach(b => b.classList.toggle('active', b.dataset.hview === v));
+        hlRefreshView();
+    };
+    window.hlSetType = function(tp) {
+        hlType = tp;
+        document.querySelectorAll('[data-htype]').forEach(b => b.classList.toggle('active', b.dataset.htype === tp));
+        document.getElementById('hlBloodInput').style.display = (tp === 'blood') ? 'block' : 'none';
+        document.getElementById('hlNoteInput').style.display = (tp === 'blood') ? 'none' : 'block';
+    };
+
+    // ---------- 입력: 편집 표 ----------
+    function hlItemRowHtml(it) {
+        const cls = it.parseFailed ? 'failed' : (it.abnormal ? 'abnormal' : '');
+        const val = it.value != null ? it.value : (it.raw || '');
+        const esc = s => String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        return `<tr class="${cls}">
+            <td><input class="hl-i-name" value="${esc(it.name)}"></td>
+            <td><input class="hl-i-val" value="${esc(val)}" data-raw="${esc(it.raw || '')}"></td>
+            <td><input class="hl-i-unit" value="${esc(it.unit)}"></td>
+            <td><input class="hl-i-ref" value="${esc(it.refText)}"></td>
+            <td class="hl-del" onclick="hlDeleteRow(this)">✕</td>
+        </tr>`;
+    }
+    function hlRenderItemsTable(items) {
+        const wrap = document.getElementById('hlItemsWrap');
+        if (!items || !items.length) { wrap.innerHTML = ''; return; }
+        wrap.innerHTML = `
+            <table class="hl-items-table">
+                <thead><tr>
+                    <th class="hl-col-name">항목명</th><th class="hl-col-val">값</th>
+                    <th class="hl-col-unit">단위</th><th class="hl-col-ref">참고치</th><th class="hl-col-x"></th>
+                </tr></thead>
+                <tbody id="hlItemsBody">${items.map(hlItemRowHtml).join('')}</tbody>
+            </table>
+            <div class="hl-btnrow"><button type="button" class="hl-addrow-btn" onclick="hlAddRow()">+ 행 추가</button></div>`;
+    }
+    window.hlAddRow = function() {
+        const body = document.getElementById('hlItemsBody');
+        if (!body) { hlRenderItemsTable([{ name: '', value: null, raw: '', unit: '', refText: '', abnormal: false, parseFailed: false }]); return; }
+        body.insertAdjacentHTML('beforeend', hlItemRowHtml({ name: '', value: null, raw: '', unit: '', refText: '', abnormal: false, parseFailed: false }));
+    };
+    window.hlDeleteRow = function(td) { td.closest('tr').remove(); };
+
+    // 표 → items 배열 (저장 시 재구성: 값 재파싱 + abnormal 재계산)
+    function hlRowsToItems() {
+        const rows = document.querySelectorAll('#hlItemsBody tr');
+        const items = [];
+        rows.forEach(tr => {
+            const name = tr.querySelector('.hl-i-name').value.trim();
+            const valInput = tr.querySelector('.hl-i-val');
+            const valStr = valInput.value.trim();
+            const unit = tr.querySelector('.hl-i-unit').value.trim();
+            const refText = tr.querySelector('.hl-i-ref').value.trim();
+            if (!name && !valStr) return;                 // 빈 행 무시
+            const res = hlParseResult(valStr);
+            const ref = hlParseRef(refText);
+            const abnormal = (res.value != null && (ref.refLow != null || ref.refHigh != null))
+                ? (ref.refLow != null && res.value < ref.refLow) || (ref.refHigh != null && res.value > ref.refHigh)
+                : res.abnormal;
+            items.push({
+                name, value: res.value, raw: valStr,
+                unit: unit || ref.unit || '', refLow: ref.refLow, refHigh: ref.refHigh,
+                refText, abnormal, parseFailed: res.value == null,
+            });
+        });
+        return items;
+    }
+
+    document.getElementById('hlParseBtn').addEventListener('click', () => {
+        const text = document.getElementById('hlPaste').value;
+        const r = hlParseBloodTest(text);
+        if (r.date && !document.getElementById('hlDate').value) document.getElementById('hlDate').value = r.date;
+        if (r.hospital && !document.getElementById('hlHospital').value) document.getElementById('hlHospital').value = r.hospital;
+        hlRenderItemsTable(r.items);
+        const failed = r.items.filter(i => i.parseFailed).length;
+        document.getElementById('hlParseInfo').innerHTML =
+            `인식 ${r.items.length}개 항목` +
+            (failed ? ` · <span style="color:#f59f00;">숫자 인식 실패 ${failed}개(노란 행)</span>` : '') +
+            (r.date ? ` · 채취일 ${r.date}` : '') +
+            (r.hospital ? ` · ${r.hospital}` : '') +
+            ` — 아래 표에서 확인·수정 후 저장하세요.`;
+    });
+
+    // ---------- 저장/수정/삭제 ----------
+    function hlMsg(text, ok) {
+        const el = document.getElementById('hlSaveMsg');
+        el.textContent = text; el.style.color = ok ? '#40c057' : '#e03131';
+        if (ok) setTimeout(() => { el.textContent = ''; }, 2000);
+    }
+    async function hlSave() {
+        const date = document.getElementById('hlDate').value;
+        if (!date) return hlMsg('날짜를 입력해주세요.');
+        const hospital = document.getElementById('hlHospital').value.trim();
+        const now = Date.now();
+        const data = { person: hlPerson, type: hlType, date, hospital, updatedAt: now };
+        if (hlType === 'blood') { data.items = hlRowsToItems(); data.note = ''; }
+        else { data.items = []; data.note = document.getElementById('hlNote').value; }
+
+        const btn = document.getElementById('hlSaveBtn');
+        btn.disabled = true;
+        try {
+            if (hlEditId) await updateDoc(doc(db, HEALTH_COLLECTION, hlEditId), data);
+            else { data.createdAt = now; await addDoc(collection(db, HEALTH_COLLECTION), data); }
+            await hlFetch();
+            hlResetInput();
+            hlMsg('✓ 저장되었습니다', true);
+        } catch (e) { console.error('건강기록 저장 실패:', e); hlMsg('저장 실패 — 다시 시도해주세요'); }
+        finally { btn.disabled = false; }
+    }
+    function hlResetInput() {
+        hlEditId = null;
+        document.getElementById('hlDate').value = '';
+        document.getElementById('hlHospital').value = '';
+        document.getElementById('hlPaste').value = '';
+        document.getElementById('hlNote').value = '';
+        document.getElementById('hlItemsWrap').innerHTML = '';
+        document.getElementById('hlParseInfo').innerHTML = '';
+        document.getElementById('hlCancelEdit').style.display = 'none';
+        document.getElementById('hlSaveBtn').textContent = '저장';
+        hlSetType('blood');
+    }
+    document.getElementById('hlSaveBtn').addEventListener('click', hlSave);
+    document.getElementById('hlCancelEdit').addEventListener('click', hlResetInput);
+
+    window.hlEdit = function(id) {
+        const r = hlRecords.find(x => x.id === id);
+        if (!r) return;
+        hlEditId = id;
+        hlPerson = r.person; hlSetPerson(r.person);
+        hlSetType(r.type || 'blood');
+        document.getElementById('hlDate').value = r.date || '';
+        document.getElementById('hlHospital').value = r.hospital || '';
+        if ((r.type || 'blood') === 'blood') { hlRenderItemsTable(r.items || []); document.getElementById('hlParseInfo').innerHTML = '수정 중 — 표를 고치고 저장하세요.'; }
+        else { document.getElementById('hlNote').value = r.note || ''; }
+        document.getElementById('hlSaveBtn').textContent = '수정 저장';
+        document.getElementById('hlCancelEdit').style.display = 'block';
+        hlSetView('input');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    window.hlDelete = async function(id) {
+        if (!confirm('이 기록을 삭제할까요?')) return;
+        try { await deleteDoc(doc(db, HEALTH_COLLECTION, id)); await hlFetch(); hlRenderList(); }
+        catch (e) { console.error('삭제 실패:', e); }
+    };
+    window.hlToggleRec = function(id) {
+        const el = document.getElementById('hlbody-' + id);
+        if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    };
+
+    // ---------- 기록 목록 ----------
+    const HL_TYPE_LABEL = { blood: '혈액', endoscopy: '내시경', other: '기타' };
+    function hlEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function hlRenderList() {
+        const wrap = document.getElementById('hlList');
+        const recs = hlRecords.filter(r => r.person === hlPerson)
+            .sort((a, b) => (a.date || '') < (b.date || '') ? 1 : (a.date || '') > (b.date || '') ? -1 : 0);
+        if (!recs.length) { wrap.innerHTML = `<div class="a10-empty">${hlPerson}의 건강기록이 없습니다.<br>“기록 입력”에서 추가하세요.</div>`; return; }
+        wrap.innerHTML = recs.map(r => {
+            const type = r.type || 'blood';
+            const abn = (r.items || []).filter(i => i.abnormal).length;
+            let body = '';
+            if (type === 'blood') {
+                const rows = (r.items || []).map(i => `<tr class="${i.abnormal ? 'abnormal' : ''}">
+                    <td>${hlEsc(i.name)}</td>
+                    <td class="hl-v">${hlEsc(i.value != null ? i.value : i.raw)}${i.abnormal ? ' <span class="hl-abn-mark">▲▼</span>' : ''}</td>
+                    <td>${hlEsc(i.unit)}</td><td>${hlEsc(i.refText)}</td></tr>`).join('');
+                body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none">
+                    <table class="hl-view-table"><thead><tr><th>항목</th><th>값</th><th>단위</th><th>참고치</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+            } else {
+                body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none"><div class="hl-rec-note">${hlEsc(r.note)}</div></div>`;
+            }
+            return `<div class="hl-rec">
+                <div class="hl-rec-head" onclick="hlToggleRec('${r.id}')">
+                    <span class="hl-rec-date">${hlEsc(r.date)}</span>
+                    <span class="hl-rec-badge hl-badge-${type}">${HL_TYPE_LABEL[type] || type}</span>
+                    ${r.hospital ? `<span class="hl-rec-hosp">${hlEsc(r.hospital)}</span>` : ''}
+                    ${abn ? `<span class="hl-rec-ab">이상 ${abn}</span>` : ''}
+                </div>
+                ${body}
+                <div class="hl-rec-actions">
+                    <button class="hl-mini-btn hl-mini-edit" onclick="hlEdit('${r.id}')">수정</button>
+                    <button class="hl-mini-btn hl-mini-del" onclick="hlDelete('${r.id}')">삭제</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // ---------- 수치 흐름 (Chart.js 재사용) ----------
+    function hlBloodItemNames(person) {
+        const set = new Set();
+        hlRecords.filter(r => r.person === person && (r.type || 'blood') === 'blood')
+            .forEach(r => (r.items || []).forEach(i => { if (i.value != null && i.name) set.add(i.name); }));
+        return [...set].sort();
+    }
+    function hlRenderChart() {
+        const sel = document.getElementById('hlChartItem');
+        const names = hlBloodItemNames(hlPerson);
+        const prev = sel.value;
+        sel.innerHTML = names.map(n => `<option>${hlEsc(n)}</option>`).join('');
+        if (names.includes(prev)) sel.value = prev;
+
+        const canvas = document.getElementById('hlChart');
+        const statsEl = document.getElementById('hlChartStats');
+        const msgEl = document.getElementById('hlChartMsg');
+        if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
+
+        if (typeof Chart === 'undefined') { canvas.style.display = 'none'; statsEl.innerHTML = ''; msgEl.innerHTML = '<div class="a10-empty">차트 라이브러리를 불러오지 못했습니다.</div>'; return; }
+        if (!names.length) { canvas.style.display = 'none'; statsEl.innerHTML = ''; sel.style.display = 'none'; msgEl.innerHTML = `<div class="a10-empty">${hlPerson}의 혈액검사 수치가 없습니다.</div>`; return; }
+        sel.style.display = '';
+
+        const itemName = sel.value;
+        const pts = []; let refLow = null, refHigh = null, unit = '';
+        hlRecords.filter(r => r.person === hlPerson && (r.type || 'blood') === 'blood')
+            .forEach(r => { const it = (r.items || []).find(x => x.name === itemName); if (it && it.value != null) { pts.push({ date: r.date, value: it.value }); if (it.refLow != null) refLow = it.refLow; if (it.refHigh != null) refHigh = it.refHigh; if (it.unit) unit = it.unit; } });
+        pts.sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
+
+        if (!pts.length) { canvas.style.display = 'none'; statsEl.innerHTML = ''; msgEl.innerHTML = '<div class="a10-empty">이 항목의 수치가 없습니다.</div>'; return; }
+        canvas.style.display = '';
+
+        const labels = pts.map(p => (p.date || '').substring(2).replace(/-/g, '/'));
+        const values = pts.map(p => p.value);
+        const datasets = [];
+        // 참고치 배경 영역 (상·하한 둘 다 있을 때 밴드, 하나면 점선)
+        if (refLow != null && refHigh != null) {
+            datasets.push({ label: '상한', data: values.map(() => refHigh), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: '+1', backgroundColor: 'rgba(12,166,120,0.10)' });
+            datasets.push({ label: '하한', data: values.map(() => refLow), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
+        } else if (refHigh != null) {
+            datasets.push({ label: '상한', data: values.map(() => refHigh), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
+        } else if (refLow != null) {
+            datasets.push({ label: '하한', data: values.map(() => refLow), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
+        }
+        const valueDsIndex = datasets.length;
+        datasets.push({
+            label: itemName, data: values, borderColor: '#364fc7', backgroundColor: 'rgba(54,79,199,0.06)',
+            pointBackgroundColor: pts.map(p => ((refLow != null && p.value < refLow) || (refHigh != null && p.value > refHigh)) ? '#e03131' : '#364fc7'),
+            pointRadius: 4, pointHoverRadius: 6, tension: 0.2, fill: false,
+        });
+
+        hlChartInstance = new Chart(canvas, {
+            type: 'line',
+            data: { labels, datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { filter: c => c.datasetIndex === valueDsIndex, callbacks: { title: c => pts[c[0].dataIndex].date, label: c => `${itemName}: ${c.parsed.y}${unit ? ' ' + unit : ''}` } }
+                },
+                scales: { x: { grid: { display: false } } }
+            }
+        });
+
+        const mn = Math.min(...values), mx = Math.max(...values), first = values[0], last = values[values.length - 1];
+        let html = `<span>최소 <b>${mn}</b></span><span>최대 <b>${mx}</b></span>`;
+        if (values.length >= 2 && first) { const chg = (last - first) / first * 100; html += `<span>변화 <b class="${chg > 0 ? 'up' : chg < 0 ? 'down' : ''}">${chg > 0 ? '+' : ''}${chg.toFixed(1)}%</b></span>`; }
+        if (refLow != null || refHigh != null) html += `<span class="hl-ref">참고 ${refLow != null ? refLow : ''}~${refHigh != null ? refHigh : ''}${unit ? ' ' + unit : ''}</span>`;
+        statsEl.innerHTML = html;
+        msgEl.innerHTML = values.length === 1 ? '<div class="a10-hint">기록이 1건이라 흐름은 다음 기록부터 보입니다.</div>' : '';
+    }
+    window.hlRenderChart = hlRenderChart;
 
     /* ===================== 로그인 게이트 =====================
        - 로그인 전: #loginScreen 만 표시, 메인(.container) 숨김
