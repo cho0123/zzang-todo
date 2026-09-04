@@ -230,124 +230,137 @@
         .tab-btn.active .tab-num { color: var(--zm-accent); }
         .tab-btn.active .tab-label { color: var(--zm-ink); font-weight: 900; }
 
-        /* After10 내부 뷰 전환 버튼 */
-        .a10-viewtabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+        /* ===================== After10 (일지) — 계기판 톤 =====================
+           일지(작성·목록·과거의 오늘)는 개인적인 글 → 무채색만, 경보색 없음, 넉넉한 행간.
+           경제지표 한 줄은 부가정보 → 더 가라앉게. 지표 흐름 차트만 어두운 계기판 패널. */
+        /* 뷰 전환 세그먼트 (한 줄, 직각) */
+        .a10-viewtabs { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 18px; }
         .a10-viewbtn {
-            padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 700;
-            background: #f1f3f5; color: #868e96; border: 1px solid #dee2e6;
-            cursor: pointer; flex: none; white-space: nowrap; transition: 0.2s;
+            padding: 7px 14px; border-radius: var(--zm-radius); font-size: 13px; font-weight: 700;
+            font-family: var(--font-body);
+            background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-border);
+            cursor: pointer; flex: none; white-space: nowrap; transition: 0.15s;
         }
-        .a10-viewbtn:hover { background: #e9ecef; }
-        .a10-viewbtn.active { background: #364fc7; color: #fff; border-color: #364fc7; }
+        .a10-viewbtn:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
+        .a10-viewbtn.active { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
 
-        /* 뷰1: 오늘 쓰기 */
-        .a10-concept { font-size: 12px; color: #adb5bd; text-align: center; letter-spacing: -0.3px; margin-bottom: 6px; }
-        .a10-date { font-size: 20px; font-weight: 800; color: #364fc7; text-align: center; letter-spacing: -0.5px; margin-bottom: 16px; }
-        .a10-editing-note { font-size: 12px; font-weight: 700; color: #f76707; text-align: center; margin: -10px 0 14px; }
+        /* 뷰1: 오늘 쓰기 — 차분하게, 본문 가독성 우선 */
+        .a10-concept { font-size: 12px; color: var(--zm-muted); text-align: center; letter-spacing: -0.3px; margin-bottom: 6px; }
+        .a10-date { font-family: var(--font-title); font-size: 20px; font-weight: 700; color: var(--zm-ink); text-align: center; letter-spacing: -0.5px; margin-bottom: 16px; }
+        .a10-editing-note { font-size: 12px; font-weight: 700; color: var(--zm-text-soft); text-align: center; margin: -10px 0 14px; }
         #a10Content {
-            width: 100%; min-height: 260px; padding: 16px;
-            border: 1px solid #e1e4e8; border-radius: 8px; box-sizing: border-box;
-            font-family: inherit; font-size: 15px; line-height: 1.7; color: #333;
+            width: 100%; min-height: 280px; padding: 18px;
+            border: 1px solid var(--zm-border); border-radius: var(--zm-radius); box-sizing: border-box;
+            font-family: var(--font-body); font-size: 15px; line-height: 1.85; color: var(--zm-text);
             background: #fff; resize: vertical;
         }
-        #a10Content:focus { outline: none; border-color: #364fc7; }
+        #a10Content:focus { outline: none; border-color: var(--zm-ink); }
         .a10-btnrow { display: flex; gap: 8px; margin-top: 12px; }
-        .a10-save-btn { background-color: #364fc7; flex: 1; }
-        .a10-save-btn.saved { background-color: #40c057; }
-        .a10-sub-btn { background-color: #868e96; flex: none; padding: 12px 16px; }
+        .a10-save-btn { background-color: var(--zm-ink); color: var(--zm-on-ink); flex: 1; border-radius: var(--zm-radius); }
+        .a10-save-btn.saved { background-color: var(--zm-muted); }
+        .a10-sub-btn { background-color: var(--zm-muted); color: #fff; flex: none; padding: 12px 16px; border-radius: var(--zm-radius); }
 
         /* 기록할 날짜 선택 */
         .a10-datepick { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; }
-        .a10-datepick input[type="date"] { flex: 0 1 190px; text-align: center; }
+        .a10-datepick input[type="date"] { flex: 0 1 190px; text-align: center; border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        .a10-datepick input[type="date"]:focus { outline: none; border-color: var(--zm-ink); }
+        #a10ViewWrite .today-btn { background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        #a10ViewWrite .today-btn:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
 
         /* 최근 기록 (쓰기 뷰 하단) */
-        .a10-recent { margin-top: 32px; padding-top: 22px; border-top: 1px solid #e1e4e8; }
+        .a10-recent { margin-top: 32px; padding-top: 22px; border-top: 2px solid var(--zm-ink); }
         .a10-recent-title {
-            font-size: 14px; font-weight: 800; color: #495057; letter-spacing: -0.5px;
+            font-family: var(--font-title); font-size: 14px; font-weight: 700; color: var(--zm-ink); letter-spacing: -0.5px;
             display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
         }
-        .a10-recent-count { font-size: 12px; font-weight: 600; color: #adb5bd; }
+        .a10-recent-count { font-family: var(--font-num); font-size: 12px; font-weight: 600; color: var(--zm-muted); }
         .a10-card-compact { padding: 12px 14px; }
-        .a10-card.current { border-color: #364fc7; background: #edf2ff; }
+        .a10-card.current { border-color: var(--zm-ink); background: var(--zm-bg); }
         .a10-card-body.clamp {
             display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
         }
 
-        /* 리스트 서브타이틀 (+10년 뒤 짱구에게) */
-        .a10-card-sub { font-size: 11px; font-weight: 700; color: #364fc7; margin-bottom: 8px; }
+        /* 리스트 서브타이틀 (N년 뒤 나에게) — 조용히 */
+        .a10-card-sub { font-size: 11px; font-weight: 700; color: var(--zm-muted); margin-bottom: 8px; }
 
-        /* 경제지표 한 줄 */
+        /* 경제지표 한 줄 — 부가정보, 본문보다 확실히 가라앉게 */
         .a10-market {
-            margin-top: 9px; padding-top: 8px; border-top: 1px dashed #e9ecef;
-            font-size: 11px; color: #495057; line-height: 1.7; word-break: keep-all;
+            margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--zm-border);
+            font-size: 11px; color: var(--zm-muted); line-height: 1.7; word-break: keep-all;
         }
-        .a10-market b { color: #212529; font-weight: 700; }
-        .a10-market .a10-basis { color: #adb5bd; font-weight: 600; }
+        .a10-market b { color: var(--zm-text-soft); font-weight: 700; font-family: var(--font-num); }
+        .a10-market .a10-basis { color: var(--zm-muted-2); font-weight: 600; }
 
         /* 뷰2: 전체 타임라인 — 연/월 접이식 */
         .a10-caret { font-size: 11px; width: 10px; flex: none; }
-        .a10-cnt { margin-left: auto; font-size: 11px; font-weight: 700; }
+        .a10-cnt { margin-left: auto; font-family: var(--font-num); font-size: 11px; font-weight: 700; }
 
         .a10-year-block { margin-bottom: 10px; }
         .a10-year-head {
             display: flex; align-items: center; gap: 8px; cursor: pointer;
-            padding: 12px 14px; border-radius: 8px;
-            background: #f8f9fa; border: 1px solid #e1e4e8; transition: 0.15s;
+            padding: 12px 14px; border-radius: var(--zm-radius);
+            background: var(--zm-card); border: 1px solid var(--zm-border); transition: 0.15s;
         }
-        .a10-year-head:hover { background: #edf2ff; border-color: #364fc7; }
-        .a10-year-head.open { background: #364fc7; border-color: #364fc7; color: #fff; }
-        .a10-year-label { font-size: 16px; font-weight: 800; letter-spacing: -0.5px; }
-        .a10-year-head .a10-cnt { color: #adb5bd; }
-        .a10-year-head.open .a10-cnt { color: #fff; opacity: 0.8; }
+        .a10-year-head:hover { background: var(--zm-bg); border-color: var(--zm-ink); }
+        .a10-year-head.open { background: var(--zm-ink); border-color: var(--zm-ink); color: var(--zm-on-ink); }
+        .a10-year-label { font-family: var(--font-title); font-size: 16px; font-weight: 700; letter-spacing: -0.5px; }
+        .a10-year-head .a10-cnt { color: var(--zm-muted); }
+        .a10-year-head.open .a10-cnt { color: var(--zm-on-ink); opacity: 0.8; }
         .a10-year-body { padding: 10px 0 4px 10px; }
 
         .a10-month-block { margin-bottom: 8px; }
         .a10-month-head {
             display: flex; align-items: center; gap: 8px; cursor: pointer;
-            padding: 9px 12px; border-radius: 6px;
-            background: #fff; border: 1px solid #e1e4e8;
-            font-size: 13px; font-weight: 800; color: #495057; transition: 0.15s;
+            padding: 9px 12px; border-radius: var(--zm-radius);
+            background: var(--zm-card); border: 1px solid var(--zm-border);
+            font-size: 13px; font-weight: 800; color: var(--zm-text-soft); transition: 0.15s;
         }
-        .a10-month-head:hover { border-color: #364fc7; color: #364fc7; }
-        .a10-month-head.open { background: #f8f9ff; border-color: #a5b4e8; color: #364fc7; }
-        .a10-month-head .a10-cnt { color: #adb5bd; }
-        .a10-month-body { margin-left: 6px; padding: 10px 0 6px 8px; border-left: 2px solid #e1e4e8; }
+        .a10-month-head:hover { border-color: var(--zm-ink); color: var(--zm-ink); }
+        .a10-month-head.open { background: var(--zm-bg); border-color: var(--zm-ink); color: var(--zm-ink); }
+        .a10-month-head .a10-cnt { color: var(--zm-muted); }
+        .a10-month-body { margin-left: 6px; padding: 10px 0 6px 8px; border-left: 2px solid var(--zm-border); }
         .a10-card {
-            background: #fff; border: 1px solid #e1e4e8; border-radius: 8px;
-            padding: 14px 16px; margin-bottom: 10px; cursor: pointer; transition: 0.15s;
+            background: var(--zm-card); border: 1px solid var(--zm-border); border-radius: var(--zm-radius);
+            padding: 16px 18px; margin-bottom: 10px; cursor: pointer; transition: 0.15s;
         }
-        .a10-card:hover { border-color: #364fc7; background: #f8f9fa; }
-        .a10-card-date { font-size: 12px; font-weight: 800; color: #868e96; margin-bottom: 6px; }
-        .a10-card-body { font-size: 14px; color: #333; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+        .a10-card:hover { border-color: var(--zm-ink); background: var(--zm-bg); }
+        .a10-card-date { font-family: var(--font-num); font-size: 12px; font-weight: 800; color: var(--zm-muted); margin-bottom: 6px; }
+        .a10-card-body { font-size: 15px; color: var(--zm-text); line-height: 1.85; white-space: pre-wrap; word-break: break-word; }
 
         /* 뷰3: 과거의 오늘 */
         .a10-past-card {
-            background: #fff; border: 1px solid #e1e4e8; border-left: 4px solid #364fc7;
-            border-radius: 8px; padding: 18px; margin-bottom: 12px;
+            background: var(--zm-card); border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink);
+            border-radius: var(--zm-radius); padding: 20px; margin-bottom: 12px;
         }
-        .a10-past-year { font-size: 18px; font-weight: 800; color: #364fc7; letter-spacing: -0.5px; margin-bottom: 10px; }
+        .a10-past-year { font-family: var(--font-title); font-size: 18px; font-weight: 700; color: var(--zm-ink); letter-spacing: -0.5px; margin-bottom: 10px; }
         .a10-hint {
-            text-align: center; color: #adb5bd; font-size: 13px; line-height: 1.7;
-            padding: 18px 12px; border: 1px dashed #dee2e6; border-radius: 8px; margin-top: 4px;
+            text-align: center; color: var(--zm-muted); font-size: 13px; line-height: 1.7;
+            padding: 18px 12px; border: 1px dashed var(--zm-border); border-radius: var(--zm-radius); margin-top: 4px;
         }
-        .a10-empty { text-align: center; color: #adb5bd; font-size: 13px; line-height: 1.7; padding: 40px 10px; }
+        .a10-empty { text-align: center; color: var(--zm-muted-2); font-size: 13px; line-height: 1.7; padding: 40px 10px; }
 
-        /* 지표 흐름 (차트) */
-        .a10-chart-metrics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-        .a10-chart-modes { display: flex; gap: 6px; margin-bottom: 8px; }
-        .a10-chart-ranges { display: flex; gap: 6px; margin-bottom: 14px; }
+        /* 뷰4: 지표 흐름 — 어두운 계기판(건강 개별 보기와 동일 톤) */
+        .a10-chart-metrics { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 12px; }
+        .a10-chart-modes { display: flex; gap: 2px; margin-bottom: 8px; }
+        .a10-chart-ranges { display: flex; gap: 2px; margin-bottom: 14px; }
         .a10-chip, .a10-chip2 {
             flex: none; width: auto; white-space: nowrap;
-            padding: 7px 13px; border-radius: 20px; font-size: 12px; font-weight: 700;
-            background: #f1f3f5; color: #868e96; border: 1px solid #dee2e6; cursor: pointer;
+            padding: 7px 13px; border-radius: var(--zm-radius); font-size: 12px; font-weight: 700;
+            font-family: var(--font-body);
+            background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-border); cursor: pointer;
         }
-        .a10-chip:hover, .a10-chip2:hover { background: #e9ecef; }
-        .a10-chip.active, .a10-chip2.active { background: #364fc7; color: #fff; border-color: #364fc7; }
+        .a10-chip:hover, .a10-chip2:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
+        .a10-chip.active, .a10-chip2.active { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
         .a10-chart-box { position: relative; height: 300px; margin-bottom: 14px; }
-        .a10-chart-stats { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; font-size: 13px; color: #495057; }
-        .a10-chart-stats b { color: #212529; }
-        .a10-chart-stats .up { color: #e03131; }
-        .a10-chart-stats .down { color: #1c7ed6; }
+        .a10-chart-stats { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; font-size: 13px; color: var(--zm-muted); }
+        .a10-chart-stats b { color: var(--zm-ink); }
+        .a10-chart-stats .up, .a10-chart-stats .down { color: var(--zm-ink); }  /* 일지 탭은 경보색 없이 무채 */
+        /* 차트 뷰: 어두운 패널 + 하단 게이지 (건강 개별 보기와 동일) */
+        #a10ViewChart .a10-chart-box { background: var(--zm-panel); border: 2px solid var(--zm-ink); border-radius: var(--zm-radius); padding: 14px 14px 10px; height: 320px; box-sizing: border-box; margin-bottom: 0; }
+        #a10ViewChart .a10-chart-stats { gap: 0; justify-content: stretch; margin-top: 0; border: 1px solid var(--zm-border); border-top: none; }
+        #a10ViewChart .a10-chart-stats span { flex: 1 1 0; min-width: 70px; text-align: center; padding: 9px 6px; font-size: 11px; color: var(--zm-muted); border-left: 1px solid var(--zm-border); }
+        #a10ViewChart .a10-chart-stats span:first-child { border-left: none; }
+        #a10ViewChart .a10-chart-stats b { display: block; margin-top: 3px; font-family: var(--font-num); font-size: 16px; color: var(--zm-ink); }
         .hl-chart-detail { margin-top: 14px; padding: 14px 16px; background: var(--zm-card); border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); border-radius: var(--zm-radius); font-size: 13px; line-height: 1.7; color: var(--zm-text-soft); }
         .hl-chart-detail b { display: block; margin-bottom: 4px; font-family: var(--font-title); font-weight: 700; color: var(--zm-ink); font-size: 14px; }
         /* 묶음 보기 — 지표 카드 그리드(좌측 잉크 바로 같은 계열 묶음) */
@@ -628,10 +641,10 @@
 <div id="after10Tab" style="display:none">
 
     <div class="a10-viewtabs">
-        <button class="a10-viewbtn active" data-view="write" onclick="switchAfter10View('write')">✍️ 오늘 쓰기</button>
-        <button class="a10-viewbtn" data-view="timeline" onclick="switchAfter10View('timeline')">📜 전체 타임라인</button>
-        <button class="a10-viewbtn" data-view="past" onclick="switchAfter10View('past')">🗓️ 과거의 오늘</button>
-        <button class="a10-viewbtn" data-view="chart" onclick="switchAfter10View('chart')">📈 지표 흐름</button>
+        <button class="a10-viewbtn active" data-view="write" onclick="switchAfter10View('write')">오늘 쓰기</button>
+        <button class="a10-viewbtn" data-view="timeline" onclick="switchAfter10View('timeline')">전체 타임라인</button>
+        <button class="a10-viewbtn" data-view="past" onclick="switchAfter10View('past')">과거의 오늘</button>
+        <button class="a10-viewbtn" data-view="chart" onclick="switchAfter10View('chart')">지표 흐름</button>
     </div>
 
     <!-- 뷰 1: 오늘 쓰기 -->
@@ -654,7 +667,7 @@
 
         <!-- 최근 기록 10개 -->
         <div class="a10-recent">
-            <div class="a10-recent-title">📜 최근 기록 <span class="a10-recent-count" id="a10RecentCount"></span></div>
+            <div class="a10-recent-title">최근 기록 <span class="a10-recent-count" id="a10RecentCount"></span></div>
             <div id="a10Recent"></div>
         </div>
     </div>
@@ -678,8 +691,8 @@
 
         <!-- 기간 모드 -->
         <div class="a10-chart-modes">
-            <button class="a10-chip active" data-cmode="range" onclick="a10SetChartMode('range')">📅 연속 구간</button>
-            <button class="a10-chip" data-cmode="anniv" onclick="a10SetChartMode('anniv')">🗓️ 매년 같은 날</button>
+            <button class="a10-chip active" data-cmode="range" onclick="a10SetChartMode('range')">연속 구간</button>
+            <button class="a10-chip" data-cmode="anniv" onclick="a10SetChartMode('anniv')">매년 같은 날</button>
         </div>
 
         <!-- 연속 구간 세부 (range 모드에서만) -->
@@ -1549,7 +1562,7 @@
                 : ` <span class="a10-basis">(${m.basisDate} 기준)</span>`;
         }
         const src = m.source ? `출처 ${m.source}${m.v ? ' v' + m.v : ''}${m.basisDate ? ' · 기준일 ' + m.basisDate : ''}` : '';
-        return `<div class="a10-market" title="${src}">📊 ${parts.join(' · ')}${basis}</div>`;
+        return `<div class="a10-market" title="${src}">${parts.join(' · ')}${basis}</div>`;
     }
 
     // 쓰기 뷰 하단: 최근 기록 10개 (최신순)
@@ -1670,7 +1683,7 @@
     function a10RenderTimeline() {
         const wrap = document.getElementById('a10Timeline');
         if (!a10Entries.length) {
-            wrap.innerHTML = '<div class="a10-empty">아직 기록이 없습니다.<br>"✍️ 오늘 쓰기"에서 첫 기록을 남겨보세요.</div>';
+            wrap.innerHTML = '<div class="a10-empty">아직 기록이 없습니다.<br>"오늘 쓰기"에서 첫 기록을 남겨보세요.</div>';
             return;
         }
         a10InitTimelineState();
@@ -1885,6 +1898,9 @@
         });
 
         const ext = chartExtremeOverlay(values, 4, 6);
+        // 어두운 계기판 팔레트(건강 탭과 동일). 최고/최저 테두리는 무채, 구분은 모양이 담당.
+        const A10_FONT = 'Archivo';
+        const extremeBorder = ext.pointBorderWidth.map(w => w > 0 ? '#f3f2f2' : 'transparent');
 
         a10ChartInstance = new Chart(canvas, {
             type: 'line',
@@ -1892,9 +1908,9 @@
                 labels,
                 datasets: [{
                     label: cfg.label, data: values,
-                    borderColor: '#364fc7', backgroundColor: 'rgba(54,79,199,0.08)',
-                    pointBackgroundColor: '#364fc7',
-                    pointBorderColor: ext.pointBorderColor, pointBorderWidth: ext.pointBorderWidth,
+                    borderColor: '#e8e4e4', backgroundColor: 'rgba(232,228,228,0.08)',
+                    pointBackgroundColor: '#e8e4e4',
+                    pointBorderColor: extremeBorder, pointBorderWidth: ext.pointBorderWidth,
                     pointStyle: ext.pointStyle, pointRotation: ext.pointRotation,
                     pointRadius: ext.pointRadius, pointHoverRadius: ext.pointHoverRadius,
                     tension: 0.25, fill: true,
@@ -1912,8 +1928,8 @@
                     }
                 },
                 scales: {
-                    y: { ticks: { callback: v => cfg.fmt(v) } },
-                    x: { grid: { display: false } }
+                    y: { ticks: { callback: v => cfg.fmt(v), color: '#9b9797', font: { family: A10_FONT, size: 10 } }, grid: { color: '#444141', tickBorderDash: [2, 2] }, border: { display: false } },
+                    x: { grid: { display: false }, border: { color: '#444141' }, ticks: { color: '#9b9797', font: { family: A10_FONT, size: 11 } } }
                 }
             }
         });
