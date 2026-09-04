@@ -348,12 +348,13 @@
         .a10-chart-stats b { color: #212529; }
         .a10-chart-stats .up { color: #e03131; }
         .a10-chart-stats .down { color: #1c7ed6; }
-        .hl-chart-detail { margin-top: 12px; padding: 12px 14px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; font-size: 13px; line-height: 1.7; color: #495057; }
-        .hl-chart-detail b { display: block; margin-bottom: 4px; color: #212529; font-size: 13px; }
-        /* 묶음 보기 */
+        .hl-chart-detail { margin-top: 14px; padding: 14px 16px; background: var(--zm-card); border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); border-radius: var(--zm-radius); font-size: 13px; line-height: 1.7; color: var(--zm-text-soft); }
+        .hl-chart-detail b { display: block; margin-bottom: 4px; font-family: var(--font-title); font-weight: 700; color: var(--zm-ink); font-size: 14px; }
+        /* 묶음 보기 — 지표 카드 그리드(좌측 잉크 바로 같은 계열 묶음) */
         .hl-group-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; margin-bottom: 10px; }
-        .hl-group-title { font-size: 13px; font-weight: 700; color: #212529; margin-bottom: 4px; }
-        .hl-group-box { position: relative; height: 190px; }
+        #hlGroupGrid > div { border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); background: var(--zm-card); padding: 10px 12px; }
+        .hl-group-title { font-family: var(--font-title); font-size: 13px; font-weight: 700; color: var(--zm-ink); margin-bottom: 4px; }
+        .hl-group-box { position: relative; height: 175px; }
         @media (max-width: 600px) { .hl-group-grid { grid-template-columns: 1fr; } }
 
         /* ===================== 로그인 게이트 ===================== */
@@ -387,79 +388,96 @@
         }
         #logoutBtn:hover { background: var(--zm-border); color: var(--zm-text-soft); }
 
-        /* ===================== 건강 기록 (health) =====================
-           포인트 컬러: #0ca678 (그린) — 기존(ToDo 다크, After10 남색)과 구분 */
-        .hl-persons, .hl-views, .hl-types, .hl-ranges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-        .hl-views { margin-bottom: 16px; }
+        /* ===================== 건강 기록 (health) — 계기판 톤 =====================
+           무채 계단 + 적색(활성·이상치·강조)만. 세그먼트는 직각. */
+        /* 보조 컨트롤: 한 줄 툴바 + 직각 세그먼트 */
+        .hl-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 16px; }
+        .hl-toolbar-sep { align-self: stretch; width: 1px; background: var(--zm-border); }
+        .hl-persons, .hl-views, .hl-types, .hl-ranges { display: flex; flex-wrap: wrap; gap: 2px; margin: 0; }
+        #hlGroupSel { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 14px; }
+        #hlViewInput .hl-types { margin-bottom: 14px; }
         .hl-chip {
             flex: none; width: auto; white-space: nowrap;
-            padding: 8px 15px; border-radius: 20px; font-size: 13px; font-weight: 700;
-            background: #f1f3f5; color: #868e96; border: 1px solid #dee2e6; cursor: pointer;
+            padding: 7px 14px; border-radius: var(--zm-radius); font-size: 13px; font-weight: 700;
+            font-family: var(--font-body);
+            background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-border); cursor: pointer;
         }
-        .hl-chip:hover { background: #e9ecef; }
-        .hl-chip.active { background: #0ca678; color: #fff; border-color: #0ca678; }
-        .hl-chip.person.active { background: #364fc7; border-color: #364fc7; }  /* 인물은 남색으로 구분 */
+        .hl-chip:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
+        .hl-chip.active { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        .hl-chip.person.active { background: var(--zm-accent); border-color: var(--zm-accent); }  /* 인물은 적색 배지 */
 
         .hl-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
         .hl-meta input[type="date"] { flex: 0 1 180px; }
         .hl-meta input[type="text"] { flex: 1; min-width: 140px; }
+        .hl-meta input { border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        .hl-meta input:focus { outline: none; border-color: var(--zm-ink); }
 
         #hlPaste, #hlNote { width: 100%; min-height: 140px; padding: 14px; box-sizing: border-box;
-            border: 1px solid #e1e4e8; border-radius: 8px; font-family: inherit; font-size: 14px; line-height: 1.6; resize: vertical; }
-        #hlPaste:focus, #hlNote:focus { outline: none; border-color: #0ca678; }
+            border: 1px solid var(--zm-border); border-radius: var(--zm-radius); font-family: inherit; font-size: 14px; line-height: 1.6; resize: vertical; }
+        #hlPaste:focus, #hlNote:focus { outline: none; border-color: var(--zm-ink); }
 
         .hl-btnrow { display: flex; gap: 8px; margin: 10px 0; }
-        .hl-analyze-btn { background: #0ca678; flex: none; padding: 11px 20px; }
-        .hl-save-btn { background: #0ca678; flex: 1; }
-        .hl-save-btn.saved { background: #40c057; }
-        .hl-sub-btn { background: #868e96; flex: none; padding: 12px 16px; }
-        .hl-save-msg { text-align: center; font-size: 13px; font-weight: 600; color: #0ca678; min-height: 18px; }
-        .hl-parse-info { font-size: 12px; color: #868e96; margin: 6px 0 10px; }
+        .hl-analyze-btn { background: var(--zm-ink); color: var(--zm-on-ink); flex: none; padding: 11px 20px; border-radius: var(--zm-radius); }
+        .hl-save-btn { background: var(--zm-ink); color: var(--zm-on-ink); flex: 1; border-radius: var(--zm-radius); }
+        .hl-save-btn.saved { background: var(--zm-accent); }
+        .hl-sub-btn { background: var(--zm-muted); color: #fff; flex: none; padding: 12px 16px; border-radius: var(--zm-radius); }
+        .hl-save-msg { text-align: center; font-size: 13px; font-weight: 600; color: var(--zm-ink); min-height: 18px; }
+        .hl-parse-info { font-size: 12px; color: var(--zm-muted); margin: 6px 0 10px; }
 
         /* 항목 편집 표 */
         .hl-items-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 8px; }
-        .hl-items-table th { background: #f1f3f5; color: #495057; font-weight: 700; padding: 6px 4px; border: 1px solid #e1e4e8; }
-        .hl-items-table td { border: 1px solid #e9ecef; padding: 2px; }
+        .hl-items-table th { background: var(--zm-bg); color: var(--zm-text-soft); font-weight: 700; padding: 6px 4px; border: 1px solid var(--zm-border); }
+        .hl-items-table td { border: 1px solid var(--zm-line); padding: 2px; }
         .hl-items-table input { width: 100%; border: none; padding: 6px 4px; font-size: 12px; box-sizing: border-box; background: transparent; }
-        .hl-items-table input:focus { outline: 1px solid #0ca678; background: #fff; }
-        .hl-items-table tr.abnormal td { background: #fff0f0; }
-        .hl-items-table tr.failed td { background: #fff9db; }
-        .hl-items-table .hl-del { color: #fa5252; cursor: pointer; text-align: center; font-weight: 800; }
+        .hl-items-table input:focus { outline: 1px solid var(--zm-ink); background: #fff; }
+        .hl-items-table tr.abnormal td { background: #fbecea; }   /* 이상치: 적색 옅은 틴트 */
+        .hl-items-table tr.failed td { background: #f1ece6; }
+        .hl-items-table .hl-del { color: var(--zm-accent); cursor: pointer; text-align: center; font-weight: 800; }
         .hl-col-name { width: 26%; } .hl-col-val { width: 16%; } .hl-col-unit { width: 16%; } .hl-col-ref { width: 32%; } .hl-col-x { width: 6%; }
-        .hl-addrow-btn { background: #f1f3f5; color: #495057; border: 1px dashed #ced4da; flex: none; padding: 8px 14px; font-size: 12px; }
+        .hl-addrow-btn { background: var(--zm-card); color: var(--zm-text-soft); border: 1px dashed var(--zm-border); flex: none; padding: 8px 14px; font-size: 12px; border-radius: var(--zm-radius); }
 
         /* 기록 목록 */
-        .hl-rec { background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 14px 15px; margin-bottom: 10px; }
+        .hl-rec { background: var(--zm-card); border: 1px solid var(--zm-ink); border-radius: var(--zm-radius); padding: 14px 15px; margin-bottom: 10px; }
         .hl-rec-head { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-        .hl-rec-date { font-size: 14px; font-weight: 800; color: #212529; }
-        .hl-rec-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; color: #fff; }
-        .hl-badge-blood { background: #e03131; } .hl-badge-endoscopy { background: #7048e8; } .hl-badge-other { background: #868e96; }
-        .hl-rec-hosp { font-size: 12px; color: #868e96; }
-        .hl-rec-ab { margin-left: auto; font-size: 11px; font-weight: 700; color: #e03131; }
+        .hl-rec-date { font-family: var(--font-num); font-size: 15px; font-weight: 800; color: var(--zm-ink); }
+        .hl-rec-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: var(--zm-radius); color: #fff; }
+        .hl-badge-blood { background: var(--zm-accent); } .hl-badge-endoscopy { background: var(--zm-ink); } .hl-badge-other { background: var(--zm-muted); }
+        .hl-rec-hosp { font-size: 12px; color: var(--zm-muted); }
+        .hl-rec-ab { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--zm-accent); }
         .hl-rec-actions { display: flex; gap: 6px; margin-top: 10px; }
-        .hl-mini-btn { flex: none; width: auto; padding: 5px 12px; font-size: 12px; border-radius: 6px; }
-        .hl-mini-edit { background: #364fc7; } .hl-mini-del { background: #fa5252; }
-        .hl-rec-note { font-size: 13px; color: #495057; line-height: 1.6; white-space: pre-wrap; margin-top: 8px; }
+        .hl-mini-btn { flex: none; width: auto; padding: 5px 12px; font-size: 12px; border-radius: var(--zm-radius); }
+        .hl-mini-edit { background: var(--zm-ink); color: var(--zm-on-ink); } .hl-mini-del { background: var(--zm-accent); color: #fff; }
+        .hl-rec-note { font-size: 13px; color: var(--zm-text-soft); line-height: 1.6; white-space: pre-wrap; margin-top: 8px; }
         .hl-rec-body { margin-top: 10px; }
         .hl-view-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        .hl-view-table th { background: #f8f9fa; color: #868e96; font-weight: 700; padding: 5px 6px; text-align: left; border-bottom: 1px solid #e9ecef; }
-        .hl-view-table td { padding: 5px 6px; border-bottom: 1px solid #f1f3f5; }
-        .hl-view-table tr.abnormal td { background: #fff0f0; }
-        .hl-view-table tr.abnormal .hl-v { color: #e03131; font-weight: 800; }
-        .hl-abn-mark { color: #e03131; font-weight: 800; }
+        .hl-view-table th { background: var(--zm-bg); color: var(--zm-muted); font-weight: 700; padding: 5px 6px; text-align: left; border-bottom: 1px solid var(--zm-border); }
+        .hl-view-table td { padding: 5px 6px; border-bottom: 1px solid var(--zm-line); }
+        .hl-view-table tr.abnormal td { background: #fbecea; }
+        .hl-view-table tr.abnormal .hl-v { color: var(--zm-accent); font-weight: 800; }
+        .hl-abn-mark { color: var(--zm-accent); font-weight: 800; }
 
-        #hlChartItem { width: 100%; margin-bottom: 12px; }
-        .hl-ref { color: #0ca678 !important; }
+        /* 수치 흐름 — 개별 보기: 어두운 계기판 패널 + 하단 요약 계기 */
+        #hlChartItem { width: 100%; margin-bottom: 12px; padding: 10px 12px; font-size: 14px;
+            font-family: var(--font-body); border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        #hlChartItem:focus { outline: none; border-color: var(--zm-ink); }
+        .hl-ref { color: var(--zm-muted) !important; }
+        #hlChartSingle .a10-chart-box { background: var(--zm-panel); border: 2px solid var(--zm-ink); border-radius: var(--zm-radius); padding: 14px 14px 10px; height: 320px; box-sizing: border-box; margin-bottom: 0; }
+        #hlChartSingle .a10-chart-stats { gap: 0; justify-content: stretch; margin-top: 0; border: 1px solid var(--zm-border); border-top: none; }
+        #hlChartSingle .a10-chart-stats span { flex: 1 1 0; min-width: 70px; text-align: center; padding: 9px 6px; font-size: 11px; color: var(--zm-muted); border-left: 1px solid var(--zm-border); }
+        #hlChartSingle .a10-chart-stats span:first-child { border-left: none; }
+        #hlChartSingle .a10-chart-stats b { display: block; margin-top: 3px; font-family: var(--font-num); font-size: 16px; color: var(--zm-ink); }
+        #hlChartSingle .a10-chart-stats .up { color: var(--zm-accent); }
+        #hlChartSingle .a10-chart-stats .down { color: var(--zm-ink); }
 
         /* 항목 설명 물음표 */
         .hl-info {
             display: inline-flex; align-items: center; justify-content: center;
             width: 15px; height: 15px; border-radius: 50%; margin-left: 3px;
-            background: #dee2e6; color: #495057; font-size: 10px; font-weight: 800;
+            background: var(--zm-border); color: var(--zm-text-soft); font-size: 10px; font-weight: 800;
             cursor: pointer; vertical-align: middle; line-height: 1; user-select: none;
         }
-        .hl-info:hover { background: #0ca678; color: #fff; }
-        .hl-info-desc { display: block; margin-top: 4px; font-size: 11px; color: #868e96; line-height: 1.5; font-weight: 400; }
+        .hl-info:hover { background: var(--zm-ink); color: var(--zm-on-ink); }
+        .hl-info-desc { display: block; margin-top: 4px; font-size: 11px; color: var(--zm-muted); line-height: 1.5; font-weight: 400; }
     </style>
 </head>
 <body>
@@ -679,25 +697,26 @@
 <!-- ===== 건강 탭 ===== -->
 <div id="healthTab" style="display:none">
 
-    <!-- 인물 전환 -->
-    <div class="hl-persons" id="hlPersons">
-        <button class="hl-chip person active" data-person="짱구" onclick="hlSetPerson('짱구')">🧒 짱구</button>
-        <button class="hl-chip person" data-person="쌤" onclick="hlSetPerson('쌤')">👩‍🏫 쌤</button>
-    </div>
-
-    <!-- 뷰 전환 -->
-    <div class="hl-views">
-        <button class="hl-chip view active" data-hview="input" onclick="hlSetView('input')">✍️ 기록 입력</button>
-        <button class="hl-chip view" data-hview="list" onclick="hlSetView('list')">📋 기록 목록</button>
-        <button class="hl-chip view" data-hview="chart" onclick="hlSetView('chart')">📈 수치 흐름</button>
+    <!-- 보조 컨트롤: 인물 + 뷰 한 줄 툴바 -->
+    <div class="hl-toolbar">
+        <div class="hl-persons" id="hlPersons">
+            <button class="hl-chip person active" data-person="짱구" onclick="hlSetPerson('짱구')">짱구</button>
+            <button class="hl-chip person" data-person="쌤" onclick="hlSetPerson('쌤')">쌤</button>
+        </div>
+        <span class="hl-toolbar-sep"></span>
+        <div class="hl-views">
+            <button class="hl-chip view active" data-hview="input" onclick="hlSetView('input')">기록 입력</button>
+            <button class="hl-chip view" data-hview="list" onclick="hlSetView('list')">기록 목록</button>
+            <button class="hl-chip view" data-hview="chart" onclick="hlSetView('chart')">수치 흐름</button>
+        </div>
     </div>
 
     <!-- 뷰: 기록 입력 -->
     <div id="hlViewInput">
         <div class="hl-types">
-            <button class="hl-chip type active" data-htype="blood" onclick="hlSetType('blood')">🩸 혈액검사</button>
-            <button class="hl-chip type" data-htype="endoscopy" onclick="hlSetType('endoscopy')">🔬 내시경</button>
-            <button class="hl-chip type" data-htype="other" onclick="hlSetType('other')">📄 기타</button>
+            <button class="hl-chip type active" data-htype="blood" onclick="hlSetType('blood')">혈액검사</button>
+            <button class="hl-chip type" data-htype="endoscopy" onclick="hlSetType('endoscopy')">내시경</button>
+            <button class="hl-chip type" data-htype="other" onclick="hlSetType('other')">기타</button>
         </div>
 
         <div class="hl-meta">
@@ -709,7 +728,7 @@
         <div id="hlBloodInput">
             <textarea id="hlPaste" placeholder="검사지 텍스트를 통째로 붙여넣고 [분석]을 누르세요.&#10;(자동 인식이 완벽하지 않으니 아래 표에서 확인·수정한 뒤 저장하세요.)"></textarea>
             <div class="hl-btnrow">
-                <button id="hlParseBtn" class="hl-analyze-btn">🔎 분석</button>
+                <button id="hlParseBtn" class="hl-analyze-btn">분석</button>
             </div>
             <div id="hlParseInfo" class="hl-parse-info"></div>
             <div id="hlItemsWrap"></div>
@@ -734,14 +753,18 @@
 
     <!-- 뷰: 수치 흐름 -->
     <div id="hlViewChart" style="display:none">
-        <div class="hl-views" id="hlChartModeRow">
-            <button class="hl-chip cmode active" data-hcmode="single" onclick="hlSetChartMode('single')">개별 보기</button>
-            <button class="hl-chip cmode" data-hcmode="group" onclick="hlSetChartMode('group')">묶음 보기</button>
-        </div>
-        <div class="hl-ranges" id="hlChartRangeRow">
-            <button class="hl-chip range active" data-hrange="all" onclick="hlSetChartRange('all')">전체</button>
-            <button class="hl-chip range" data-hrange="3y" onclick="hlSetChartRange('3y')">3년</button>
-            <button class="hl-chip range" data-hrange="1y" onclick="hlSetChartRange('1y')">1년</button>
+        <!-- 보기방식 + 기간 한 줄 툴바 -->
+        <div class="hl-toolbar">
+            <div class="hl-views" id="hlChartModeRow">
+                <button class="hl-chip cmode active" data-hcmode="single" onclick="hlSetChartMode('single')">개별 보기</button>
+                <button class="hl-chip cmode" data-hcmode="group" onclick="hlSetChartMode('group')">묶음 보기</button>
+            </div>
+            <span class="hl-toolbar-sep"></span>
+            <div class="hl-ranges" id="hlChartRangeRow">
+                <button class="hl-chip range active" data-hrange="all" onclick="hlSetChartRange('all')">전체</button>
+                <button class="hl-chip range" data-hrange="3y" onclick="hlSetChartRange('3y')">3년</button>
+                <button class="hl-chip range" data-hrange="1y" onclick="hlSetChartRange('1y')">1년</button>
+            </div>
         </div>
         <!-- 개별 보기 -->
         <div id="hlChartSingle">
@@ -2538,6 +2561,14 @@
         opts = opts || {};
         if (typeof Chart === 'undefined') return { kind: 'lib' };
 
+        // 시안 팔레트(무채 + 적색). opts.dark = 어두운 계기판 패널(개별 보기)용.
+        const dark = !!opts.dark;
+        const PAL = dark
+            ? { line: '#e8e4e4', fill: 'rgba(232,228,228,0.06)', point: '#e8e4e4', extreme: '#f3f2f2', ref: 'rgba(232,228,228,0.30)', band: 'rgba(232,228,228,0.05)', grid: '#444141', tick: '#9b9797' }
+            : { line: '#201e1d', fill: 'rgba(32,30,29,0.05)', point: '#201e1d', extreme: '#201e1d', ref: 'rgba(32,30,29,0.32)', band: 'rgba(32,30,29,0.05)', grid: '#e2dede', tick: '#9b9797' };
+        const CHART_FONT = 'Archivo';
+        const OUTLIER = '#ec3013';
+
         const all = []; let refLow = null, refHigh = null, unit = '';
         hlRecords.filter(r => r.person === hlPerson && (r.type || 'blood') === 'blood')
             .forEach(r => { const it = (r.items || []).find(x => x.name && hlNormalizeName(x.name) === itemName); if (it && it.value != null) { all.push({ date: r.date, ts: hlDateTs(r.date), value: it.value }); if (it.refLow != null) refLow = it.refLow; if (it.refHigh != null) refHigh = it.refHigh; if (it.unit) unit = hlDisplayUnit(it.unit); } });
@@ -2557,19 +2588,21 @@
         const datasets = [];
         // 참고치 배경 영역 (상·하한 둘 다 있으면 밴드, 하나면 점선)
         if (refLow != null && refHigh != null) {
-            datasets.push({ label: '상한', data: mk(values.map(() => refHigh)), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: '+1', backgroundColor: 'rgba(12,166,120,0.10)' });
-            datasets.push({ label: '하한', data: mk(values.map(() => refLow)), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
+            datasets.push({ label: '상한', data: mk(values.map(() => refHigh)), borderColor: PAL.ref, borderDash: [4, 4], pointRadius: 0, fill: '+1', backgroundColor: PAL.band });
+            datasets.push({ label: '하한', data: mk(values.map(() => refLow)), borderColor: PAL.ref, borderDash: [4, 4], pointRadius: 0, fill: false });
         } else if (refHigh != null) {
-            datasets.push({ label: '상한', data: mk(values.map(() => refHigh)), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
+            datasets.push({ label: '상한', data: mk(values.map(() => refHigh)), borderColor: PAL.ref, borderDash: [4, 4], pointRadius: 0, fill: false });
         } else if (refLow != null) {
-            datasets.push({ label: '하한', data: mk(values.map(() => refLow)), borderColor: 'rgba(12,166,120,0.45)', borderDash: [4, 4], pointRadius: 0, fill: false });
+            datasets.push({ label: '하한', data: mk(values.map(() => refLow)), borderColor: PAL.ref, borderDash: [4, 4], pointRadius: 0, fill: false });
         }
         const valueDsIndex = datasets.length;
         const ext = chartExtremeOverlay(values, 4, 6);
+        // 최고/최저 테두리는 팔레트(무채)로 통일 — 구분은 모양(위/아래 삼각형)이 담당
+        const extremeBorder = ext.pointBorderWidth.map(w => w > 0 ? PAL.extreme : 'transparent');
         datasets.push({
-            label: itemName, data: mk(values), borderColor: '#364fc7', backgroundColor: 'rgba(54,79,199,0.06)',
-            pointBackgroundColor: pts.map(p => ((refLow != null && p.value < refLow) || (refHigh != null && p.value > refHigh)) ? '#e03131' : '#364fc7'),
-            pointBorderColor: ext.pointBorderColor, pointBorderWidth: ext.pointBorderWidth,
+            label: itemName, data: mk(values), borderColor: PAL.line, backgroundColor: PAL.fill,
+            pointBackgroundColor: pts.map(p => ((refLow != null && p.value < refLow) || (refHigh != null && p.value > refHigh)) ? OUTLIER : PAL.point),
+            pointBorderColor: extremeBorder, pointBorderWidth: ext.pointBorderWidth,
             pointStyle: ext.pointStyle, pointRotation: ext.pointRotation,
             pointRadius: ext.pointRadius, pointHoverRadius: ext.pointHoverRadius,
             tension: 0.2, fill: false,
@@ -2581,9 +2614,12 @@
                 type: 'time',
                 time: { displayFormats: { day: 'MM/dd', week: 'yy/MM/dd', month: 'yy/MM', quarter: 'yy/MM', year: 'yyyy' } },
                 grid: { display: false },
-                ticks: { autoSkip: true, maxRotation: 0, maxTicksLimit: 8, font: { size: 11 } },
+                border: { color: PAL.grid },
+                ticks: { autoSkip: true, maxRotation: 0, maxTicksLimit: 8, color: PAL.tick, font: { family: CHART_FONT, size: 11 } },
               }
-            : { grid: { display: false } };
+            : { grid: { display: false }, border: { color: PAL.grid }, ticks: { color: PAL.tick, font: { family: CHART_FONT, size: 11 } } };
+        // y축: 가로 격자만 얇게 (시안), 축선 제거
+        const yScale = { grid: { color: PAL.grid, tickBorderDash: [2, 2] }, border: { display: false }, ticks: { color: PAL.tick, font: { family: CHART_FONT, size: 10 } } };
         if (useTime) {
             const forced = (opts.xMin != null && opts.xMax != null && opts.xMin !== opts.xMax);
             if (forced) {
@@ -2611,7 +2647,7 @@
                     legend: { display: false },
                     tooltip: { filter: c => c.datasetIndex === valueDsIndex, callbacks: { title: c => pts[c[0].dataIndex].date, label: c => `${itemName}: ${c.parsed.y}${unit ? ' ' + unit : ''}${chartExtremeNote(ext, c.dataIndex)}` } }
                 },
-                scales: { x: xScale }
+                scales: { x: xScale, y: yScale }
             }
         };
         return { kind: 'ok', config, meta: { pts, all, refLow, refHigh, unit, values, useTime, ext, cutoff, valueDsIndex } };
@@ -2684,7 +2720,7 @@
             else { detailEl.innerHTML = ''; detailEl.style.display = 'none'; }
         }
 
-        const res = hlMakeChartConfig(itemName);
+        const res = hlMakeChartConfig(itemName, { dark: true });
         if (res.kind === 'no-item') { canvas.style.display = 'none'; statsEl.innerHTML = ''; msgEl.innerHTML = '<div class="a10-empty">이 항목의 수치가 없습니다.</div>'; return; }
         if (res.kind === 'no-range') {
             canvas.style.display = 'none'; statsEl.innerHTML = '';
