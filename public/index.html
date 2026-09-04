@@ -437,16 +437,20 @@
         .hl-addrow-btn { background: var(--zm-card); color: var(--zm-text-soft); border: 1px dashed var(--zm-border); flex: none; padding: 8px 14px; font-size: 12px; border-radius: var(--zm-radius); }
 
         /* 기록 목록 */
-        .hl-rec { background: var(--zm-card); border: 1px solid var(--zm-ink); border-radius: var(--zm-radius); padding: 14px 15px; margin-bottom: 10px; }
-        .hl-rec-head { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .hl-rec { background: var(--zm-card); border: 1px solid var(--zm-ink); border-radius: var(--zm-radius); padding: 10px 14px; margin-bottom: 8px; }
+        /* 상단 한 줄: 날짜·병원명(좌) + 이상·수정/삭제(우), 좁으면 접힘 */
+        .hl-rec-top { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+        .hl-rec-head { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .hl-rec-date { font-family: var(--font-num); font-size: 15px; font-weight: 800; color: var(--zm-ink); }
-        .hl-rec-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: var(--zm-radius); color: #fff; }
-        .hl-badge-blood { background: var(--zm-accent); } .hl-badge-endoscopy { background: var(--zm-ink); } .hl-badge-other { background: var(--zm-muted); }
-        .hl-rec-hosp { font-size: 12px; color: var(--zm-muted); }
-        .hl-rec-ab { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--zm-accent); }
-        .hl-rec-actions { display: flex; gap: 6px; margin-top: 10px; }
-        .hl-mini-btn { flex: none; width: auto; padding: 5px 12px; font-size: 12px; border-radius: var(--zm-radius); }
-        .hl-mini-edit { background: var(--zm-ink); color: var(--zm-on-ink); } .hl-mini-del { background: var(--zm-accent); color: #fff; }
+        .hl-rec-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: var(--zm-radius); background: var(--zm-bg); color: var(--zm-muted-3); border: 1px solid var(--zm-border); }
+        .hl-badge-blood, .hl-badge-endoscopy, .hl-badge-other { background: var(--zm-bg); color: var(--zm-muted-3); }  /* 배지는 무채 */
+        .hl-rec-hosp { font-size: 14px; font-weight: 600; color: var(--zm-text); }   /* 병원명 강조: 날짜 다음으로 */
+        .hl-rec-ab { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--zm-accent); }  /* 빨강은 여기에만 */
+        .hl-rec-actions { display: flex; gap: 6px; flex: none; }
+        .hl-mini-btn { flex: none; width: auto; padding: 5px 12px; font-size: 12px; border-radius: var(--zm-radius); border: 1px solid transparent; }
+        .hl-mini-edit { background: var(--zm-ink); color: var(--zm-on-ink); }
+        .hl-mini-del { background: var(--zm-card); color: var(--zm-muted); border-color: var(--zm-border); }
+        .hl-mini-del:hover { background: var(--zm-accent); color: #fff; border-color: var(--zm-accent); }
         .hl-rec-note { font-size: 13px; color: var(--zm-text-soft); line-height: 1.6; white-space: pre-wrap; margin-top: 8px; }
         .hl-rec-body { margin-top: 10px; }
         .hl-view-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -2465,17 +2469,19 @@
                 body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none"><div class="hl-rec-note">${hlEsc(r.note)}</div></div>`;
             }
             return `<div class="hl-rec">
-                <div class="hl-rec-head" onclick="hlToggleRec('${r.id}')">
-                    <span class="hl-rec-date">${hlEsc(r.date)}</span>
-                    <span class="hl-rec-badge hl-badge-${type}">${HL_TYPE_LABEL[type] || type}</span>
-                    ${r.hospital ? `<span class="hl-rec-hosp">${hlEsc(r.hospital)}</span>` : ''}
-                    ${abn ? `<span class="hl-rec-ab">이상 ${abn}</span>` : ''}
+                <div class="hl-rec-top">
+                    <div class="hl-rec-head" onclick="hlToggleRec('${r.id}')">
+                        <span class="hl-rec-date">${hlEsc(r.date)}</span>
+                        <span class="hl-rec-badge hl-badge-${type}">${HL_TYPE_LABEL[type] || type}</span>
+                        ${r.hospital ? `<span class="hl-rec-hosp">${hlEsc(r.hospital)}</span>` : ''}
+                        ${abn ? `<span class="hl-rec-ab">이상 ${abn}</span>` : ''}
+                    </div>
+                    <div class="hl-rec-actions">
+                        <button class="hl-mini-btn hl-mini-edit" onclick="hlEdit('${r.id}')">수정</button>
+                        <button class="hl-mini-btn hl-mini-del" onclick="hlDelete('${r.id}')">삭제</button>
+                    </div>
                 </div>
                 ${body}
-                <div class="hl-rec-actions">
-                    <button class="hl-mini-btn hl-mini-edit" onclick="hlEdit('${r.id}')">수정</button>
-                    <button class="hl-mini-btn hl-mini-del" onclick="hlDelete('${r.id}')">삭제</button>
-                </div>
             </div>`;
         }).join('');
     }
