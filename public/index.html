@@ -1807,6 +1807,26 @@
         return '';
     }
 
+    // 시간축 라벨 축약 규칙 — 두 차트(건강·After10)가 공유한다.
+    // 데이터가 실제로 걸친 기간(ms)으로 눈금 단위·형식을 정한다:
+    //   ~3개월 이하 → 날짜(07/18) / ~2년 이하 → 월(7월) / 그보다 길면 → 연(2026)
+    // maxTicksLimit(=8) + autoSkip 으로 어느 경우든 라벨이 겹치지 않게 개수를 제한한다.
+    function chartTimeUnit(tMinMs, tMaxMs) {
+        const spanDays = (tMaxMs - tMinMs) / 86400000;
+        if (spanDays <= 95)  return { unit: 'day',   fmt: 'MM/dd' };  // 1개월·3개월: 날짜(띄엄띄엄)
+        if (spanDays <= 730) return { unit: 'month', fmt: 'M월' };    // 1년·전체(≤2년): 월
+        return { unit: 'year', fmt: 'yyyy' };                         // 전체(>2년): 연
+    }
+    const CHART_MAX_TICKS = 8;
+    // month 단위 눈금 라벨: 연초(1월)에만 연도를 붙인다. 예: "11월"·"12월"·"2026 1월"·"2월"
+    // (같은 해 안이면 "7월"만, 연도가 바뀌는 1월에만 연도 표기)
+    function chartMonthTickLabel(value, index, ticks) {
+        const t = ticks[index];
+        const d = new Date(t && t.value != null ? t.value : value);
+        const m = d.getMonth();
+        return m === 0 ? (d.getFullYear() + ' 1월') : ((m + 1) + '월');
+    }
+
     /* ===================== 뷰4: 지표 흐름 (차트) =====================
        - a10Entries(탭 진입 시 1회 조회)를 재사용 → 추가 읽기 없음
        - 7종 단위가 달라 한 번에 하나만 그림, 값 없는 날은 건너뜀(0 채우기 X)
@@ -1905,12 +1925,37 @@
         const A10_FONT = 'Archivo';
         const extremeBorder = ext.pointBorderWidth.map(w => w > 0 ? '#f3f2f2' : 'transparent');
 
+        // 연속 구간 모드에서만 실제 날짜 간격(time scale)로 그린다. '매년 같은 날'은 연도 축 유지.
+        // 건강 탭이 쓰는 어댑터/헬퍼(hlDateAdapterOk·hlDateTs)를 그대로 활용. 실패 시 기존 등간격으로 폴백.
+        const useTime = a10ChartMode === 'range' && hlDateAdapterOk() && items.every(e => hlDateTs(e.ymd) != null);
+        const tsData = useTime ? items.map(e => ({ x: hlDateTs(e.ymd), y: e.value })) : null;
+        let xScale;
+        if (useTime) {
+            const tsAll = items.map(e => hlDateTs(e.ymd));
+            let tMin = Math.min.apply(null, tsAll), tMax = Math.max.apply(null, tsAll);
+            // 점이 1개뿐이거나 전부 같은 날이면 폭이 0이라 밀리초 눈금이 생긴다. 앞뒤 보름씩 벌린다.
+            const single = (tMin === tMax);
+            if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
+            const tu = chartTimeUnit(tMin, tMax);  // 기간에 맞는 단위·형식 (공유 규칙)
+            const xticks = { autoSkip: true, maxRotation: 0, maxTicksLimit: CHART_MAX_TICKS, color: '#9b9797', font: { family: A10_FONT, size: 11 } };
+            if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }  // 연초에 연도 표기
+            xScale = {
+                type: 'time',
+                time: { unit: tu.unit, displayFormats: { [tu.unit]: tu.fmt } },
+                grid: { display: false }, border: { color: '#444141' },
+                ticks: xticks,
+            };
+            if (single) { xScale.min = tMin; xScale.max = tMax; }
+        } else {
+            xScale = { grid: { display: false }, border: { color: '#444141' }, ticks: { color: '#9b9797', font: { family: A10_FONT, size: 11 } } };
+        }
+
         a10ChartInstance = new Chart(canvas, {
             type: 'line',
             data: {
-                labels,
+                labels: useTime ? undefined : labels,
                 datasets: [{
-                    label: cfg.label, data: values,
+                    label: cfg.label, data: useTime ? tsData : values,
                     borderColor: '#e8e4e4', backgroundColor: 'rgba(232,228,228,0.08)',
                     pointBackgroundColor: '#e8e4e4',
                     pointBorderColor: extremeBorder, pointBorderWidth: ext.pointBorderWidth,
@@ -1932,7 +1977,7 @@
                 },
                 scales: {
                     y: { ticks: { callback: v => cfg.fmt(v), color: '#9b9797', font: { family: A10_FONT, size: 10 } }, grid: { color: '#444141', tickBorderDash: [2, 2] }, border: { display: false } },
-                    x: { grid: { display: false }, border: { color: '#444141' }, ticks: { color: '#9b9797', font: { family: A10_FONT, size: 11 } } }
+                    x: xScale
                 }
             }
         });
@@ -2633,35 +2678,30 @@
             tension: 0.2, fill: false,
         });
 
-        // x축: 단위(일/월/년)는 Chart.js가 기간을 보고 고르게 두고, 겹침만 막는다
-        const xScale = useTime
-            ? {
+        // x축: 데이터가 걸친 기간에 맞춰 눈금 단위·형식을 정한다(공유 규칙 chartTimeUnit).
+        let xScale;
+        if (useTime) {
+            const tsArr = pts.map(p => p.ts);
+            let tMin = Math.min.apply(null, tsArr), tMax = Math.max.apply(null, tsArr);
+            const forced = (opts.xMin != null && opts.xMax != null && opts.xMin !== opts.xMax);  // 묶음 보기: 공통 x범위
+            const single = !forced && (tMin === tMax);                                           // 점 1개/같은 날
+            if (forced) { tMin = opts.xMin; tMax = opts.xMax; }
+            else if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
+            const tu = chartTimeUnit(tMin, tMax);
+            const xticks = { autoSkip: true, maxRotation: 0, maxTicksLimit: CHART_MAX_TICKS, color: PAL.tick, font: { family: CHART_FONT, size: 11 } };
+            if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }  // 연초에 연도 표기
+            xScale = {
                 type: 'time',
-                time: { displayFormats: { day: 'MM/dd', week: 'yy/MM/dd', month: 'yy/MM', quarter: 'yy/MM', year: 'yyyy' } },
-                grid: { display: false },
-                border: { color: PAL.grid },
-                ticks: { autoSkip: true, maxRotation: 0, maxTicksLimit: 8, color: PAL.tick, font: { family: CHART_FONT, size: 11 } },
-              }
-            : { grid: { display: false }, border: { color: PAL.grid }, ticks: { color: PAL.tick, font: { family: CHART_FONT, size: 11 } } };
+                time: { unit: tu.unit, displayFormats: { [tu.unit]: tu.fmt } },
+                grid: { display: false }, border: { color: PAL.grid },
+                ticks: xticks,
+            };
+            if (forced || single) { xScale.min = tMin; xScale.max = tMax; }
+        } else {
+            xScale = { grid: { display: false }, border: { color: PAL.grid }, ticks: { color: PAL.tick, font: { family: CHART_FONT, size: 11 } } };
+        }
         // y축: 가로 격자만 얇게 (시안), 축선 제거
         const yScale = { grid: { color: PAL.grid, tickBorderDash: [2, 2] }, border: { display: false }, ticks: { color: PAL.tick, font: { family: CHART_FONT, size: 10 } } };
-        if (useTime) {
-            const forced = (opts.xMin != null && opts.xMax != null && opts.xMin !== opts.xMax);
-            if (forced) {
-                // 묶음 보기: 모든 작은 차트의 x축을 같은 범위로 맞춘다
-                xScale.min = opts.xMin; xScale.max = opts.xMax;
-            } else {
-                // 개별 보기(및 강제범위 없음): 점이 하나뿐이면 폭이 0이라 밀리초 눈금이 생긴다.
-                // 앞뒤로 보름씩 벌려 날짜 눈금이 나오게 한다. 여러 점이면 예전처럼 자동에 맡긴다.
-                const tMin = Math.min.apply(null, pts.map(p => p.ts));
-                const tMax = Math.max.apply(null, pts.map(p => p.ts));
-                if (tMin === tMax) {
-                    const pad = 15 * 24 * 60 * 60 * 1000;
-                    xScale.min = tMin - pad; xScale.max = tMax + pad;
-                    xScale.time.unit = 'day';
-                }
-            }
-        }
 
         const config = {
             type: 'line',
