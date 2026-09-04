@@ -16,7 +16,8 @@
             /* 색 — 무채 계단 + 적색 1 */
             --zm-bg: #eae9e9;          /* 지면 배경 */
             --zm-card: #f8f4f4;        /* 카드 표면 */
-            --zm-panel: #2d2b2b;       /* 반전 패널(차트) — 다음 단계용 */
+            --zm-panel: #2d2b2b;       /* 건강 차트 패널(어두운 회색) */
+            --zm-panel-a10: #242a38;   /* After10 차트 패널(저채도 짙은 남색) — 건강 탭과 구분 */
             --zm-ink: #201e1d;         /* 잉크(최다크) */
             --zm-accent: #ec3013;      /* 포인트 적색 (활성·강조에만) */
             --zm-border: #d7d3d3;      /* 옅은 경계 */
@@ -350,17 +351,19 @@
             background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-border); cursor: pointer;
         }
         .a10-chip:hover, .a10-chip2:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
-        .a10-chip.active, .a10-chip2.active { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        /* 활성 버튼은 차트 패널과 같은 남색으로 (컨트롤+차트를 한 영역으로) */
+        .a10-chip.active, .a10-chip2.active { background: var(--zm-panel-a10); color: var(--zm-on-ink); border-color: var(--zm-panel-a10); }
         .a10-chart-box { position: relative; height: 300px; margin-bottom: 14px; }
         .a10-chart-stats { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; font-size: 13px; color: var(--zm-muted); }
         .a10-chart-stats b { color: var(--zm-ink); }
         .a10-chart-stats .up, .a10-chart-stats .down { color: var(--zm-ink); }  /* 일지 탭은 경보색 없이 무채 */
         /* 차트 뷰: 어두운 패널 + 하단 게이지 (건강 개별 보기와 동일) */
-        #a10ViewChart .a10-chart-box { background: var(--zm-panel); border: 2px solid var(--zm-ink); border-radius: var(--zm-radius); padding: 14px 14px 10px; height: 320px; box-sizing: border-box; margin-bottom: 0; }
-        #a10ViewChart .a10-chart-stats { gap: 0; justify-content: stretch; margin-top: 0; border: 1px solid var(--zm-border); border-top: none; }
-        #a10ViewChart .a10-chart-stats span { flex: 1 1 0; min-width: 70px; text-align: center; padding: 9px 6px; font-size: 11px; color: var(--zm-muted); border-left: 1px solid var(--zm-border); }
+        /* After10 차트만 짙은 남색 패널 (건강 탭은 #hlChartSingle 규칙 그대로 회색 유지) */
+        #a10ViewChart .a10-chart-box { background: var(--zm-panel-a10); border: 2px solid var(--zm-ink); border-radius: var(--zm-radius); padding: 14px 14px 10px; height: 320px; box-sizing: border-box; margin-bottom: 0; }
+        #a10ViewChart .a10-chart-stats { gap: 0; justify-content: stretch; margin-top: 0; background: var(--zm-panel-a10); border: 1px solid var(--zm-ink); border-top: none; }
+        #a10ViewChart .a10-chart-stats span { flex: 1 1 0; min-width: 70px; text-align: center; padding: 9px 6px; font-size: 11px; color: var(--zm-muted-2); border-left: 1px solid rgba(255,255,255,0.12); }
         #a10ViewChart .a10-chart-stats span:first-child { border-left: none; }
-        #a10ViewChart .a10-chart-stats b { display: block; margin-top: 3px; font-family: var(--font-num); font-size: 16px; color: var(--zm-ink); }
+        #a10ViewChart .a10-chart-stats b { display: block; margin-top: 3px; font-family: var(--font-num); font-size: 16px; color: var(--zm-on-ink); }
         .hl-chart-detail { margin-top: 14px; padding: 14px 16px; background: var(--zm-card); border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); border-radius: var(--zm-radius); font-size: 13px; line-height: 1.7; color: var(--zm-text-soft); }
         .hl-chart-detail b { display: block; margin-bottom: 4px; font-family: var(--font-title); font-weight: 700; color: var(--zm-ink); font-size: 14px; }
         /* 묶음 보기 — 지표 카드 그리드(좌측 잉크 바로 같은 계열 묶음) */
