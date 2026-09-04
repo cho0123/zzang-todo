@@ -428,9 +428,20 @@
         .hl-meta input { border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
         .hl-meta input:focus { outline: none; border-color: var(--zm-ink); }
 
-        #hlPaste, #hlNote { width: 100%; min-height: 140px; padding: 14px; box-sizing: border-box;
+        #hlPaste, #hlCheckupNote, #hlEffortNote { width: 100%; min-height: 140px; padding: 14px; box-sizing: border-box;
             border: 1px solid var(--zm-border); border-radius: var(--zm-radius); font-family: inherit; font-size: 14px; line-height: 1.6; resize: vertical; }
-        #hlPaste:focus, #hlNote:focus { outline: none; border-color: var(--zm-ink); }
+        #hlPaste:focus, #hlCheckupNote:focus, #hlEffortNote:focus { outline: none; border-color: var(--zm-ink); }
+        /* 검진·노력 입력 필드 */
+        #hlExam, #hlEffortTitle { width: 100%; padding: 12px 14px; box-sizing: border-box; margin-bottom: 10px;
+            border: 1px solid var(--zm-border); border-radius: var(--zm-radius); font-family: inherit; font-size: 14px; background: #fff; }
+        #hlExam:focus, #hlEffortTitle:focus { outline: none; border-color: var(--zm-ink); }
+        .hl-effort-end { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .hl-effort-end label { font-size: 12px; color: var(--zm-muted); }
+        .hl-effort-end input[type="date"] { border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        .hl-effort-end input[type="date"]:focus { outline: none; border-color: var(--zm-ink); }
+        /* 차트 '노력 표시' 토글 */
+        .hl-effort-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--zm-muted); cursor: pointer; }
+        .hl-effort-toggle input { accent-color: var(--zm-ink); }
 
         .hl-btnrow { display: flex; gap: 8px; margin: 10px 0; }
         .hl-analyze-btn { background: var(--zm-ink); color: var(--zm-on-ink); flex: none; padding: 11px 20px; border-radius: var(--zm-radius); }
@@ -459,8 +470,13 @@
         .hl-rec-head { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .hl-rec-date { font-family: var(--font-num); font-size: 15px; font-weight: 800; color: var(--zm-ink); }
         .hl-rec-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: var(--zm-radius); background: var(--zm-bg); color: var(--zm-muted-3); border: 1px solid var(--zm-border); }
-        .hl-badge-blood, .hl-badge-endoscopy, .hl-badge-other { background: var(--zm-bg); color: var(--zm-muted-3); }  /* 배지는 무채 */
+        .hl-badge-blood, .hl-badge-checkup, .hl-badge-effort, .hl-badge-endoscopy, .hl-badge-other { background: var(--zm-bg); color: var(--zm-muted-3); }  /* 배지는 무채 */
+        /* 종류별 카드 구분 — 좌측 바 굵기/색 차이 */
+        .hl-rec-checkup { border-left: 3px solid var(--zm-muted); }
+        .hl-rec-effort { border-left: 3px solid var(--zm-ink); }
         .hl-rec-hosp { font-size: 14px; font-weight: 600; color: var(--zm-text); }   /* 병원명 강조: 날짜 다음으로 */
+        .hl-rec-hosp2 { font-size: 12px; color: var(--zm-muted); }                    /* 검진 병원명(보조) */
+        .hl-rec-period { font-family: var(--font-num); font-size: 12px; color: var(--zm-muted); }  /* 노력 기간 */
         .hl-rec-ab { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--zm-accent); }  /* 빨강은 여기에만 */
         .hl-rec-actions { display: flex; gap: 6px; flex: none; }
         .hl-mini-btn { flex: none; width: auto; padding: 5px 12px; font-size: 12px; border-radius: var(--zm-radius); border: 1px solid transparent; }
@@ -735,8 +751,8 @@
     <div id="hlViewInput">
         <div class="hl-types">
             <button class="hl-chip type active" data-htype="blood" onclick="hlSetType('blood')">혈액검사</button>
-            <button class="hl-chip type" data-htype="endoscopy" onclick="hlSetType('endoscopy')">내시경</button>
-            <button class="hl-chip type" data-htype="other" onclick="hlSetType('other')">기타</button>
+            <button class="hl-chip type" data-htype="checkup" onclick="hlSetType('checkup')">검진</button>
+            <button class="hl-chip type" data-htype="effort" onclick="hlSetType('effort')">노력</button>
         </div>
 
         <div class="hl-meta">
@@ -754,9 +770,20 @@
             <div id="hlItemsWrap"></div>
         </div>
 
-        <!-- 내시경/기타: 소견만 -->
-        <div id="hlNoteInput" style="display:none">
-            <textarea id="hlNote" placeholder="소견 텍스트를 입력하세요."></textarea>
+        <!-- 검진: 검사 항목 + 소견 -->
+        <div id="hlCheckupInput" style="display:none">
+            <input type="text" id="hlExam" placeholder="검사 항목 (예: 위내시경, 대장내시경, CT)">
+            <textarea id="hlCheckupNote" placeholder="소견 텍스트를 입력하세요."></textarea>
+        </div>
+
+        <!-- 노력: 무엇을 시작/중단 + 기간 + 메모 -->
+        <div id="hlEffortInput" style="display:none">
+            <input type="text" id="hlEffortTitle" placeholder="무엇을 시작/중단했나요? (예: 저탄고지 시작)">
+            <div class="hl-effort-end">
+                <label for="hlEffortEnd">종료일 (선택 — 비우면 진행 중)</label>
+                <input type="date" id="hlEffortEnd">
+            </div>
+            <textarea id="hlEffortNote" placeholder="메모 (선택)"></textarea>
         </div>
 
         <div class="hl-btnrow">
@@ -785,6 +812,8 @@
                 <button class="hl-chip range" data-hrange="3y" onclick="hlSetChartRange('3y')">3년</button>
                 <button class="hl-chip range" data-hrange="1y" onclick="hlSetChartRange('1y')">1년</button>
             </div>
+            <span class="hl-toolbar-sep"></span>
+            <label class="hl-effort-toggle"><input type="checkbox" id="hlEffortToggle" checked onchange="hlToggleEffort(this)"> 노력 표시</label>
         </div>
         <!-- 개별 보기 -->
         <div id="hlChartSingle">
@@ -2212,6 +2241,64 @@
     let hlChartMode = 'single'; // 'single'(개별) | 'group'(묶음)
     let hlGroupKey = 'thyroid'; // 선택된 묶음 키
     let hlGroupCharts = [];     // 묶음 보기의 작은 차트 인스턴스들 (정리용)
+    let hlShowEffort = true;    // 차트에 '노력' 표시 여부 (기본 켜짐)
+
+    // 기록 종류 — 저장된 옛 값(endoscopy/other)도 읽는 시점에 새 값으로 매핑 (저장 데이터는 그대로).
+    function hlNormType(t) {
+        if (t === 'endoscopy') return 'checkup';
+        if (t === 'other') return 'effort';
+        return t || 'blood';
+    }
+    // 선택 인물의 '노력' 기록 → {start, end|null, title}. 시작일을 못 읽으면 제외.
+    function hlEffortSpans(person) {
+        return hlRecords
+            .filter(r => r.person === person && hlNormType(r.type) === 'effort')
+            .map(r => ({ start: hlDateTs(r.date), end: r.endDate ? hlDateTs(r.endDate) : null, title: (r.title || r.note || '노력') }))
+            .filter(e => e.start != null);
+    }
+    // 차트에 '노력' 세로선·구간을 그리는 인라인 플러그인 (time scale일 때만, 켜졌을 때만).
+    // 밴드는 데이터 뒤(beforeDatasetsDraw), 선·라벨은 데이터 위(afterDatasetsDraw)에 은은하게.
+    function hlEffortPlugin(dark) {
+        const line = dark ? 'rgba(232,228,228,0.5)' : 'rgba(32,30,29,0.4)';
+        const band = dark ? 'rgba(232,228,228,0.07)' : 'rgba(32,30,29,0.05)';
+        const text = dark ? '#c9c4c4' : '#605d5d';
+        return {
+            id: 'hlEffort',
+            beforeDatasetsDraw(chart) {
+                if (!hlShowEffort) return;
+                const xs = chart.scales.x; if (!xs || xs.type !== 'time') return;
+                const ca = chart.chartArea, ctx = chart.ctx;
+                ctx.save(); ctx.fillStyle = band;
+                for (const e of hlEffortSpans(hlPerson)) {
+                    if (e.end == null) continue;
+                    let a = xs.getPixelForValue(e.start), b = xs.getPixelForValue(e.end);
+                    const lo = Math.max(ca.left, Math.min(a, b)), hi = Math.min(ca.right, Math.max(a, b));
+                    if (hi > ca.left && lo < ca.right) ctx.fillRect(lo, ca.top, hi - lo, ca.bottom - ca.top);
+                }
+                ctx.restore();
+            },
+            afterDatasetsDraw(chart) {
+                if (!hlShowEffort) return;
+                const xs = chart.scales.x; if (!xs || xs.type !== 'time') return;
+                const ca = chart.chartArea, ctx = chart.ctx;
+                ctx.save();
+                for (const e of hlEffortSpans(hlPerson)) {
+                    const x = xs.getPixelForValue(e.start);
+                    if (x < ca.left || x > ca.right) continue;
+                    ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+                    ctx.beginPath(); ctx.moveTo(x, ca.top); ctx.lineTo(x, ca.bottom); ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = text; ctx.font = "10px Pretendard, sans-serif";
+                    ctx.save(); ctx.translate(x + 3, ca.top + 4); ctx.rotate(Math.PI / 2);
+                    ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+                    ctx.fillText(e.title, 0, 0);
+                    ctx.restore();
+                }
+                ctx.restore();
+            }
+        };
+    }
+    window.hlToggleEffort = function (el) { hlShowEffort = !!el.checked; hlRenderChart(); };
 
     // 묶음 정의 — 항목명은 정규화된 이름(canonical) 기준. 여기만 고치면 묶음이 바뀐다.
     const HL_GROUPS = {
@@ -2364,7 +2451,9 @@
         hlType = tp;
         document.querySelectorAll('[data-htype]').forEach(b => b.classList.toggle('active', b.dataset.htype === tp));
         document.getElementById('hlBloodInput').style.display = (tp === 'blood') ? 'block' : 'none';
-        document.getElementById('hlNoteInput').style.display = (tp === 'blood') ? 'none' : 'block';
+        document.getElementById('hlCheckupInput').style.display = (tp === 'checkup') ? 'block' : 'none';
+        document.getElementById('hlEffortInput').style.display = (tp === 'effort') ? 'block' : 'none';
+        document.getElementById('hlHospital').style.display = (tp === 'effort') ? 'none' : '';  // 노력엔 병원 칸 숨김
     };
 
     // ---------- 입력: 편집 표 ----------
@@ -2453,7 +2542,15 @@
         const now = Date.now();
         const data = { person: hlPerson, type: hlType, date, hospital, updatedAt: now };
         if (hlType === 'blood') { data.items = hlRowsToItems(); data.note = ''; }
-        else { data.items = []; data.note = document.getElementById('hlNote').value; }
+        else if (hlType === 'checkup') { data.items = []; data.exam = document.getElementById('hlExam').value.trim(); data.note = document.getElementById('hlCheckupNote').value; }
+        else if (hlType === 'effort') {
+            data.items = []; data.hospital = '';
+            data.title = document.getElementById('hlEffortTitle').value.trim();
+            data.endDate = document.getElementById('hlEffortEnd').value || '';
+            data.note = document.getElementById('hlEffortNote').value;
+            if (!data.title) { return hlMsg('무엇을 시작/중단했는지 입력해주세요.'); }
+        }
+        else { data.items = []; data.note = ''; }
 
         const btn = document.getElementById('hlSaveBtn');
         btn.disabled = true;
@@ -2471,9 +2568,13 @@
         document.getElementById('hlDate').value = '';
         document.getElementById('hlHospital').value = '';
         document.getElementById('hlPaste').value = '';
-        document.getElementById('hlNote').value = '';
         document.getElementById('hlItemsWrap').innerHTML = '';
         document.getElementById('hlParseInfo').innerHTML = '';
+        document.getElementById('hlExam').value = '';
+        document.getElementById('hlCheckupNote').value = '';
+        document.getElementById('hlEffortTitle').value = '';
+        document.getElementById('hlEffortEnd').value = '';
+        document.getElementById('hlEffortNote').value = '';
         document.getElementById('hlCancelEdit').style.display = 'none';
         document.getElementById('hlSaveBtn').textContent = '저장';
         hlSetType('blood');
@@ -2485,12 +2586,14 @@
         const r = hlRecords.find(x => x.id === id);
         if (!r) return;
         hlEditId = id;
+        const type = hlNormType(r.type);
         hlPerson = r.person; hlSetPerson(r.person);
-        hlSetType(r.type || 'blood');
+        hlSetType(type);
         document.getElementById('hlDate').value = r.date || '';
         document.getElementById('hlHospital').value = r.hospital || '';
-        if ((r.type || 'blood') === 'blood') { hlRenderItemsTable(r.items || []); document.getElementById('hlParseInfo').innerHTML = '수정 중 — 표를 고치고 저장하세요.'; }
-        else { document.getElementById('hlNote').value = r.note || ''; }
+        if (type === 'blood') { hlRenderItemsTable(r.items || []); document.getElementById('hlParseInfo').innerHTML = '수정 중 — 표를 고치고 저장하세요.'; }
+        else if (type === 'checkup') { document.getElementById('hlExam').value = r.exam || ''; document.getElementById('hlCheckupNote').value = r.note || ''; }
+        else if (type === 'effort') { document.getElementById('hlEffortTitle').value = r.title || ''; document.getElementById('hlEffortEnd').value = r.endDate || ''; document.getElementById('hlEffortNote').value = r.note || ''; }
         document.getElementById('hlSaveBtn').textContent = '수정 저장';
         document.getElementById('hlCancelEdit').style.display = 'block';
         hlSetView('input');
@@ -2507,7 +2610,7 @@
     };
 
     // ---------- 기록 목록 ----------
-    const HL_TYPE_LABEL = { blood: '혈액', endoscopy: '내시경', other: '기타' };
+    const HL_TYPE_LABEL = { blood: '혈액', checkup: '검진', effort: '노력', endoscopy: '검진', other: '노력' };
     function hlEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function hlAttr(s) { return hlEsc(s).replace(/"/g, '&quot;'); }
     // 항목 설명 물음표 토글 (마우스오버는 title, 클릭은 아래 desc 표시)
@@ -2521,9 +2624,9 @@
             .sort((a, b) => (a.date || '') < (b.date || '') ? 1 : (a.date || '') > (b.date || '') ? -1 : 0);
         if (!recs.length) { wrap.innerHTML = `<div class="a10-empty">${hlPerson}의 건강기록이 없습니다.<br>“기록 입력”에서 추가하세요.</div>`; return; }
         wrap.innerHTML = recs.map(r => {
-            const type = r.type || 'blood';
+            const type = hlNormType(r.type);   // 옛 endoscopy/other도 checkup/effort로 읽음
             const abn = (r.items || []).filter(i => i.abnormal).length;
-            let body = '';
+            let body = '', headMid = '';
             if (type === 'blood') {
                 const rows = (r.items || []).map(i => {
                     // 표시만 정규화한다. 저장된 i.name 은 건드리지 않는다.
@@ -2541,16 +2644,24 @@
                 }).join('');
                 body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none">
                     <table class="hl-view-table"><thead><tr><th>항목</th><th>값</th><th>단위</th><th>참고치</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+                headMid = `${r.hospital ? `<span class="hl-rec-hosp">${hlEsc(r.hospital)}</span>` : ''}${abn ? `<span class="hl-rec-ab">이상 ${abn}</span>` : ''}`;
+            } else if (type === 'checkup') {
+                headMid = `${r.exam ? `<span class="hl-rec-hosp">${hlEsc(r.exam)}</span>` : ''}${r.hospital ? `<span class="hl-rec-hosp2">${hlEsc(r.hospital)}</span>` : ''}`;
+                body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none"><div class="hl-rec-note">${r.note ? hlEsc(r.note) : '<span style="color:var(--zm-muted)">소견 없음</span>'}</div></div>`;
+            } else if (type === 'effort') {
+                const s = r.date || '', e = r.endDate || '';
+                const period = e ? `${hlEsc(s)} ~ ${hlEsc(e)}` : `${hlEsc(s)} ~ 진행 중`;
+                headMid = `<span class="hl-rec-hosp">${hlEsc(r.title || '노력')}</span><span class="hl-rec-period">${period}</span>`;
+                body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none"><div class="hl-rec-note">${r.note ? hlEsc(r.note) : '<span style="color:var(--zm-muted)">메모 없음</span>'}</div></div>`;
             } else {
                 body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none"><div class="hl-rec-note">${hlEsc(r.note)}</div></div>`;
             }
-            return `<div class="hl-rec">
+            return `<div class="hl-rec hl-rec-${type}">
                 <div class="hl-rec-top">
                     <div class="hl-rec-head" onclick="hlToggleRec('${r.id}')">
                         <span class="hl-rec-date">${hlEsc(r.date)}</span>
                         <span class="hl-rec-badge hl-badge-${type}">${HL_TYPE_LABEL[type] || type}</span>
-                        ${r.hospital ? `<span class="hl-rec-hosp">${hlEsc(r.hospital)}</span>` : ''}
-                        ${abn ? `<span class="hl-rec-ab">이상 ${abn}</span>` : ''}
+                        ${headMid}
                     </div>
                     <div class="hl-rec-actions">
                         <button class="hl-mini-btn hl-mini-edit" onclick="hlEdit('${r.id}')">수정</button>
@@ -2725,7 +2836,8 @@
                     tooltip: { filter: c => c.datasetIndex === valueDsIndex, callbacks: { title: c => pts[c[0].dataIndex].date, label: c => `${itemName}: ${c.parsed.y}${unit ? ' ' + unit : ''}${chartExtremeNote(ext, c.dataIndex)}` } }
                 },
                 scales: { x: xScale, y: yScale }
-            }
+            },
+            plugins: [hlEffortPlugin(dark)]   // '노력' 세로선·구간 표시
         };
         return { kind: 'ok', config, meta: { pts, all, refLow, refHigh, unit, values, useTime, ext, cutoff, valueDsIndex } };
     }
