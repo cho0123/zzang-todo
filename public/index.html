@@ -4,11 +4,48 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>짱구 ToDo Fixed</title>
+    <!-- 디자인 시안(계기판) 서체 — Gothic A1(제목) + Archivo(숫자) + Pretendard(본문) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=Gothic+A1:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
     <style>
-        body { font-family: 'Apple SD Gothic Neo', sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
-        .container { background: white; width: 100%; max-width: 1000px; padding: 25px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        h2 { text-align: center; color: #333; margin-bottom: 5px; letter-spacing: -1px; }
-        .sub-title { text-align: center; color: #888; font-size: 12px; margin-bottom: 25px; }
+        /* ===================== 디자인 토큰 (계기판/Instrument 시안) =====================
+           색·서체·간격의 단일 출처. 이후 스타일은 이 변수를 참조한다. */
+        :root {
+            /* 색 — 무채 계단 + 적색 1 */
+            --zm-bg: #eae9e9;          /* 지면 배경 */
+            --zm-card: #f8f4f4;        /* 카드 표면 */
+            --zm-panel: #2d2b2b;       /* 반전 패널(차트) — 다음 단계용 */
+            --zm-ink: #201e1d;         /* 잉크(최다크) */
+            --zm-accent: #ec3013;      /* 포인트 적색 (활성·강조에만) */
+            --zm-border: #d7d3d3;      /* 옅은 경계 */
+            --zm-line: #eae7e7;        /* 내부 규칙선 */
+            --zm-muted: #7d7979;       /* 흐린 텍스트 */
+            --zm-muted-2: #9b9797;
+            --zm-muted-3: #605d5d;
+            --zm-text: #201e1d;
+            --zm-text-soft: #444141;
+            --zm-on-ink: #f3f2f2;      /* 잉크/패널 위 텍스트 */
+            /* 형태 */
+            --zm-radius: 0px;          /* 시안은 직각 */
+            --zm-shadow: none;
+            --zm-maxw: 1200px;
+            /* 서체 */
+            --font-title: 'Gothic A1', 'Apple SD Gothic Neo', sans-serif;
+            --font-body: 'Pretendard', 'Pretendard Variable', 'Apple SD Gothic Neo', sans-serif;
+            --font-num: 'Archivo', sans-serif;
+        }
+
+        body { font-family: var(--font-body); background-color: var(--zm-bg); display: flex; justify-content: center; padding: 20px; color: var(--zm-text); }
+        .container { background: var(--zm-card); width: 100%; max-width: var(--zm-maxw); padding: 25px; border: 2px solid var(--zm-ink); border-radius: var(--zm-radius); box-shadow: var(--zm-shadow); }
+        h2 { text-align: center; color: var(--zm-ink); margin-bottom: 5px; letter-spacing: -1px; }
+        .sub-title { text-align: center; color: var(--zm-muted-3); font-size: 12px; margin-bottom: 25px; }
+
+        /* 앱 헤더 (계기판 시안: 제목 + 하단 규칙선) */
+        .app-header { border-bottom: 2px solid var(--zm-ink); padding-bottom: 14px; margin-bottom: 18px; }
+        .app-title { font-family: var(--font-title); font-weight: 900; font-size: 26px; letter-spacing: -0.02em; color: var(--zm-ink); }
+        .app-sub { font-size: 12px; color: var(--zm-muted-3); margin-top: 4px; }
         
         /* 입력 영역 */
         .input-group { 
@@ -179,15 +216,19 @@
         /* ===================== After10 (일지) ===================== */
         /* 포인트 컬러: #364fc7 (남색) — 기존 팔레트와 겹치지 않음 */
 
-        /* 상단 탭 (ToDo / After10) */
-        .tab-group { display: flex; gap: 8px; justify-content: center; margin-bottom: 22px; }
+        /* 상단 탭 — 계기판 시안: 01/02/03 인덱스, 활성 칸만 상단 규칙선 적색 */
+        .tab-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin-bottom: 22px; }
         .tab-btn {
-            padding: 11px 24px; border-radius: 22px; font-size: 14px; font-weight: 700;
-            background: #f1f3f5; color: #868e96; border: 1px solid #dee2e6;
-            cursor: pointer; flex: none; white-space: nowrap; transition: 0.2s;
+            text-align: left; background: transparent; border: none;
+            border-top: 3px solid var(--zm-border); border-radius: 0;
+            padding: 8px 4px 0; cursor: pointer; flex: none; transition: 0.15s;
         }
-        .tab-btn:hover { background: #e9ecef; }
-        .tab-btn.active { background: #364fc7; color: #fff; border-color: #364fc7; }
+        .tab-btn .tab-num { display: block; font-family: var(--font-num); font-size: 11px; color: var(--zm-muted-2); }
+        .tab-btn .tab-label { display: block; margin-top: 2px; font-family: var(--font-title); font-weight: 500; font-size: 15px; color: var(--zm-muted-2); }
+        .tab-btn:hover .tab-label { color: var(--zm-text-soft); }
+        .tab-btn.active { border-top-color: var(--zm-accent); }
+        .tab-btn.active .tab-num { color: var(--zm-accent); }
+        .tab-btn.active .tab-label { color: var(--zm-ink); font-weight: 900; }
 
         /* After10 내부 뷰 전환 버튼 */
         .a10-viewtabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
@@ -318,30 +359,33 @@
         /* ===================== 로그인 게이트 ===================== */
         #loginScreen { width: 100%; max-width: 360px; margin-top: 8vh; }
         .login-card {
-            background: #fff; padding: 34px 26px; border-radius: 15px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center;
+            background: var(--zm-card); padding: 36px 28px; border: 2px solid var(--zm-ink);
+            border-radius: var(--zm-radius); box-shadow: var(--zm-shadow); text-align: center;
         }
-        .login-title { margin-bottom: 6px; }
-        .login-sub { color: #888; font-size: 12px; margin-bottom: 26px; }
+        .login-title {
+            font-family: var(--font-title); font-weight: 900; font-size: 24px;
+            letter-spacing: -0.02em; color: var(--zm-ink); margin-bottom: 6px;
+        }
+        .login-sub { color: var(--zm-muted-3); font-size: 12px; margin-bottom: 26px; }
         #loginScreen input {
             width: 100%; padding: 13px; margin-bottom: 10px; box-sizing: border-box;
-            border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: #fff;
+            border: 1px solid var(--zm-border); border-radius: var(--zm-radius); font-size: 14px; background: #fff;
         }
-        #loginScreen input:focus { outline: none; border-color: #212529; }
+        #loginScreen input:focus { outline: none; border-color: var(--zm-ink); }
         #loginBtn {
-            width: 100%; padding: 13px; margin-top: 6px;
-            background: #212529; color: #fff; font-weight: bold; font-size: 14px;
+            width: 100%; padding: 13px; margin-top: 6px; border-radius: var(--zm-radius);
+            background: var(--zm-ink); color: var(--zm-on-ink); font-weight: bold; font-size: 14px;
         }
         #loginBtn:disabled { opacity: 0.6; cursor: default; }
-        .login-error { display: none; margin-top: 14px; color: #e03131; font-size: 13px; font-weight: 600; line-height: 1.5; }
+        .login-error { display: none; margin-top: 14px; color: var(--zm-accent); font-size: 13px; font-weight: 600; line-height: 1.5; }
 
         /* 로그아웃 버튼 (상단 우측, 작게) */
         #logoutBtn {
             position: fixed; top: 12px; right: 12px; z-index: 100; flex: none; width: auto;
-            padding: 6px 13px; border: 1px solid #dee2e6; border-radius: 20px;
-            background: rgba(255,255,255,0.92); color: #868e96; font-size: 12px; font-weight: 700;
+            padding: 6px 13px; border: 1px solid var(--zm-border); border-radius: var(--zm-radius);
+            background: rgba(248,244,244,0.94); color: var(--zm-muted); font-size: 12px; font-weight: 700;
         }
-        #logoutBtn:hover { background: #f1f3f5; color: #495057; }
+        #logoutBtn:hover { background: var(--zm-border); color: var(--zm-text-soft); }
 
         /* ===================== 건강 기록 (health) =====================
            포인트 컬러: #0ca678 (그린) — 기존(ToDo 다크, After10 남색)과 구분 */
@@ -426,7 +470,7 @@
 <!-- ===== 로그인 화면 (로그인 전) ===== -->
 <div id="loginScreen">
     <div class="login-card">
-        <h2 class="login-title">⚡ 짱구 Manager</h2>
+        <h2 class="login-title">짱구 Manager</h2>
         <div class="login-sub">로그인이 필요합니다</div>
         <input type="email" id="loginEmail" placeholder="이메일" autocomplete="username">
         <input type="password" id="loginPassword" placeholder="비밀번호" autocomplete="current-password">
@@ -437,14 +481,25 @@
 
 <!-- ===== 메인 앱 (로그인 후 표시) ===== -->
 <div class="container" style="display:none">
-    <h2>⚡ 짱구 Manager</h2>
-    <div class="sub-title">오늘도 화이팅!</div>
+    <div class="app-header">
+        <div class="app-title">짱구 Manager</div>
+        <div class="app-sub">오늘도 화이팅!</div>
+    </div>
 
-    <!-- 상단 탭 -->
+    <!-- 상단 탭 — 01/02/03 인덱스 -->
     <div class="tab-group">
-        <button class="tab-btn active" data-tab="todo" onclick="switchTab('todo')">📋 ToDo</button>
-        <button class="tab-btn" data-tab="after10" onclick="switchTab('after10')">⏳ After10</button>
-        <button class="tab-btn" data-tab="health" onclick="switchTab('health')">🩺 건강</button>
+        <button class="tab-btn active" data-tab="todo" onclick="switchTab('todo')">
+            <span class="tab-num">01</span>
+            <span class="tab-label">ToDo</span>
+        </button>
+        <button class="tab-btn" data-tab="after10" onclick="switchTab('after10')">
+            <span class="tab-num">02</span>
+            <span class="tab-label">After10</span>
+        </button>
+        <button class="tab-btn" data-tab="health" onclick="switchTab('health')">
+            <span class="tab-num">03</span>
+            <span class="tab-label">건강</span>
+        </button>
     </div>
 
 <!-- ===== ToDo 탭 (기존 화면 전체) ===== -->

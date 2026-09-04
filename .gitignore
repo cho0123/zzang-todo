@@ -15,3 +15,7 @@ desktop.ini
 
 # Local Netlify folder
 .netlify
+
+# 디자인 시안 (참고용, 커밋 안 함)
+design-ref.html
+design-ref.html.html
