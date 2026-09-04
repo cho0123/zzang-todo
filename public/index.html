@@ -2042,41 +2042,46 @@
     function hlNameKey(s) {
         return String(s == null ? '' : s)
             .replace(/\s+/g, ' ').trim().toLowerCase()
-            .replace(/\s*([(),])\s*/g, '$1');
+            .replace(/\s*([(),])\s*/g, '$1')
+            .replace(/\./g, '');   // 마침표 무시 ("Neutrophil Seg." = "Neutrophil Seg")
     }
     const HL_NAME_GROUPS = {
         // 간 · 담도
-        'AST(GOT)': ['AST', 'GOT'],
-        'ALT(GPT)': ['ALT', 'GPT'],
-        'Alkaline Phosphatase': ['ALP'],
-        'γ-GTP': ['GGT (γ-GTP)', 'GGT', 'r-GTP'],
+        'AST(GOT)': ['AST', 'GOT', 'AST(SGOT)'],
+        'ALT(GPT)': ['ALT', 'GPT', 'ALT(SGPT)'],
+        'Alkaline Phosphatase': ['ALP', 'ALP(Alkaline phosphatase)'],
+        'γ-GTP': ['GGT (γ-GTP)', 'GGT', 'r-GTP', 'γ-GT'],
         'Total Bilirubin': ['Bilirubin, total'],
         'Total Protein': ['Protein, total'],
+        'CPK': ['CK(Creatine Kinase, CPK)'],
         // 콩팥 · 전해질
         'Urea Nitrogen': ['BUN'],
         'IDMS-traceable MDRD-eGFR': ['eGFR(IDMS-MDRD)'],
-        'Sodium': ['Sodium (Na)', 'Sodium(Na)'],
-        'Potassium': ['Potassium (K)', 'Potassium(K)'],
-        'Chloride': ['Chloride (Cl)', 'Chloride(Cl)'],
+        'Sodium': ['Sodium (Na)', 'Sodium(Na)', 'Na(Sodium)'],
+        'Potassium': ['Potassium (K)', 'Potassium(K)', 'K(Potassium)'],
+        'Chloride': ['Chloride (Cl)', 'Chloride(Cl)', 'Cl'],
         'Uric acid': ['Uric Acid'],
         'Calcium (Ca)': ['Calcium'],
         'Phosphorus (P)': ['Phosphorus'],
         // 당 · 지질
-        'Glucose': ['FBS', '공복혈당'],
+        'Glucose': ['FBS', '공복혈당', 'Glucose(S)'],
         'HbA1c': ['HbA1c-NGSP', '당화혈색소'],
         'Total Cholesterol': ['Cholesterol,total', 'T-Chol', '총콜레스테롤'],
         'Triglycerides': ['Triglyceride (TG)', 'Triglyceride', 'TG', '중성지방'],
         'HDL-Cholesterol': ['HDL-cholesterol', 'HDL Cholesterol'],
-        'LDL-Cholesterol': ['LDL-cholesterol', 'LDL Cholesterol(계산법)'],
-        // 갑상선
+        'LDL-Cholesterol': ['LDL-cholesterol', 'LDL Cholesterol(계산법)', 'LDL Cholesterol'],
+        // 갑상선 · 비타민
         'TSH': ['TSH (Thyroid Stimulating Hormone) CLIA'],
         'T3 (Triiodothyronine)': ['T3', 'T3 (Triiodothyronine) CLIA'],
         'TSH Receptor Ab (TSI/TBII)': ['TSH-R-Ab'],
+        '25-OH vitamin D': ['25-(OH) Vitamin D'],
         // 혈액(CBC)
         'Hemoglobin': ['Hemoglobin (Hb)', 'Hemoglobin(Hb)', 'Hb', '혈색소'],
-        'Hematocrit': ['Hematocrit (Hct)', 'Hematocrit(Hct)'],
-        'Segmented neutrophil': ['Neutrophil Seg'],
-        'Neutrophil band': ['Band'],
+        'Hematocrit': ['Hematocrit (Hct)', 'Hematocrit(Hct)', 'Hct'],
+        'RBC': ['RBC(B)'],
+        'WBC': ['WBC(B)'],
+        'Segmented neutrophil': ['Neutrophil Seg', 'Neutrophil Seg.'],
+        'Neutrophil band': ['Band', 'Band Neutrophil'],
     };
     // 기준이름 자신도 키로 넣어 표기 흔들림을 흡수한다
     const HL_NAME_LOOKUP = (() => {
@@ -2175,6 +2180,13 @@
         '25-OH vitamin D': { short: '비타민 D', desc: '체내 비타민 D의 저장 형태(25-하이드록시 비타민 D) 농도를 재는 항목입니다.', detail: "몸에 저장된 형태의 비타민 D(25-하이드록시 비타민 D) 농도로, 비타민 D 상태를 대표합니다. 햇빛 노출, 식사, 계절에 영향을 받습니다." },
         'Systolic blood viscosity': { short: '수축기 혈액점도', desc: '심장이 수축할 때처럼 혈류가 빠른 조건에서 혈액의 점성을 재는 항목입니다.', detail: "혈류가 빠른 조건(수축기)에서 혈액이 얼마나 끈끈한지 잰 값입니다. 적혈구 비율과 수분 상태 등에 영향을 받습니다." },
         'Diastolic blood viscosity': { short: '이완기 혈액점도', desc: '심장이 이완할 때처럼 혈류가 느린 조건에서 혈액의 점성을 재는 항목입니다.', detail: "혈류가 느린 조건(이완기)에서 혈액의 점성을 잰 값입니다. 느린 흐름에서 적혈구가 뭉치는 정도 등에 영향을 받습니다." },
+        // ── GC Labs / 수담의원 결과지에서 추가된 항목
+        'LDH(Lactate dehydrogenase)': { short: '젖산탈수소효소', desc: '몸 여러 조직의 세포 안에 있는 효소(LDH)를 재는 항목입니다.', detail: "근육·간·혈액 등 다양한 세포에 들어 있는 효소로, 세포가 손상되면 혈액으로 나옵니다. 특정 장기에 국한되지 않으며, 채혈 과정의 용혈에도 영향을 받습니다." },
+        'CRP(정량)': { short: 'C-반응성단백', desc: '몸에 염증이 있을 때 간에서 늘어나는 단백질(CRP)의 양을 정량으로 재는 항목입니다.', detail: "염증이나 감염이 있을 때 간이 더 많이 만들어 내보내는 단백질입니다. 몸의 전반적인 염증 상태에 영향을 받습니다." },
+        'Magnesium (Mg)': { short: '마그네슘', desc: '신경·근육 기능 등에 관여하는 마그네슘(Mg)의 혈중 농도를 재는 항목입니다.', detail: "신경·근육과 여러 효소 반응에 두루 쓰이는 무기질(Mg)의 혈중 농도입니다. 식사, 콩팥의 배설, 소화흡수 상태에 영향을 받습니다." },
+        'Folate': { short: '엽산', desc: '혈액 속 엽산(비타민 B9)의 양을 재는 항목입니다.', detail: "세포 분열과 적혈구 생성에 쓰이는 비타민(엽산)의 혈중 양입니다. 식사와 흡수 상태에 영향을 받습니다." },
+        'Homocysteine': { short: '호모시스테인', desc: '아미노산 대사 과정에서 생기는 물질(호모시스테인)의 혈중 농도를 재는 항목입니다.', detail: "단백질(아미노산) 대사 중 생기는 중간 물질입니다. 엽산·비타민 B군 상태와 콩팥 기능에 영향을 받습니다." },
+        'Blast': { short: '모세포', desc: '혈액에서 아직 성숙하지 않은 어린 혈액세포(모세포)의 비율을 보는 항목입니다.', detail: "골수에서 만들어지는 미성숙 혈액세포입니다. 골수의 조혈 상태에 따라 혈액에 나타나는 정도가 달라집니다." },
     };
     const HL_INFO_LOOKUP = (() => {
         const m = new Map();
@@ -2188,7 +2200,7 @@
     // ※ 결과지 원문이 "서울맑음내과의원"처럼 적어도, 저장된 표기와 맞추기 위해 여기 적은 이름을 쓴다.
     //    앞에서부터 먼저 걸린 것을 채택하므로 긴 이름을 먼저 둔다.
     const HL_HOSPITALS = ['서울성모병원', '삼성서울병원', '서울아산병원', '세브란스병원', '분당서울대병원',
-        '서울맑음내과', '진내과'];
+        '서울맑음내과', '진내과', '수담의원'];
 
     let hlRecords = [];
     let hlPerson = '짱구';
