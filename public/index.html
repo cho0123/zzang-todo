@@ -505,14 +505,16 @@
         #hlStrips { margin-top: 10px; }
         .hl-strip { position: relative; margin-top: 8px; }
         .hl-strip-label { font-size: 10px; letter-spacing: 0.06em; color: var(--zm-muted); margin-bottom: 4px; }
-        .hl-strip-rows { position: relative; }
+        /* 띠는 차트 폭 안에서만 그린다 — 넘친 요소가 페이지 가로 스크롤을 만들지 않게 */
+        .hl-strip-rows { position: relative; overflow: hidden; }
         .hl-bar { position: absolute; height: 15px; box-sizing: border-box; font-size: 10px; line-height: 14px;
-            color: var(--zm-text-soft); white-space: nowrap; overflow: hidden; padding: 0 4px; }
+            color: var(--zm-text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
         .hl-bar-plus { background: rgba(32,30,29,0.13); border: 1px solid var(--zm-muted); }   /* + 채움 */
         .hl-bar-minus { border: 1px dashed var(--zm-muted); background: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(32,30,29,0.16) 3px, rgba(32,30,29,0.16) 5px); }  /* − 빗금 */
-        .hl-pt { position: absolute; display: flex; align-items: center; gap: 4px; height: 15px; white-space: nowrap; }
+        .hl-pt { position: absolute; display: flex; align-items: center; gap: 4px; height: 15px; white-space: nowrap; overflow: hidden; }
         .hl-pt-dot { width: 7px; height: 7px; background: var(--zm-ink); transform: rotate(45deg); flex: none; }
-        .hl-pt-label { font-size: 10px; color: var(--zm-text-soft); }
+        /* 라벨이 길면 말줄임 — 전체 내용은 title 툴팁으로 */
+        .hl-pt-label { font-size: 10px; color: var(--zm-text-soft); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
         .hl-rec-sign { font-family: var(--font-num); font-weight: 800; color: var(--zm-muted); }  /* 목록 노력 +/− */
 
         .hl-btnrow { display: flex; gap: 8px; margin: 10px 0; }
@@ -2421,19 +2423,40 @@
         const xs = chart.scales.x, ca = chart.chartArea;
         const timeOk = !!xs && xs.type === 'time' && !!ca;
         // 레이아웃·토글·데이터가 그대로면 다시 그리지 않는다(애니메이션 중 반복 방지)
-        const key = [timeOk, ca && Math.round(ca.left), ca && Math.round(ca.right), hlShowEffort, hlShowCheckup, hlPerson, hlChartRange].join('|');
+        const key = [timeOk, ca && Math.round(ca.left), ca && Math.round(ca.right), hlShowEffort, hlShowCheckup,
+                     hlPerson, hlChartRange, timeOk && Math.round(xs.min), timeOk && Math.round(xs.max)].join('|');
         if (chart.$stripKey === key) return;
         chart.$stripKey = key;
         if (!timeOk) { effStrip.style.display = 'none'; chkStrip.style.display = 'none'; return; }
 
-        const canvasLeft = chart.canvas.getBoundingClientRect().left;
+        effStrip.style.display = hlShowEffort ? '' : 'none';
+        chkStrip.style.display = hlShowCheckup ? '' : 'none';
+
+        // 띠 기준으로 본 캔버스의 x. 띠와 차트 박스는 #hlChartSingle 안의 같은 폭 형제라,
+        // 이 값은 차트 박스의 왼쪽 테두리 + 안쪽 여백으로 고정된다.
+        // 화면 좌표(getBoundingClientRect)로 재지 않는 것이 핵심 — 재는 순간의 스크롤바 유무,
+        // 가운데 정렬 밀림, 숨김 상태(display:none이면 전부 0)에 그대로 휘둘려 띠가 어긋난다.
+        // 기준은 항상 살아 있는 #hlStrips로 잡는다(띠 하나는 토글로 꺼져 있을 수 있고,
+        // 꺼진 요소의 offsetLeft는 0이라 그걸 기준 삼으면 그만큼 통째로 밀린다).
+        const box = chart.canvas.parentElement, bcs = getComputedStyle(box);
+        const stripsRoot = effStrip.parentElement;
+        const dx = (box.offsetLeft - stripsRoot.offsetLeft)
+                 + (parseFloat(bcs.borderLeftWidth) || 0) + (parseFloat(bcs.paddingLeft) || 0);
         const clamp = px => Math.max(ca.left, Math.min(ca.right, px));
+        const tMin = xs.min, tMax = xs.max;   // 화면에 실제로 보이는 기간
+        const areaW = Math.max(1, ca.right - ca.left);   // 띠 상자 = 차트 그림 영역과 같은 폭
         const ROW = 19;
+        // 띠 상자를 차트 영역에 정확히 겹쳐 놓는다. 항목 x는 이 상자 기준(ca.left 원점)으로 잡고,
+        // 상자는 overflow:hidden이라 어떤 경우에도 차트 밖으로 나가지 않는다.
+        const rowsOpen = rows =>
+            '<div class="hl-strip-rows" style="margin-left:' + (dx + ca.left) + 'px;width:' + areaW + 'px;height:' + (rows * ROW) + 'px">';
 
         // ── 노력 띠 (기간 막대, + 채움 / − 빗금) ──
         if (hlShowEffort) {
-            const dx = canvasLeft - effStrip.getBoundingClientRect().left;
-            const spans = hlEffortSpans(hlPerson).slice().sort((a, b) => a.start - b.start);
+            const allSpans = hlEffortSpans(hlPerson);
+            // 보이는 기간과 겹치는 것만. 종료일 없는 '진행 중'은 오른쪽 끝까지로 본다.
+            const spans = allSpans.filter(e => e.start <= tMax && (e.end == null || e.end >= tMin))
+                                  .sort((a, b) => a.start - b.start);
             const rowsEnd = [];
             const bars = spans.map(e => {
                 const x1 = clamp(xs.getPixelForValue(e.start));
@@ -2442,23 +2465,25 @@
                 rowsEnd[row] = Math.max(x1 + 3, x2);
                 return { e, x1, x2, row };
             });
-            if (!spans.length) effStrip.innerHTML = '<div class="hl-strip-label">노력 — 기록 없음</div>';
+            if (!spans.length) effStrip.innerHTML = '<div class="hl-strip-label">노력 — ' + (allSpans.length ? '이 기간에 기록 없음' : '기록 없음') + '</div>';
             else {
-                let h = '<div class="hl-strip-label">노력</div><div class="hl-strip-rows" style="height:' + (rowsEnd.length * ROW) + 'px">';
+                let h = '<div class="hl-strip-label">노력</div>' + rowsOpen(rowsEnd.length);
                 for (const b of bars) {
                     const cls = b.e.effect === 'minus' ? 'hl-bar-minus' : 'hl-bar-plus';
                     const sign = b.e.effect === 'minus' ? '−' : '+';
-                    h += '<div class="hl-bar ' + cls + '" title="' + hlAttr(sign + ' ' + b.e.title) + '" style="left:' + (dx + b.x1) + 'px;width:' + Math.max(3, b.x2 - b.x1) + 'px;top:' + (b.row * ROW) + 'px">' + hlEsc(b.e.title) + '</div>';
+                    // 오른쪽 끝에 딱 붙는 항목도 잘려 사라지지 않게 최소 폭만큼은 남긴다
+                    const left = Math.min(b.x1 - ca.left, areaW - 3);
+                    const w = Math.min(Math.max(3, b.x2 - b.x1), areaW - left);
+                    h += '<div class="hl-bar ' + cls + '" title="' + hlAttr(sign + ' ' + b.e.title) + '" style="left:' + left + 'px;width:' + w + 'px;top:' + (b.row * ROW) + 'px">' + hlEsc(b.e.title) + '</div>';
                 }
                 effStrip.innerHTML = h + '</div>';
             }
-            effStrip.style.display = '';
-        } else { effStrip.style.display = 'none'; effStrip.innerHTML = ''; }
+        } else { effStrip.innerHTML = ''; }
 
         // ── 검진 띠 (시점 점) ──
         if (hlShowCheckup) {
-            const dx = canvasLeft - chkStrip.getBoundingClientRect().left;
-            const pts = hlCheckupPoints(hlPerson).slice().sort((a, b) => a.ts - b.ts);
+            const allPts = hlCheckupPoints(hlPerson);
+            const pts = allPts.filter(p => p.ts >= tMin && p.ts <= tMax).sort((a, b) => a.ts - b.ts);
             const rowsEnd = [];
             const items = pts.map(p => {
                 const x = clamp(xs.getPixelForValue(p.ts));
@@ -2466,16 +2491,17 @@
                 rowsEnd[row] = x + 14 + p.label.length * 6.5;
                 return { p, x, row };
             });
-            if (!pts.length) chkStrip.innerHTML = '<div class="hl-strip-label">검진 — 기록 없음</div>';
+            if (!pts.length) chkStrip.innerHTML = '<div class="hl-strip-label">검진 — ' + (allPts.length ? '이 기간에 기록 없음' : '기록 없음') + '</div>';
             else {
-                let h = '<div class="hl-strip-label">검진</div><div class="hl-strip-rows" style="height:' + (rowsEnd.length * ROW) + 'px">';
+                let h = '<div class="hl-strip-label">검진</div>' + rowsOpen(rowsEnd.length);
                 for (const it of items) {
-                    h += '<div class="hl-pt" title="' + hlAttr(it.p.date + ' · ' + it.p.label) + '" style="left:' + (dx + it.x) + 'px;top:' + (it.row * ROW) + 'px"><span class="hl-pt-dot"></span><span class="hl-pt-label">' + hlEsc(it.p.label) + '</span></div>';
+                    const left = Math.min(it.x - ca.left, areaW - 5);   // 끝에 딱 붙은 표식도 보이게
+                    const maxW = Math.max(5, areaW - left);             // 라벨은 오른쪽 끝에서 말줄임
+                    h += '<div class="hl-pt" title="' + hlAttr(it.p.date + ' · ' + it.p.label) + '" style="left:' + left + 'px;top:' + (it.row * ROW) + 'px;max-width:' + maxW + 'px"><span class="hl-pt-dot"></span><span class="hl-pt-label">' + hlEsc(it.p.label) + '</span></div>';
                 }
                 chkStrip.innerHTML = h + '</div>';
             }
-            chkStrip.style.display = '';
-        } else { chkStrip.style.display = 'none'; chkStrip.innerHTML = ''; }
+        } else { chkStrip.innerHTML = ''; }
     }
 
     window.hlToggleAnnot = function () {
