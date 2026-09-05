@@ -442,6 +442,22 @@
         /* 차트 '노력 표시' 토글 */
         .hl-effort-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--zm-muted); cursor: pointer; }
         .hl-effort-toggle input { accent-color: var(--zm-ink); }
+        /* 노력 방향(+/−) 세그먼트 */
+        .hl-effort-effect { display: flex; gap: 2px; margin-bottom: 10px; }
+        .hl-chip.effect { padding: 8px 14px; }
+        /* 차트 아래 노력/검진 띠 */
+        #hlStrips { margin-top: 10px; }
+        .hl-strip { position: relative; margin-top: 8px; }
+        .hl-strip-label { font-size: 10px; letter-spacing: 0.06em; color: var(--zm-muted); margin-bottom: 4px; }
+        .hl-strip-rows { position: relative; }
+        .hl-bar { position: absolute; height: 15px; box-sizing: border-box; font-size: 10px; line-height: 14px;
+            color: var(--zm-text-soft); white-space: nowrap; overflow: hidden; padding: 0 4px; }
+        .hl-bar-plus { background: rgba(32,30,29,0.13); border: 1px solid var(--zm-muted); }   /* + 채움 */
+        .hl-bar-minus { border: 1px dashed var(--zm-muted); background: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(32,30,29,0.16) 3px, rgba(32,30,29,0.16) 5px); }  /* − 빗금 */
+        .hl-pt { position: absolute; display: flex; align-items: center; gap: 4px; height: 15px; white-space: nowrap; }
+        .hl-pt-dot { width: 7px; height: 7px; background: var(--zm-ink); transform: rotate(45deg); flex: none; }
+        .hl-pt-label { font-size: 10px; color: var(--zm-text-soft); }
+        .hl-rec-sign { font-family: var(--font-num); font-weight: 800; color: var(--zm-muted); }  /* 목록 노력 +/− */
 
         .hl-btnrow { display: flex; gap: 8px; margin: 10px 0; }
         .hl-analyze-btn { background: var(--zm-ink); color: var(--zm-on-ink); flex: none; padding: 11px 20px; border-radius: var(--zm-radius); }
@@ -776,9 +792,13 @@
             <textarea id="hlCheckupNote" placeholder="소견 텍스트를 입력하세요."></textarea>
         </div>
 
-        <!-- 노력: 무엇을 시작/중단 + 기간 + 메모 -->
+        <!-- 노력: 방향(+/−) + 무엇을 시작/중단 + 기간 + 메모 -->
         <div id="hlEffortInput" style="display:none">
-            <input type="text" id="hlEffortTitle" placeholder="무엇을 시작/중단했나요? (예: 저탄고지 시작)">
+            <div class="hl-effort-effect">
+                <button type="button" class="hl-chip effect active" data-heffect="plus" onclick="hlSetEffortEffect('plus')">＋ 좋은 실천</button>
+                <button type="button" class="hl-chip effect" data-heffect="minus" onclick="hlSetEffortEffect('minus')">－ 주의 상황</button>
+            </div>
+            <input type="text" id="hlEffortTitle" placeholder="무엇을 시작/중단했나요? (예: 저탄고지 시작 / 야근·음주 증가)">
             <div class="hl-effort-end">
                 <label for="hlEffortEnd">종료일 (선택 — 비우면 진행 중)</label>
                 <input type="date" id="hlEffortEnd">
@@ -813,13 +833,18 @@
                 <button class="hl-chip range" data-hrange="1y" onclick="hlSetChartRange('1y')">1년</button>
             </div>
             <span class="hl-toolbar-sep"></span>
-            <label class="hl-effort-toggle"><input type="checkbox" id="hlEffortToggle" checked onchange="hlToggleEffort(this)"> 노력 표시</label>
+            <label class="hl-effort-toggle"><input type="checkbox" id="hlEffortToggle" checked onchange="hlToggleAnnot()"> 노력</label>
+            <label class="hl-effort-toggle"><input type="checkbox" id="hlCheckupToggle" checked onchange="hlToggleAnnot()"> 검진</label>
         </div>
         <!-- 개별 보기 -->
         <div id="hlChartSingle">
             <select id="hlChartItem" onchange="hlRenderChart()"></select>
             <div class="a10-chart-box"><canvas id="hlChart"></canvas></div>
             <div class="a10-chart-stats" id="hlChartStats"></div>
+            <div id="hlStrips">
+                <div class="hl-strip" id="hlEffortStrip" style="display:none"></div>
+                <div class="hl-strip" id="hlCheckupStrip" style="display:none"></div>
+            </div>
             <div id="hlChartMsg"></div>
             <div class="hl-chart-detail" id="hlChartDetail" style="display:none"></div>
         </div>
@@ -2241,7 +2266,9 @@
     let hlChartMode = 'single'; // 'single'(개별) | 'group'(묶음)
     let hlGroupKey = 'thyroid'; // 선택된 묶음 키
     let hlGroupCharts = [];     // 묶음 보기의 작은 차트 인스턴스들 (정리용)
-    let hlShowEffort = true;    // 차트에 '노력' 표시 여부 (기본 켜짐)
+    let hlShowEffort = true;      // 차트에 '노력' 표시 여부 (기본 켜짐)
+    let hlShowCheckup = true;     // 차트에 '검진' 표시 여부 (기본 켜짐)
+    let hlEffortEffectSel = 'plus'; // 노력 입력 폼의 현재 +/− 선택
 
     // 기록 종류 — 저장된 옛 값(endoscopy/other)도 읽는 시점에 새 값으로 매핑 (저장 데이터는 그대로).
     function hlNormType(t) {
@@ -2249,34 +2276,29 @@
         if (t === 'other') return 'effort';
         return t || 'blood';
     }
-    // 선택 인물의 '노력' 기록 → {start, end|null, title}. 시작일을 못 읽으면 제외.
+    // 노력 부호: 저장값이 없으면 '+'(좋은 실천)로 본다.
+    function hlEffortEffect(r) { return r.effect === 'minus' ? 'minus' : 'plus'; }
+    // 선택 인물의 '노력' 기록 → {start, end|null, title, effect}. 시작일을 못 읽으면 제외.
     function hlEffortSpans(person) {
         return hlRecords
             .filter(r => r.person === person && hlNormType(r.type) === 'effort')
-            .map(r => ({ start: hlDateTs(r.date), end: r.endDate ? hlDateTs(r.endDate) : null, title: (r.title || r.note || '노력') }))
+            .map(r => ({ start: hlDateTs(r.date), end: r.endDate ? hlDateTs(r.endDate) : null, title: (r.title || r.note || '노력'), effect: hlEffortEffect(r) }))
             .filter(e => e.start != null);
     }
-    // 차트에 '노력' 세로선·구간을 그리는 인라인 플러그인 (time scale일 때만, 켜졌을 때만).
-    // 밴드는 데이터 뒤(beforeDatasetsDraw), 선·라벨은 데이터 위(afterDatasetsDraw)에 은은하게.
-    function hlEffortPlugin(dark) {
+    // 선택 인물의 '검진' 기록 → {ts, date, label}. 날짜를 못 읽으면 제외.
+    function hlCheckupPoints(person) {
+        return hlRecords
+            .filter(r => r.person === person && hlNormType(r.type) === 'checkup')
+            .map(r => ({ ts: hlDateTs(r.date), date: r.date || '', label: (r.exam || '검진') }))
+            .filter(p => p.ts != null);
+    }
+
+    // 차트 안에는 '노력' 시작 세로선만 그린다(라벨·구간 밴드는 아래 띠로 분리).
+    // +는 실선, −는 점선으로 구분(색은 쓰지 않음). withStrips면 차트 아래 띠도 그린다(개별 보기).
+    function hlEffortPlugin(dark, withStrips) {
         const line = dark ? 'rgba(232,228,228,0.5)' : 'rgba(32,30,29,0.4)';
-        const band = dark ? 'rgba(232,228,228,0.07)' : 'rgba(32,30,29,0.05)';
-        const text = dark ? '#c9c4c4' : '#605d5d';
         return {
             id: 'hlEffort',
-            beforeDatasetsDraw(chart) {
-                if (!hlShowEffort) return;
-                const xs = chart.scales.x; if (!xs || xs.type !== 'time') return;
-                const ca = chart.chartArea, ctx = chart.ctx;
-                ctx.save(); ctx.fillStyle = band;
-                for (const e of hlEffortSpans(hlPerson)) {
-                    if (e.end == null) continue;
-                    let a = xs.getPixelForValue(e.start), b = xs.getPixelForValue(e.end);
-                    const lo = Math.max(ca.left, Math.min(a, b)), hi = Math.min(ca.right, Math.max(a, b));
-                    if (hi > ca.left && lo < ca.right) ctx.fillRect(lo, ca.top, hi - lo, ca.bottom - ca.top);
-                }
-                ctx.restore();
-            },
             afterDatasetsDraw(chart) {
                 if (!hlShowEffort) return;
                 const xs = chart.scales.x; if (!xs || xs.type !== 'time') return;
@@ -2285,20 +2307,92 @@
                 for (const e of hlEffortSpans(hlPerson)) {
                     const x = xs.getPixelForValue(e.start);
                     if (x < ca.left || x > ca.right) continue;
-                    ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+                    ctx.strokeStyle = line; ctx.lineWidth = 1;
+                    ctx.setLineDash(e.effect === 'minus' ? [2, 3] : []);  // + 실선, − 점선
                     ctx.beginPath(); ctx.moveTo(x, ca.top); ctx.lineTo(x, ca.bottom); ctx.stroke();
                     ctx.setLineDash([]);
-                    ctx.fillStyle = text; ctx.font = "10px Pretendard, sans-serif";
-                    ctx.save(); ctx.translate(x + 3, ca.top + 4); ctx.rotate(Math.PI / 2);
-                    ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-                    ctx.fillText(e.title, 0, 0);
-                    ctx.restore();
                 }
                 ctx.restore();
-            }
+            },
+            afterDraw(chart) { if (withStrips) hlRenderStrips(chart); }
         };
     }
-    window.hlToggleEffort = function (el) { hlShowEffort = !!el.checked; hlRenderChart(); };
+
+    // 차트 아래 '노력/검진 띠'를 x축에 맞춰 그린다(개별 보기 전용). 겹치면 위아래로 쌓는다.
+    function hlRenderStrips(chart) {
+        const effStrip = document.getElementById('hlEffortStrip');
+        const chkStrip = document.getElementById('hlCheckupStrip');
+        if (!effStrip || !chkStrip) return;
+        const xs = chart.scales.x, ca = chart.chartArea;
+        const timeOk = !!xs && xs.type === 'time' && !!ca;
+        // 레이아웃·토글·데이터가 그대로면 다시 그리지 않는다(애니메이션 중 반복 방지)
+        const key = [timeOk, ca && Math.round(ca.left), ca && Math.round(ca.right), hlShowEffort, hlShowCheckup, hlPerson, hlChartRange].join('|');
+        if (chart.$stripKey === key) return;
+        chart.$stripKey = key;
+        if (!timeOk) { effStrip.style.display = 'none'; chkStrip.style.display = 'none'; return; }
+
+        const canvasLeft = chart.canvas.getBoundingClientRect().left;
+        const clamp = px => Math.max(ca.left, Math.min(ca.right, px));
+        const ROW = 19;
+
+        // ── 노력 띠 (기간 막대, + 채움 / − 빗금) ──
+        if (hlShowEffort) {
+            const dx = canvasLeft - effStrip.getBoundingClientRect().left;
+            const spans = hlEffortSpans(hlPerson).slice().sort((a, b) => a.start - b.start);
+            const rowsEnd = [];
+            const bars = spans.map(e => {
+                const x1 = clamp(xs.getPixelForValue(e.start));
+                const x2 = clamp(e.end != null ? xs.getPixelForValue(e.end) : ca.right);
+                let row = 0; while (row < rowsEnd.length && rowsEnd[row] + 6 > x1) row++;
+                rowsEnd[row] = Math.max(x1 + 3, x2);
+                return { e, x1, x2, row };
+            });
+            if (!spans.length) effStrip.innerHTML = '<div class="hl-strip-label">노력 — 기록 없음</div>';
+            else {
+                let h = '<div class="hl-strip-label">노력</div><div class="hl-strip-rows" style="height:' + (rowsEnd.length * ROW) + 'px">';
+                for (const b of bars) {
+                    const cls = b.e.effect === 'minus' ? 'hl-bar-minus' : 'hl-bar-plus';
+                    const sign = b.e.effect === 'minus' ? '−' : '+';
+                    h += '<div class="hl-bar ' + cls + '" title="' + hlAttr(sign + ' ' + b.e.title) + '" style="left:' + (dx + b.x1) + 'px;width:' + Math.max(3, b.x2 - b.x1) + 'px;top:' + (b.row * ROW) + 'px">' + hlEsc(b.e.title) + '</div>';
+                }
+                effStrip.innerHTML = h + '</div>';
+            }
+            effStrip.style.display = '';
+        } else { effStrip.style.display = 'none'; effStrip.innerHTML = ''; }
+
+        // ── 검진 띠 (시점 점) ──
+        if (hlShowCheckup) {
+            const dx = canvasLeft - chkStrip.getBoundingClientRect().left;
+            const pts = hlCheckupPoints(hlPerson).slice().sort((a, b) => a.ts - b.ts);
+            const rowsEnd = [];
+            const items = pts.map(p => {
+                const x = clamp(xs.getPixelForValue(p.ts));
+                let row = 0; while (row < rowsEnd.length && rowsEnd[row] > x) row++;
+                rowsEnd[row] = x + 14 + p.label.length * 6.5;
+                return { p, x, row };
+            });
+            if (!pts.length) chkStrip.innerHTML = '<div class="hl-strip-label">검진 — 기록 없음</div>';
+            else {
+                let h = '<div class="hl-strip-label">검진</div><div class="hl-strip-rows" style="height:' + (rowsEnd.length * ROW) + 'px">';
+                for (const it of items) {
+                    h += '<div class="hl-pt" title="' + hlAttr(it.p.date + ' · ' + it.p.label) + '" style="left:' + (dx + it.x) + 'px;top:' + (it.row * ROW) + 'px"><span class="hl-pt-dot"></span><span class="hl-pt-label">' + hlEsc(it.p.label) + '</span></div>';
+                }
+                chkStrip.innerHTML = h + '</div>';
+            }
+            chkStrip.style.display = '';
+        } else { chkStrip.style.display = 'none'; chkStrip.innerHTML = ''; }
+    }
+
+    window.hlToggleAnnot = function () {
+        const e = document.getElementById('hlEffortToggle'), c = document.getElementById('hlCheckupToggle');
+        hlShowEffort = !e || e.checked;
+        hlShowCheckup = !c || c.checked;
+        hlRenderChart();
+    };
+    window.hlSetEffortEffect = function (v) {
+        hlEffortEffectSel = (v === 'minus') ? 'minus' : 'plus';
+        document.querySelectorAll('[data-heffect]').forEach(b => b.classList.toggle('active', b.dataset.heffect === hlEffortEffectSel));
+    };
 
     // 묶음 정의 — 항목명은 정규화된 이름(canonical) 기준. 여기만 고치면 묶음이 바뀐다.
     const HL_GROUPS = {
@@ -2545,6 +2639,7 @@
         else if (hlType === 'checkup') { data.items = []; data.exam = document.getElementById('hlExam').value.trim(); data.note = document.getElementById('hlCheckupNote').value; }
         else if (hlType === 'effort') {
             data.items = []; data.hospital = '';
+            data.effect = hlEffortEffectSel;
             data.title = document.getElementById('hlEffortTitle').value.trim();
             data.endDate = document.getElementById('hlEffortEnd').value || '';
             data.note = document.getElementById('hlEffortNote').value;
@@ -2575,6 +2670,7 @@
         document.getElementById('hlEffortTitle').value = '';
         document.getElementById('hlEffortEnd').value = '';
         document.getElementById('hlEffortNote').value = '';
+        hlSetEffortEffect('plus');
         document.getElementById('hlCancelEdit').style.display = 'none';
         document.getElementById('hlSaveBtn').textContent = '저장';
         hlSetType('blood');
@@ -2593,7 +2689,7 @@
         document.getElementById('hlHospital').value = r.hospital || '';
         if (type === 'blood') { hlRenderItemsTable(r.items || []); document.getElementById('hlParseInfo').innerHTML = '수정 중 — 표를 고치고 저장하세요.'; }
         else if (type === 'checkup') { document.getElementById('hlExam').value = r.exam || ''; document.getElementById('hlCheckupNote').value = r.note || ''; }
-        else if (type === 'effort') { document.getElementById('hlEffortTitle').value = r.title || ''; document.getElementById('hlEffortEnd').value = r.endDate || ''; document.getElementById('hlEffortNote').value = r.note || ''; }
+        else if (type === 'effort') { hlSetEffortEffect(hlEffortEffect(r)); document.getElementById('hlEffortTitle').value = r.title || ''; document.getElementById('hlEffortEnd').value = r.endDate || ''; document.getElementById('hlEffortNote').value = r.note || ''; }
         document.getElementById('hlSaveBtn').textContent = '수정 저장';
         document.getElementById('hlCancelEdit').style.display = 'block';
         hlSetView('input');
@@ -2651,7 +2747,8 @@
             } else if (type === 'effort') {
                 const s = r.date || '', e = r.endDate || '';
                 const period = e ? `${hlEsc(s)} ~ ${hlEsc(e)}` : `${hlEsc(s)} ~ 진행 중`;
-                headMid = `<span class="hl-rec-hosp">${hlEsc(r.title || '노력')}</span><span class="hl-rec-period">${period}</span>`;
+                const sign = hlEffortEffect(r) === 'minus' ? '－' : '＋';
+                headMid = `<span class="hl-rec-sign">${sign}</span><span class="hl-rec-hosp">${hlEsc(r.title || '노력')}</span><span class="hl-rec-period">${period}</span>`;
                 body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none"><div class="hl-rec-note">${r.note ? hlEsc(r.note) : '<span style="color:var(--zm-muted)">메모 없음</span>'}</div></div>`;
             } else {
                 body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none"><div class="hl-rec-note">${hlEsc(r.note)}</div></div>`;
@@ -2837,7 +2934,7 @@
                 },
                 scales: { x: xScale, y: yScale }
             },
-            plugins: [hlEffortPlugin(dark)]   // '노력' 세로선·구간 표시
+            plugins: [hlEffortPlugin(dark, !!opts.strips)]   // '노력' 세로선 (+ 개별 보기면 아래 띠)
         };
         return { kind: 'ok', config, meta: { pts, all, refLow, refHigh, unit, values, useTime, ext, cutoff, valueDsIndex } };
     }
@@ -2899,6 +2996,9 @@
         singleWrap.style.display = ''; groupWrap.style.display = 'none';
         sel.style.display = '';
         if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
+        // 띠는 일단 숨겼다가, 차트가 실제로 그려질 때 플러그인이 다시 채운다
+        document.getElementById('hlEffortStrip').style.display = 'none';
+        document.getElementById('hlCheckupStrip').style.display = 'none';
 
         const itemName = sel.value;
         // 선택 항목 상세 설명 (detail 우선, 없으면 desc, 둘 다 없으면 숨김)
@@ -2909,7 +3009,7 @@
             else { detailEl.innerHTML = ''; detailEl.style.display = 'none'; }
         }
 
-        const res = hlMakeChartConfig(itemName, { dark: true });
+        const res = hlMakeChartConfig(itemName, { dark: true, strips: true });
         if (res.kind === 'no-item') { canvas.style.display = 'none'; statsEl.innerHTML = ''; msgEl.innerHTML = '<div class="a10-empty">이 항목의 수치가 없습니다.</div>'; return; }
         if (res.kind === 'no-range') {
             canvas.style.display = 'none'; statsEl.innerHTML = '';
