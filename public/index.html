@@ -48,171 +48,219 @@
         .app-title { font-family: var(--font-title); font-weight: 900; font-size: 26px; letter-spacing: -0.02em; color: var(--zm-ink); }
         .app-sub { font-size: 12px; color: var(--zm-muted-3); margin-top: 4px; }
         
-        /* 입력 영역 */
-        .input-group { 
-            background: #f8f9fa; 
-            padding: 20px; 
-            border-radius: 10px; 
-            border: 1px solid #e1e4e8;
-            margin-bottom: 20px; 
-            display: flex; flex-direction: column; gap: 12px; 
-        }
-        
-        input, select, textarea { 
+        /* ===================== ToDo — 계기판 톤 =====================
+           무채 계단만 사용(적색은 건강 탭 이상치 전용).
+           분류는 채움 농도로, 상태는 윤곽으로 구분한다. */
+
+        /* 전역 폼/버튼 규칙은 다른 탭도 함께 쓰므로 그대로 두고, ToDo 안에서만 덮어쓴다 */
+        input, select, textarea {
             padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px;
             background-color: #fff;
         }
         input:focus, select:focus, textarea:focus { outline: none; border-color: #333; }
         textarea { resize: none; }
-
-        /* 시간 입력 그룹 */
-        .time-group { display: flex; gap: 5px; flex: 1.5; }
-        .time-group select { flex: 1; min-width: 60px; text-align: center; }
-        .time-group input { flex: 1; text-align: center; }
-
-        /* 체크박스 스타일 */
-        .checkbox-wrapper { display: flex; align-items: center; }
-        .checkbox-wrapper input[type="checkbox"] { display: none; }
-        .checkbox-wrapper label {
-            background-color: #fff; border: 1px solid #ddd; color: #aaa;
-            padding: 10px 0; border-radius: 8px; cursor: pointer;
-            font-weight: bold; font-size: 13px; display: block; width: 100%;
-            text-align: center; transition: 0.2s; box-sizing: border-box;
-        }
-        
-        #impCheck:checked + label { background-color: #f59f00; color: white; border-color: #f59f00; }
-        #repeatCheck:checked + label { background-color: #be4bdb; color: white; border-color: #be4bdb; }
-        #pinCheck:checked + label { background-color: #228be6; color: white; border-color: #228be6; }
-
-        /* 버튼 그룹 */
-        .btn-area { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; }
         button { border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; flex: 1; font-size: 14px; color: white; }
-        #add-btn { background-color: #212529; width: 100%; }
-        
-        .edit-mode-btns { display: none; width: 100%; gap: 5px; }
-        #update-btn { background-color: #228be6; flex: 2; } 
-        #complete-btn { background-color: #40c057; flex: 1; } 
-        #delete-btn { background-color: #fa5252; flex: 1; } 
-        #cancel-btn { background-color: #868e96; flex: 0.5; } 
 
-        /* 필터 버튼 */
-        .filter-group { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 5px; -webkit-overflow-scrolling: touch; }
-        .filter-btn { 
-            padding: 8px 12px; border-radius: 20px; font-size: 12px; white-space: nowrap; 
-            background: #f1f3f5; color: #868e96; border: 1px solid #dee2e6; flex: none; cursor: pointer;
+        #todoTab input, #todoTab select, #todoTab textarea {
+            border: 1px solid var(--zm-border); border-radius: var(--zm-radius);
+            font-family: var(--font-body); color: var(--zm-text); background: #fff;
         }
-        .filter-btn.active { background: #333; color: white; border-color: #333; }
+        #todoTab input:focus, #todoTab select:focus, #todoTab textarea:focus { outline: none; border-color: var(--zm-ink); }
+        #todoTab input[type="date"], #todoTab input[type="number"] { font-family: var(--font-num); }
+        #todoTab button { border-radius: var(--zm-radius); font-family: var(--font-body); }
 
-        /* 리스트 스타일 */
-        ul { list-style: none; padding: 0; margin: 0; border-top: 3px solid #333; }
-        li { 
-            border-bottom: 2px solid #dde2e5; padding: 0;
-            position: relative; overflow: hidden;
+        /* 입력 영역 — 지면 위 한 장의 카드 */
+        .input-group {
+            background: var(--zm-card);
+            border: 1px solid var(--zm-ink);
+            border-radius: var(--zm-radius);
+            padding: 18px;
+            margin-bottom: 26px;
+            display: flex; flex-direction: column; gap: 12px;
         }
+        #taskInput { font-size: 16px; padding: 13px 14px; }
+        #memoInput { font-size: 14px; line-height: 1.6; }
+
+        /* 한 줄 툴바 — 건강 탭 .hl-toolbar와 같은 구조 */
+        .td-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+        .td-toolbar-sep { align-self: stretch; width: 1px; background: var(--zm-border); }
+        /* 좁은 화면에서는 툴바가 줄바꿈되므로 구분선을 감춘다(줄 끝에 남는 선 방지) */
+        @media (max-width: 899px) { .td-toolbar-sep { display: none; } }
+        .td-seg { display: flex; flex-wrap: wrap; gap: 2px; }
+        /* 세그먼트 칩 — 건강 탭 .hl-chip과 같은 어휘 */
+        .td-chip {
+            flex: none; width: auto; white-space: nowrap;
+            padding: 7px 14px; border-radius: var(--zm-radius);
+            font-size: 13px; font-weight: 700; font-family: var(--font-body);
+            background: var(--zm-card); color: var(--zm-muted);
+            border: 1px solid var(--zm-border); cursor: pointer; transition: 0.15s;
+        }
+        .td-chip:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
+        .td-chip.active { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        /* 세그먼트가 조작하는 원본 select — 값은 그대로 두고 화면에서만 감춘다 */
+        .td-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+        /* 옵션 토글 (고정·반복·우선) — 켜지면 잉크로 채운다 */
+        .checkbox-wrapper { display: flex; align-items: center; flex: none; }
+        .checkbox-wrapper input[type="checkbox"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+        .checkbox-wrapper label {
+            display: block; width: 100%; box-sizing: border-box; text-align: center; cursor: pointer;
+            padding: 7px 14px; border-radius: var(--zm-radius);
+            background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-border);
+            font-size: 13px; font-weight: 700; transition: 0.15s;
+        }
+        .checkbox-wrapper label:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
+        #pinCheck:checked + label,
+        #repeatCheck:checked + label,
+        #impCheck:checked + label { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        .checkbox-wrapper input[type="checkbox"]:focus-visible + label { border-color: var(--zm-ink); }
+
+        /* 날짜·시간 입력 */
+        .time-group { display: flex; gap: 6px; flex: 1.5; }
+        .time-group select { flex: 1; min-width: 62px; text-align: center; }
+        .time-group input { flex: 1; text-align: center; }
+        .date-wrap { display: flex; gap: 6px; align-items: stretch; }
+        #todoTab .today-btn {
+            flex: none; width: auto; padding: 0 14px;
+            background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-border);
+            border-radius: var(--zm-radius); font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer;
+        }
+        #todoTab .today-btn:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
+        /* 장기 전용 필드(마감일) */
+        #longFields { align-items: center; }
+        .td-field-label { font-size: 12px; font-weight: 700; color: var(--zm-muted); white-space: nowrap; letter-spacing: 0.02em; }
+        .td-field-label .opt { color: var(--zm-muted-2); font-weight: 600; }
+
+        /* 버튼 — 주동작만 채우고 나머지는 윤곽 */
+        .btn-area { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+        #add-btn { background: var(--zm-ink); color: var(--zm-on-ink); width: 100%; letter-spacing: 0.02em; }
+        .edit-mode-btns { display: none; width: 100%; gap: 6px; }
+        #update-btn { background: var(--zm-ink); color: var(--zm-on-ink); flex: 2; }
+        #complete-btn { background: var(--zm-card); color: var(--zm-ink); border: 1px solid var(--zm-ink); flex: 1; }
+        #complete-btn.restore { background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-muted); }
+        #delete-btn { background: var(--zm-card); color: var(--zm-muted); border: 1px dashed var(--zm-muted); flex: 1; }
+        #delete-btn:hover { background: var(--zm-ink); color: var(--zm-on-ink); border: 1px solid var(--zm-ink); }
+        #cancel-btn { background: transparent; color: var(--zm-muted-2); border: 1px solid var(--zm-border); flex: 0.6; }
+        #cancel-btn:hover { color: var(--zm-text-soft); border-color: var(--zm-muted); }
+
+        /* 카테고리 필터 — 건강 탭 세그먼트와 같은 톤 */
+        .filter-group { display: flex; flex-wrap: wrap; gap: 2px; padding: 0; margin: 0 0 12px; }
+        .filter-btn {
+            flex: none; width: auto; white-space: nowrap;
+            padding: 6px 12px; border-radius: var(--zm-radius);
+            font-size: 12px; font-weight: 700; font-family: var(--font-body);
+            background: var(--zm-card); color: var(--zm-muted);
+            border: 1px solid var(--zm-border); cursor: pointer; transition: 0.15s;
+        }
+        .filter-btn:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
+        .filter-btn.active { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+
+        /* 섹션 헤더 (오늘 일정 / 장기 플랜) */
+        .section-header {
+            font-family: var(--font-title); font-size: 15px; font-weight: 900; color: var(--zm-ink);
+            letter-spacing: -0.02em; margin: 0 0 12px;
+            display: flex; align-items: baseline; gap: 8px;
+            padding-bottom: 8px; border-bottom: 2px solid var(--zm-ink);
+        }
+        .section-header .count { font-family: var(--font-num); font-size: 12px; font-weight: 600; color: var(--zm-muted); }
+
+        /* 리스트 */
+        ul { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--zm-border); }
+        #longColumn ul { border-top: none; }
+        li { border-bottom: 1px solid var(--zm-line); padding: 0; position: relative; overflow: hidden; }
         li:last-child { border-bottom: none; }
 
-        /* 스와이프 배경 (색·문구는 JS에서 완료 여부에 맞춤) */
+        /* 스와이프 배경 (문구·농도는 JS에서 완료 여부에 맞춘다) */
         .swipe-bg {
             position: absolute; left: 0; top: 0; bottom: 0; width: 100%;
-            background-color: #40c057; color: #fff; font-weight: 800; font-size: 15px;
+            background: var(--zm-ink); color: var(--zm-on-ink);
+            font-family: var(--font-title); font-weight: 700; font-size: 13px; letter-spacing: 0.1em;
             display: flex; align-items: center; padding-left: 18px; box-sizing: border-box;
             z-index: 0; pointer-events: none;
         }
         .swipe-content {
             position: relative; z-index: 1;
-            display: flex; gap: 15px; align-items: flex-start;
-            padding: 18px 15px; width: 100%; box-sizing: border-box;
+            display: flex; gap: 12px; align-items: flex-start;
+            padding: 14px; width: 100%; box-sizing: border-box;
             background: #fff; cursor: pointer;
+            border-left: 3px solid transparent;
             transition: transform 0.28s ease-out;
             touch-action: pan-y;
         }
         .swipe-content.swipe-no-transition { transition: none; }
+        li:hover .swipe-content { background: var(--zm-bg); }
 
-        li:hover .swipe-content { background-color: #f8f9fa; }
+        /* 고정 — 옅은 농도 + 좌측 바 (색 대신 형태로) */
+        li.pinned .swipe-content { background: var(--zm-bg); border-left: 3px dashed var(--zm-muted); }
+        li.pinned:hover .swipe-content { background: var(--zm-border); }
+        /* 마감 임박 — 좌측 잉크 바 (건강 탭 기록 카드와 같은 어휘) */
+        li.imminent .swipe-content { background: var(--zm-bg); border-left-color: var(--zm-ink); }
+        li.imminent:hover .swipe-content { background: var(--zm-border); }
 
-        /* 핀 고정된 항목 배경색 (연한 핑크) */
-        li.pinned .swipe-content { background-color: #fff0f6; }
-        li.pinned:hover .swipe-content { background-color: #ffdeeb; }
-        
-        .row-num { font-size: 12px; color: #adb5bd; font-weight: bold; min-width: 25px; margin-top: 3px; }
-        .content-area { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .row-num { font-family: var(--font-num); font-size: 11px; font-weight: 600; color: var(--zm-muted-2); min-width: 22px; margin-top: 4px; }
+        .content-area { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 
-        /* 뱃지 및 색상 */
-        .badges { display: flex; gap: 6px; font-size: 11px; font-weight: 700; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
-        .badge { padding: 3px 6px; border-radius: 4px; color: white; }
-        
-        .cat-vt { background-color: #7950f2; }      
-        .cat-botiz { background-color: #228be6; }   
-        .cat-money { background-color: #2f9e44; }   
-        .cat-general { background-color: #868e96; } 
+        /* 배지 — 분류는 채움 농도 4단, 상태는 윤곽 */
+        .badges { display: flex; gap: 4px; font-size: 11px; font-weight: 700; align-items: center; flex-wrap: wrap; }
+        .badge {
+            padding: 2px 7px; border-radius: var(--zm-radius);
+            border: 1px solid transparent; line-height: 1.5; white-space: nowrap;
+        }
+        /* 분류(무채 4단 계단 — 진할수록 정렬 우선순위가 높은 카테고리) */
+        .cat-vt { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        .cat-botiz { background: var(--zm-muted-3); color: var(--zm-on-ink); border-color: var(--zm-muted-3); }
+        .cat-money { background: var(--zm-muted-2); color: var(--zm-ink); border-color: var(--zm-muted-2); }
+        .cat-general { background: var(--zm-bg); color: var(--zm-muted); border-color: var(--zm-border); }
 
-        .type-date { background-color: #e64980; } 
-        .type-time { background-color: #1098ad; }
-        .type-repeat { background-color: #be4bdb; } 
-        .imp-icon { color: #fa5252; font-weight: 800; font-size: 13px; }
+        /* 상태 — 채우지 않고 윤곽으로 */
+        .type-date, .type-time, .type-due {
+            font-family: var(--font-num); font-weight: 600; letter-spacing: 0.02em;
+            background: transparent; color: var(--zm-text-soft); border-color: var(--zm-border);
+        }
+        .type-repeat { background: transparent; color: var(--zm-muted); border: 1px dashed var(--zm-muted-2); }
+        .flag-today { background: transparent; color: var(--zm-ink); border-color: var(--zm-ink); font-weight: 800; }
+        .flag-imp { background: transparent; color: var(--zm-ink); border-color: var(--zm-ink); font-weight: 800; box-shadow: inset 3px 0 0 var(--zm-ink); padding-left: 9px; }
+        .badge.dday { font-family: var(--font-num); font-weight: 700; background: transparent; }
+        .badge.dday-over { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        .badge.dday-near { color: var(--zm-ink); border-color: var(--zm-ink); }
+        .badge.dday-far { color: var(--zm-muted); border-color: var(--zm-border); }
+        .imp-icon { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; color: var(--zm-ink); }
+        .status-msg { font-family: var(--font-num); font-size: 11px; font-weight: 600; color: var(--zm-muted-2); margin-left: auto; }
 
-        /* 리스트 내 핀 버튼 */
-        .task-line { display: flex; align-items: center; gap: 8px; }
+        /* 고정 토글 — 회전 사각형 표식 (건강 탭 .hl-pt-dot와 같은 어휘) */
+        .task-line { display: flex; align-items: center; gap: 10px; }
         .inline-pin-btn {
-            background: none; border: none; padding: 0; cursor: pointer; margin: 0; flex: none;
-            font-size: 18px; color: #e9ecef; transition: all 0.2s; line-height: 1;
+            background: none; border: none; padding: 4px; margin: 0; flex: none; width: auto;
+            cursor: pointer; line-height: 0; color: inherit;
         }
-        .inline-pin-btn.active { color: #fa5252; transform: rotate(-45deg); } 
-        .inline-pin-btn:hover { transform: scale(1.2); }
-
-        .task-text { font-size: 16px; font-weight: 600; color: #333; line-height: 1.4; flex: 1; }
-        .task-memo { font-size: 13px; color: #868e96; margin-top: 2px; margin-left: 1px; }
-
-        /* 완료된 항목 */
-        li.completed .swipe-content { opacity: 0.5; background-color: #f1f3f5; }
-        li.completed .task-text { text-decoration: line-through; color: #ced4da; }
-        li.completed .badges { filter: grayscale(100%); opacity: 0.7; }
-
-        /* 섹션 헤더 (오늘 할 일 / 장기일정) */
-        .section-header {
-            font-size: 14px; font-weight: 800; color: #495057; letter-spacing: -0.5px;
-            margin: 22px 0 8px; display: flex; align-items: center; gap: 6px;
+        .pin-mark {
+            display: block; width: 8px; height: 8px; transform: rotate(45deg);
+            border: 1px solid var(--zm-muted-2); background: transparent; transition: 0.15s;
         }
-        .section-header .count { font-size: 12px; color: #adb5bd; font-weight: 600; }
+        .inline-pin-btn:hover .pin-mark { border-color: var(--zm-ink); }
+        .inline-pin-btn.active .pin-mark { background: var(--zm-ink); border-color: var(--zm-ink); }
 
-        /* 2단 레이아웃 (좌: 오늘 일정 / 우: 장기 플랜)
-           가로 폭이 충분하면(≈2×250px) 자동으로 좌우 2단, 좁으면 위아래로 쌓임 */
-        .columns {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
-            gap: 24px;
-            align-items: start;
-            margin-top: 10px;
-        }
+        .task-text { font-size: 15px; font-weight: 600; color: var(--zm-text); line-height: 1.5; flex: 1; min-width: 0; word-break: break-word; }
+        .task-memo { font-size: 12px; color: var(--zm-muted); line-height: 1.6; padding-left: 10px; border-left: 1px solid var(--zm-border); }
+
+        /* 완료된 항목 — 채도가 아니라 농도로 가라앉힌다 */
+        li.completed .swipe-content { background: var(--zm-bg); border-left-color: transparent; }
+        li.completed:hover .swipe-content { background: var(--zm-border); }
+        li.completed .task-text { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--zm-muted-2); font-weight: 500; }
+        li.completed .badges { opacity: 0.5; }
+        li.completed .row-num, li.completed .task-memo { color: var(--zm-muted-2); }
+
+        /* 2단 레이아웃 — PC는 좌우 2단(사이에 규칙선), 좁아지면 1열 */
+        .columns { display: grid; grid-template-columns: 1fr; gap: 30px; align-items: start; margin-top: 4px; }
         .column { min-width: 0; }
         .column .section-header { margin-top: 0; }
-
-        /* 장기 플랜 리스트는 파란 상단선으로 구분 */
-        #longColumn ul { border-top: 3px solid #1c7ed6; }
+        @media (min-width: 900px) {
+            .columns { grid-template-columns: 1.15fr 1fr; column-gap: 36px; }
+            #longColumn { padding-left: 36px; border-left: 1px solid var(--zm-border); }
+        }
 
         /* 빈 상태 안내 문구 */
-        .empty-msg { text-align: center; padding: 30px 10px; color: #adb5bd; font-size: 13px; }
-
-        /* 날짜 옆 '오늘' 버튼 */
-        .date-wrap { display: flex; gap: 6px; align-items: stretch; }
-        .today-btn {
-            flex: none; width: auto; padding: 0 14px;
-            background: #e7f5ff; color: #1c7ed6; border: 1px solid #a5d8ff;
-            border-radius: 8px; font-size: 13px; font-weight: 700; white-space: nowrap;
-            cursor: pointer;
-        }
-        .today-btn:hover { background: #d0ebff; }
-
-        /* 장기일정 관련 뱃지 */
-        .type-due { background-color: #f76707; }
-        .badge.dday { color: #fff; }
-
-        /* 마감 임박 항목 (오늘 목록 상단 노출) */
-        li.imminent .swipe-content { background-color: #fff9db; }
-        li.imminent:hover .swipe-content { background-color: #fff3bf; }
-
-        /* 장기 전용 필드(마감일) */
-        #longFields { align-items: center; }
+        .empty-msg { text-align: center; padding: 32px 12px; color: var(--zm-muted-2); font-size: 13px; line-height: 1.7; border: 1px dashed var(--zm-border); }
 
         /* ===================== After10 (일지) ===================== */
         /* 포인트 컬러: #364fc7 (남색) — 기존 팔레트와 겹치지 않음 */
@@ -578,18 +626,47 @@
     <div class="input-group">
         <input type="text" id="taskInput" placeholder="할 일을 입력하세요">
 
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <select id="scheduleTypeInput" style="flex: 1; min-width: 80px;">
-                <option value="short" selected>📌 단기(1회성)</option>
-                <option value="long">🌱 장기(플랜)</option>
-            </select>
-            <select id="categoryInput" style="flex: 1; min-width: 80px;">
-                <option value="vt">🎙️ VT</option>
-                <option value="botiz">🤖 보티즈</option>
-                <option value="money">💰 머니</option>
-                <option value="general" selected>📂 일반</option>
-            </select>
+        <!-- 한 줄 툴바: 일정 타입 / 카테고리 / 옵션.
+             값의 출처는 아래 두 select 그대로이고, 세그먼트는 그 값을 바꾸는 화면 컨트롤이다. -->
+        <div class="td-toolbar">
+            <div class="td-seg" data-seg-for="scheduleTypeInput">
+                <button type="button" class="td-chip" data-value="short">단기</button>
+                <button type="button" class="td-chip" data-value="long">장기</button>
+            </div>
+            <div class="td-toolbar-sep"></div>
+            <div class="td-seg" data-seg-for="categoryInput">
+                <button type="button" class="td-chip" data-value="vt">VT</button>
+                <button type="button" class="td-chip" data-value="botiz">보티즈</button>
+                <button type="button" class="td-chip" data-value="money">머니</button>
+                <button type="button" class="td-chip" data-value="general">일반</button>
+            </div>
+            <div class="td-toolbar-sep"></div>
+            <div class="td-seg">
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="pinCheck">
+                    <label for="pinCheck">고정</label>
+                </div>
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="repeatCheck">
+                    <label for="repeatCheck">반복</label>
+                </div>
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="impCheck">
+                    <label for="impCheck">우선</label>
+                </div>
+            </div>
         </div>
+
+        <select id="scheduleTypeInput" class="td-sr" tabindex="-1" aria-hidden="true">
+            <option value="short" selected>단기(1회성)</option>
+            <option value="long">장기(플랜)</option>
+        </select>
+        <select id="categoryInput" class="td-sr" tabindex="-1" aria-hidden="true">
+            <option value="vt">VT</option>
+            <option value="botiz">보티즈</option>
+            <option value="money">머니</option>
+            <option value="general" selected>일반</option>
+        </select>
 
         <!-- 단기(오늘) 전용: 날짜 + 시간 -->
         <div id="shortFields" style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -610,23 +687,8 @@
 
         <!-- 장기 전용: 마감일 (선택 입력) -->
         <div id="longFields" style="display: none; gap: 8px;">
-            <span style="font-size:13px; color:#868e96; font-weight:700; white-space:nowrap;">📅 마감일 <span style="color:#adb5bd; font-weight:600;">(선택)</span></span>
+            <span class="td-field-label">마감일 <span class="opt">(선택)</span></span>
             <input type="date" id="dueDateInput" style="flex: 1; min-width: 0;">
-        </div>
-
-        <div style="display: flex; gap: 8px;">
-             <div class="checkbox-wrapper" style="flex: 1;">
-                <input type="checkbox" id="pinCheck">
-                <label for="pinCheck">📌 고정</label>
-            </div>
-            <div class="checkbox-wrapper" style="flex: 1;">
-                <input type="checkbox" id="repeatCheck">
-                <label for="repeatCheck">🔄 반복</label>
-            </div>
-            <div class="checkbox-wrapper" style="flex: 1;">
-                <input type="checkbox" id="impCheck">
-                <label for="impCheck">⭐ 우선</label>
-            </div>
         </div>
 
         <textarea id="memoInput" rows="2" placeholder="메모"></textarea>
@@ -637,8 +699,8 @@
 
         <div class="btn-area edit-mode-btns" id="edit-mode-area">
             <button id="update-btn">수정저장</button>
-            <button id="complete-btn">완료(✔)</button>
-            <button id="delete-btn">삭제(🗑️)</button>
+            <button id="complete-btn">완료</button>
+            <button id="delete-btn">삭제</button>
             <button id="cancel-btn">취소</button>
         </div>
     </div>
@@ -646,15 +708,15 @@
     <div class="columns">
         <!-- 왼쪽: 단기(오늘) 일정 -->
         <div class="column" id="shortColumn">
-            <div class="section-header">📅 오늘 일정 <span class="count" id="shortCount"></span></div>
+            <div class="section-header">오늘 일정 <span class="count" id="shortCount"></span></div>
 
             <div class="filter-group" id="filterContainer">
-                <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">📋 전체</button>
-                <button class="filter-btn" data-filter="important" onclick="setFilter('important')">⚡ 주요</button>
-                <button class="filter-btn" data-filter="vt" onclick="setFilter('vt')">🎙️ 보이스튜닝</button>
-                <button class="filter-btn" data-filter="botiz" onclick="setFilter('botiz')">🤖 보티즈</button>
-                <button class="filter-btn" data-filter="money" onclick="setFilter('money')">💰 머니</button>
-                <button class="filter-btn" data-filter="general" onclick="setFilter('general')">📂 일반</button>
+                <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">전체</button>
+                <button class="filter-btn" data-filter="important" onclick="setFilter('important')">주요</button>
+                <button class="filter-btn" data-filter="vt" onclick="setFilter('vt')">보이스튜닝</button>
+                <button class="filter-btn" data-filter="botiz" onclick="setFilter('botiz')">보티즈</button>
+                <button class="filter-btn" data-filter="money" onclick="setFilter('money')">머니</button>
+                <button class="filter-btn" data-filter="general" onclick="setFilter('general')">일반</button>
             </div>
 
             <ul id="taskList">
@@ -664,7 +726,7 @@
 
         <!-- 오른쪽: 장기 플랜 (빌드업) -->
         <div class="column" id="longColumn">
-            <div class="section-header">🌱 장기 플랜 <span class="count" id="longCount"></span></div>
+            <div class="section-header">장기 플랜 <span class="count" id="longCount"></span></div>
             <ul id="longList"></ul>
         </div>
     </div>
@@ -936,12 +998,11 @@
         return { diff, label };
     }
 
-    // D-day 임박도에 따른 색상
-    function ddayColor(diff) {
-        if (diff < 0) return '#e03131';   // 지남
-        if (diff === 0) return '#f03e3e'; // 당일
-        if (diff <= 3) return '#f59f00';  // 임박
-        return '#1c7ed6';                 // 여유
+    // D-day 임박도에 따른 배지 형태 (색 대신 채움/윤곽 농도)
+    function ddayClass(diff) {
+        if (diff <= 0) return 'dday-over';  // 지남·당일: 잉크 채움
+        if (diff <= 3) return 'dday-near';  // 임박: 잉크 윤곽
+        return 'dday-far';                  // 여유: 옅은 윤곽
     }
 
     // 카테고리 정렬 우선순위: 보이스튜닝 > 보티즈 > 머니 > 일반
@@ -958,6 +1019,27 @@
     document.getElementById('scheduleTypeInput').addEventListener('change', (e) => {
         applyScheduleTypeUI(e.target.value);
     });
+
+    // 입력 폼 세그먼트 — 값은 위 select가 그대로 갖고 있고, 여기서는 그 값을 바꿔주기만 한다.
+    function syncFormSegments() {
+        document.querySelectorAll('#todoTab .td-seg[data-seg-for]').forEach(seg => {
+            const cur = document.getElementById(seg.dataset.segFor).value;
+            seg.querySelectorAll('.td-chip').forEach(chip => {
+                chip.classList.toggle('active', chip.dataset.value === cur);
+            });
+        });
+    }
+    document.querySelectorAll('#todoTab .td-seg[data-seg-for]').forEach(seg => {
+        seg.addEventListener('click', (e) => {
+            const chip = e.target.closest('.td-chip');
+            if (!chip) return;
+            const sel = document.getElementById(seg.dataset.segFor);
+            sel.value = chip.dataset.value;
+            sel.dispatchEvent(new Event('change'));
+            syncFormSegments();
+        });
+    });
+    syncFormSegments();
 
     // 로컬 기준 오늘 날짜(YYYY-MM-DD)
     function todayStr() {
@@ -1070,13 +1152,14 @@
         document.getElementById('impCheck').checked = !!task.isImportant;
         document.getElementById('repeatCheck').checked = !!task.isRepeat;
         document.getElementById('pinCheck').checked = !!task.isPinned;
+        syncFormSegments();
 
         document.getElementById('add-mode-area').style.display = 'none';
         document.getElementById('edit-mode-area').style.display = 'flex';
         
         const completeBtn = document.getElementById('complete-btn');
-        completeBtn.innerText = task.isCompleted ? '미완료로 복구' : '완료 처리(✔)';
-        completeBtn.style.backgroundColor = task.isCompleted ? '#fab005' : '#40c057';
+        completeBtn.innerText = task.isCompleted ? '미완료로 복구' : '완료 처리';
+        completeBtn.classList.toggle('restore', !!task.isCompleted);
 
         isEditing = true;
         currentEditId = task.id;
@@ -1139,6 +1222,7 @@
 
         document.getElementById('add-mode-area').style.display = 'flex';
         document.getElementById('edit-mode-area').style.display = 'none';
+        syncFormSegments();
 
         isEditing = false;
         currentEditId = null;
@@ -1162,7 +1246,7 @@
         const imminent = longTasks
             .filter(t => !t.isCompleted && t.dueDate && getDDay(t.dueDate).diff <= 3)
             .sort((a, b) => getDDay(a.dueDate).diff - getDDay(b.dueDate).diff);
-        imminent.forEach(task => list.appendChild(createTaskItem(task, '⏰', true)));
+        imminent.forEach(task => list.appendChild(createTaskItem(task, '—', true)));
 
         let filteredTasks = shortTasks.filter(task => {
             if (currentFilter === 'all') return true;
@@ -1219,7 +1303,7 @@
 
         if (!longTasks.length) {
             document.getElementById('longCount').textContent = '';
-            list.innerHTML = '<div class="empty-msg">아직 장기 플랜이 없어요.<br>등록 시 "🌱 장기(플랜)"을 선택해 추가하세요.</div>';
+            list.innerHTML = '<div class="empty-msg">아직 장기 플랜이 없어요.<br>등록 시 &quot;장기&quot;를 선택해 추가하세요.</div>';
             return;
         }
 
@@ -1253,20 +1337,20 @@
         if (task.scheduleType === 'long') {
             if (task.dueDate) {
                 const dueShort = task.dueDate.substring(5).replace('-', '/');
-                typeHtml += `<span class="badge type-due">📅 ${dueShort}</span>`;
+                typeHtml += `<span class="badge type-due">${dueShort}</span>`;
                 const dd = getDDay(task.dueDate);
-                typeHtml += `<span class="badge dday" style="background-color:${ddayColor(dd.diff)}">${dd.label}</span>`;
+                typeHtml += `<span class="badge dday ${ddayClass(dd.diff)}">${dd.label}</span>`;
             }
         } else if (task.targetDate) {
             const dateShort = task.targetDate.substring(5).replace('-', '/');
             const dd = getDDay(task.targetDate);
             if (dd.diff === 0) {
                 // 오늘 마감
-                typeHtml += `<span class="badge" style="background-color:#f76707;">오늘</span>`;
+                typeHtml += `<span class="badge flag-today">오늘</span>`;
             } else if (dd.diff < 0 && !task.isCompleted) {
                 // 처리 안 된 지난 일정: 날짜 + D+n
                 typeHtml += `<span class="badge type-date">${dateShort}</span>`;
-                typeHtml += `<span class="badge" style="background-color:#e03131;">${dd.label}</span>`;
+                typeHtml += `<span class="badge dday dday-over">${dd.label}</span>`;
             } else {
                 typeHtml += `<span class="badge type-date">${dateShort}</span>`;
             }
@@ -1281,13 +1365,13 @@
             }
         }
         if (task.isRepeat) {
-            typeHtml += `<span class="badge type-repeat">🔄 반복</span>`;
+            typeHtml += `<span class="badge type-repeat">반복</span>`;
         }
         return typeHtml;
     }
 
     // 개별 항목(li) 생성 — 오늘 목록/장기 섹션 공통 사용
-    // numLabel: 순번 또는 '⏰' 같은 표시, isImminent: 마감임박 강조 여부
+    // numLabel: 순번 또는 마감임박 표식, isImminent: 마감임박 강조 여부
     function createTaskItem(task, numLabel, isImminent) {
             const li = document.createElement('li');
             if (task.isCompleted) li.classList.add('completed');
@@ -1300,13 +1384,13 @@
 
             const typeHtml = buildTypeHtml(task);
 
-            const impHtml = task.isImportant ? '<span class="badge" style="background-color:#f59f00;">⭐ 우선</span>' : '';
-            const imminentHtml = isImminent ? '<span class="imp-icon" style="color:#f76707;">⏰ 마감임박</span>' : '';
+            const impHtml = task.isImportant ? '<span class="badge flag-imp">우선</span>' : '';
+            const imminentHtml = isImminent ? '<span class="imp-icon">마감임박</span>' : '';
 
             let memoHtml = '';
             if (task.memo) {
                 const onelineMemo = task.memo.replace(/\n/g, " / ");
-                memoHtml = `<div class="task-memo">└ ${onelineMemo}</div>`;
+                memoHtml = `<div class="task-memo">${onelineMemo}</div>`;
             }
 
             let statusMsg = '';
@@ -1317,11 +1401,11 @@
                 const day = delDate.getDate();
                 const hours = delDate.getHours().toString().padStart(2, '0');
                 const minutes = delDate.getMinutes().toString().padStart(2, '0');
-                statusMsg = `<span style="font-size:11px; color:#aaa; margin-left:auto;">(${month}/${day} ${hours}:${minutes} 삭제)</span>`;
+                statusMsg = `<span class="status-msg">${month}/${day} ${hours}:${minutes} 삭제</span>`;
             }
 
             const pinBtnClass = task.isPinned ? 'inline-pin-btn active' : 'inline-pin-btn';
-            const pinIcon = '📌';
+            const pinIcon = '<span class="pin-mark"></span>';
 
             const taskStr = encodeURIComponent(JSON.stringify(task));
 
@@ -1330,8 +1414,8 @@
 
             function syncSwipeBgFromLi() {
                 const completed = li.getAttribute('data-completed') === 'true';
-                swipeBg.style.backgroundColor = completed ? '#fab005' : '#40c057';
-                swipeBg.textContent = completed ? '↩ 복구' : '✔ 완료';
+                swipeBg.style.backgroundColor = completed ? 'var(--zm-muted)' : 'var(--zm-ink)';
+                swipeBg.textContent = completed ? '복구' : '완료';
             }
             syncSwipeBgFromLi();
 
