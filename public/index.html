@@ -28,6 +28,13 @@
             --zm-text: #201e1d;
             --zm-text-soft: #444141;
             --zm-on-ink: #f3f2f2;      /* 잉크/패널 위 텍스트 */
+            /* 강조 배지 전용 다크 톤 — 저채도·어두움. 적색 계열 제외(적색은 이상치 전용),
+               After10 패널 남색(#242a38)과 색상환에서 떨어뜨려 서로 겹치지 않게 잡았다.
+               모두 --zm-on-ink 글자와 대비 6:1 이상. */
+            --zm-tone-amber: #6b4a17;  /* ToDo '오늘' — 임박의 관습색인 앰버를 어둡게 */
+            --zm-tone-teal: #21454f;   /* 건강 혈액검사 */
+            --zm-tone-moss: #3f4a2a;   /* 건강 검진 */
+            --zm-tone-plum: #46304a;   /* 건강 노력 */
             /* 형태 */
             --zm-radius: 0px;          /* 시안은 직각 */
             --zm-shadow: none;
@@ -218,7 +225,8 @@
             background: transparent; color: var(--zm-text-soft); border-color: var(--zm-border);
         }
         .type-repeat { background: transparent; color: var(--zm-muted); border: 1px dashed var(--zm-muted-2); }
-        .flag-today { background: transparent; color: var(--zm-ink); border-color: var(--zm-ink); font-weight: 800; }
+        /* '오늘'만 다크 앰버로 채운다 — 목록에서 먼저 읽혀야 하는 유일한 상태 */
+        .flag-today { background: var(--zm-tone-amber); color: var(--zm-on-ink); border-color: var(--zm-tone-amber); font-weight: 800; }
         .flag-imp { background: transparent; color: var(--zm-ink); border-color: var(--zm-ink); font-weight: 800; box-shadow: inset 3px 0 0 var(--zm-ink); padding-left: 9px; }
         .badge.dday { font-family: var(--font-num); font-weight: 700; background: transparent; }
         .badge.dday-over { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
@@ -534,7 +542,10 @@
         .hl-rec-head { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .hl-rec-date { font-family: var(--font-num); font-size: 15px; font-weight: 800; color: var(--zm-ink); }
         .hl-rec-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: var(--zm-radius); background: var(--zm-bg); color: var(--zm-muted-3); border: 1px solid var(--zm-border); }
-        .hl-badge-blood, .hl-badge-checkup, .hl-badge-effort, .hl-badge-endoscopy, .hl-badge-other { background: var(--zm-bg); color: var(--zm-muted-3); }  /* 배지는 무채 */
+        /* 기록 종류 배지 — 종류별 다크 톤. 목록에서 혈액/검진/노력이 한눈에 갈리게 */
+        .hl-badge-blood { background: var(--zm-tone-teal); color: var(--zm-on-ink); border-color: var(--zm-tone-teal); }
+        .hl-badge-checkup, .hl-badge-endoscopy { background: var(--zm-tone-moss); color: var(--zm-on-ink); border-color: var(--zm-tone-moss); }
+        .hl-badge-effort, .hl-badge-other { background: var(--zm-tone-plum); color: var(--zm-on-ink); border-color: var(--zm-tone-plum); }
         /* 종류별 카드 구분 — 좌측 바 굵기/색 차이 */
         .hl-rec-checkup { border-left: 3px solid var(--zm-muted); }
         .hl-rec-effort { border-left: 3px solid var(--zm-ink); }
