@@ -3070,6 +3070,23 @@
             const tsArr = pts.map(p => p.ts);
             let tMin = Math.min.apply(null, tsArr), tMax = Math.max.apply(null, tsArr);
             const forced = (opts.xMin != null && opts.xMax != null && opts.xMin !== opts.xMax);  // 묶음 보기: 공통 x범위
+
+            // 개별 보기(띠 표시)에서는 띠에 그릴 검진·노력 날짜까지 축에 넣는다.
+            // 축을 혈액검사 범위로만 두면 그 밖의 기록이 띠 필터에서 조용히 빠진다
+            // (예: 마지막 혈액검사보다 늦은 검진). 실제 기록이 있는 날짜까지만 넓히고,
+            // 선택한 기간(3년/1년) 밖으로는 넓히지 않는다. 꺼둔 띠는 계산에서 제외한다.
+            const widen = !forced && !!opts.strips;
+            if (widen) {
+                const lo = (cutoff == null) ? -Infinity : cutoff;
+                const marks = [];
+                if (hlShowCheckup) hlCheckupPoints(hlPerson).forEach(p => { if (p.ts >= lo) marks.push(p.ts); });
+                if (hlShowEffort) hlEffortSpans(hlPerson).forEach(e => {
+                    if (e.start >= lo) marks.push(e.start);
+                    if (e.end != null && e.end >= lo) marks.push(e.end);   // 진행 중(end 없음)은 오른쪽 끝까지 그리므로 축을 늘리지 않는다
+                });
+                for (const t of marks) { if (t < tMin) tMin = t; if (t > tMax) tMax = t; }
+            }
+
             const single = !forced && (tMin === tMax);                                           // 점 1개/같은 날
             if (forced) { tMin = opts.xMin; tMax = opts.xMax; }
             else if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
@@ -3082,7 +3099,9 @@
                 grid: { display: false }, border: { color: PAL.grid },
                 ticks: xticks,
             };
-            if (forced || single) { xScale.min = tMin; xScale.max = tMax; }
+            // 넓힌 범위는 반드시 축에 직접 박아야 한다 — 비워두면 Chart.js가 bounds:'data'로
+            // 되돌려 혈액검사 데이터 범위만 잡는다(넓힌 의미가 없어진다).
+            if (forced || single || widen) { xScale.min = tMin; xScale.max = tMax; }
         } else {
             xScale = { grid: { display: false }, border: { color: PAL.grid }, ticks: { color: PAL.tick, font: { family: CHART_FONT, size: 11 } } };
         }
