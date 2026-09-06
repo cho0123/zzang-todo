@@ -35,6 +35,11 @@
             --zm-tone-teal: #21454f;   /* 건강 혈액검사 */
             --zm-tone-moss: #3f4a2a;   /* 건강 검진 */
             --zm-tone-plum: #46304a;   /* 건강 노력 */
+            /* After10 비교 모드 선 색 — 남색 패널(#242a38) 위에서 서로 확실히 갈리는 3색.
+               적색 계열은 쓰지 않고, 색상환에서 120도씩 떨어뜨렸다. 패널 대비 6:1 이상. */
+            --zm-cmp-1: #e8b04b;       /* 앰버 */
+            --zm-cmp-2: #5ec8c8;       /* 청록 */
+            --zm-cmp-3: #a99bec;       /* 연보라 */
             /* 형태 */
             --zm-radius: 0px;          /* 시안은 직각 */
             --zm-shadow: none;
@@ -412,6 +417,16 @@
         /* 활성 버튼은 차트 패널과 같은 남색으로 (컨트롤+차트를 한 영역으로) */
         .a10-chip.active, .a10-chip2.active { background: var(--zm-panel-a10); color: var(--zm-on-ink); border-color: var(--zm-panel-a10); }
         .a10-chart-box { position: relative; height: 300px; margin-bottom: 14px; }
+        /* 비교 모드 — 색 옆에 선 모양(실선/파선/점선)도 함께 보여 색만으로 구분하지 않게 한다 */
+        .a10-chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 10px; }
+        .a10-legend-item { display: inline-flex; align-items: center; font-size: 12px; font-weight: 700; color: var(--zm-text-soft); }
+        .a10-legend-line { display: inline-block; width: 22px; height: 0; margin-right: 6px;
+            border-top: 3px solid currentColor; vertical-align: middle; }
+        .a10-legend-line.d2 { border-top-style: dashed; }
+        .a10-legend-line.d3 { border-top-style: dotted; }
+        .a10-swatch { display: inline-block; width: 9px; height: 9px; margin-right: 6px;
+            background: currentColor; vertical-align: middle; flex: none; }
+        .a10-chip2.cmp { display: inline-flex; align-items: center; }
         .a10-chart-stats { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; font-size: 13px; color: var(--zm-muted); }
         .a10-chart-stats b { color: var(--zm-ink); }
         .a10-chart-stats .up, .a10-chart-stats .down { color: var(--zm-ink); }  /* 일지 탭은 경보색 없이 무채 */
@@ -970,11 +985,17 @@
     <div id="a10ViewChart" style="display:none">
         <div class="a10-concept">일지에 기록된 날의 지표 흐름</div>
 
+        <!-- 보기 방식: 단일 / 비교(최대 3개 겹쳐 보기) -->
+        <div class="a10-chart-modes">
+            <button class="a10-chip active" data-cview="single" onclick="a10SetChartView('single')">단일</button>
+            <button class="a10-chip" data-cview="compare" onclick="a10SetChartView('compare')">비교</button>
+        </div>
+
         <!-- 지표 선택 (7종) -->
         <div class="a10-chart-metrics" id="a10ChartMetrics"></div>
 
-        <!-- 기간 모드 -->
-        <div class="a10-chart-modes">
+        <!-- 기간 모드 (단일에서만) -->
+        <div class="a10-chart-modes" id="a10ChartModes">
             <button class="a10-chip active" data-cmode="range" onclick="a10SetChartMode('range')">연속 구간</button>
             <button class="a10-chip" data-cmode="anniv" onclick="a10SetChartMode('anniv')">매년 같은 날</button>
         </div>
@@ -987,6 +1008,7 @@
             <button class="a10-chip2" data-crange="all" onclick="a10SetChartRange('all')">전체</button>
         </div>
 
+        <div class="a10-chart-legend" id="a10ChartLegend" style="display:none"></div>
         <div class="a10-chart-box"><canvas id="a10Chart"></canvas></div>
         <div class="a10-chart-stats" id="a10ChartStats"></div>
         <div id="a10ChartMsg"></div>
@@ -2185,10 +2207,31 @@
     let a10ChartMode = 'range';      // 'range' | 'anniv'
     let a10ChartRange = '1m';        // '1m' | '3m' | '1y' | 'all'
     let a10ChartInstance = null;
+    let a10ChartView = 'single';     // 'single' | 'compare'
+    let a10CompareKeys = ['usdkrw', 'spx'];   // 비교 모드에서 겹쳐 볼 지표 (최대 3개)
+    const A10_CMP_MAX = 3;
+    // 색만으로 구분하지 않도록 선 모양도 함께 다르게 한다(실선 / 파선 / 점선)
+    const A10_CMP_DASH = [[], [6, 3], [2, 3]];
+    function a10CmpColors() {
+        const cs = getComputedStyle(document.documentElement);
+        return ['--zm-cmp-1', '--zm-cmp-2', '--zm-cmp-3']
+            .map(n => cs.getPropertyValue(n).trim() || '#e8e4e4');
+    }
 
     window.a10SetChartMetric = function(k) { a10ChartMetric = k; a10RenderChart(); };
     window.a10SetChartMode   = function(m) { a10ChartMode = m; a10RenderChart(); };
     window.a10SetChartRange  = function(r) { a10ChartRange = r; a10RenderChart(); };
+    window.a10SetChartView   = function(v) { a10ChartView = v; a10RenderChart(); };
+    window.a10ToggleCompare  = function(k) {
+        const i = a10CompareKeys.indexOf(k);
+        if (i >= 0) a10CompareKeys.splice(i, 1);
+        else if (a10CompareKeys.length >= A10_CMP_MAX) {
+            document.getElementById('a10ChartMsg').innerHTML =
+                `<div class="a10-hint">한 번에 ${A10_CMP_MAX}개까지 겹쳐 볼 수 있어요.<br>선택된 지표를 하나 해제한 뒤 골라주세요.</div>`;
+            return;
+        } else a10CompareKeys.push(k);
+        a10RenderChart();
+    };
 
     // Date → YYYY-MM-DD (로컬)
     function a10DateToYmd(d) {
@@ -2196,13 +2239,14 @@
     }
 
     // 현재 선택에 맞는 데이터 포인트 목록 (오름차순)
-    function a10ChartData() {
-        const metric = a10ChartMetric;
+    // metric 생략 시 단일 보기의 선택 지표. forceRange면 '매년 같은 날'을 무시한다(비교 모드용).
+    function a10ChartData(metric, forceRange) {
+        const key = metric || a10ChartMetric;
         let items = a10Entries
-            .filter(e => e.market && e.market[metric] != null)
-            .map(e => ({ ymd: e.id, value: e.market[metric] }));
+            .filter(e => e.market && e.market[key] != null)
+            .map(e => ({ ymd: e.id, value: e.market[key] }));
 
-        if (a10ChartMode === 'anniv') {
+        if (!forceRange && a10ChartMode === 'anniv') {
             const md = todayStr().substring(5);                 // 오늘의 MM-DD
             items = items.filter(e => e.ymd.substring(5) === md);
         } else if (a10ChartRange !== 'all') {
@@ -2215,19 +2259,35 @@
         return items;
     }
 
-    // 지표 선택 버튼 렌더 (active 반영)
+    // 지표 선택 버튼 렌더 (active 반영). 비교 모드에서는 여러 개를 켜고 색을 함께 보여준다.
     function a10BuildMetricBtns() {
-        document.getElementById('a10ChartMetrics').innerHTML = Object.keys(A10_METRICS).map(k =>
-            `<button class="a10-chip2${k === a10ChartMetric ? ' active' : ''}" onclick="a10SetChartMetric('${k}')">${A10_METRICS[k].label}</button>`
-        ).join('');
+        const el = document.getElementById('a10ChartMetrics');
+        if (a10ChartView === 'compare') {
+            const colors = a10CmpColors();
+            el.innerHTML = Object.keys(A10_METRICS).map(k => {
+                const i = a10CompareKeys.indexOf(k);
+                return `<button class="a10-chip2 cmp${i >= 0 ? ' active' : ''}" onclick="a10ToggleCompare('${k}')">`
+                    + (i >= 0 ? `<i class="a10-swatch" style="color:${colors[i]}"></i>` : '')
+                    + `${A10_METRICS[k].label}</button>`;
+            }).join('');
+        } else {
+            el.innerHTML = Object.keys(A10_METRICS).map(k =>
+                `<button class="a10-chip2${k === a10ChartMetric ? ' active' : ''}" onclick="a10SetChartMetric('${k}')">${A10_METRICS[k].label}</button>`
+            ).join('');
+        }
     }
 
     function a10RenderChart() {
         // 컨트롤 상태 갱신
+        const compare = a10ChartView === 'compare';
         a10BuildMetricBtns();
+        document.querySelectorAll('[data-cview]').forEach(b => b.classList.toggle('active', b.dataset.cview === a10ChartView));
         document.querySelectorAll('[data-cmode]').forEach(b => b.classList.toggle('active', b.dataset.cmode === a10ChartMode));
         document.querySelectorAll('[data-crange]').forEach(b => b.classList.toggle('active', b.dataset.crange === a10ChartRange));
-        document.getElementById('a10ChartRanges').style.display = (a10ChartMode === 'range') ? 'flex' : 'none';
+        // '매년 같은 날'은 단일 보기 전용. 비교 모드는 늘 연속 구간이라 기간 칩만 남긴다.
+        document.getElementById('a10ChartModes').style.display = compare ? 'none' : 'flex';
+        document.getElementById('a10ChartRanges').style.display = (compare || a10ChartMode === 'range') ? 'flex' : 'none';
+        document.getElementById('a10ChartLegend').style.display = compare ? 'flex' : 'none';
 
         const msgEl = document.getElementById('a10ChartMsg');
         const statsEl = document.getElementById('a10ChartStats');
@@ -2241,6 +2301,7 @@
             msgEl.innerHTML = '<div class="a10-empty">차트 라이브러리를 불러오지 못했습니다.<br>네트워크 확인 후 다시 시도해주세요.</div>';
             return;
         }
+        if (compare) { a10RenderCompare(); return; }
 
         const items = a10ChartData();
         if (!items.length) {
@@ -2340,6 +2401,136 @@
         } else {
             msgEl.innerHTML = '';
         }
+    }
+
+    /* 비교 모드 — 단위가 다른 지표를 겹쳐 보기 위해 기간 첫 값을 100으로 두고 비율로 환산한다.
+       환산값은 세로축, 원래 값은 툴팁에 담는다. 최고/최저 강조는 선이 겹쳐 지저분해져 생략. */
+    function a10RenderCompare() {
+        const msgEl = document.getElementById('a10ChartMsg');
+        const statsEl = document.getElementById('a10ChartStats');
+        const legendEl = document.getElementById('a10ChartLegend');
+        const canvas = document.getElementById('a10Chart');
+        const colors = a10CmpColors();
+
+        // 기간 안에 데이터가 있는 지표만 남긴다(없는 것은 건너뛴다)
+        const series = [];
+        a10CompareKeys.forEach(k => {
+            const items = a10ChartData(k, true);
+            if (items.length) series.push({ key: k, cfg: A10_METRICS[k], items });
+        });
+        if (!series.length) {
+            canvas.style.display = 'none'; statsEl.innerHTML = ''; legendEl.innerHTML = '';
+            msgEl.innerHTML = a10CompareKeys.length
+                ? '<div class="a10-empty">선택한 지표의 데이터가 이 기간에 없습니다.<br>기간을 넓히거나 다른 지표를 골라보세요.</div>'
+                : '<div class="a10-empty">비교할 지표를 하나 이상 선택해주세요.</div>';
+            return;
+        }
+        canvas.style.display = '';
+        msgEl.innerHTML = '';
+
+        const A10_FONT = 'Archivo';
+        const useTime = hlDateAdapterOk() && series.every(s => s.items.every(e => hlDateTs(e.ymd) != null));
+        // 등간격 폴백에서 쓸 날짜 합집합 (지표마다 기록된 날이 다를 수 있다)
+        const allDates = [...new Set([].concat.apply([], series.map(s => s.items.map(e => e.ymd))))].sort();
+
+        const datasets = series.map((s, i) => {
+            const base = s.items[0].value;
+            const norm = v => (base ? v / base * 100 : 100);
+            s.byDate = {};
+            s.items.forEach(e => { s.byDate[e.ymd] = e.value; });
+            const data = useTime
+                ? s.items.map(e => ({ x: hlDateTs(e.ymd), y: norm(e.value), v: e.value, d: e.ymd }))
+                : allDates.map(d => (s.byDate[d] != null ? norm(s.byDate[d]) : null));
+            return {
+                label: s.cfg.label, data,
+                borderColor: colors[i], backgroundColor: 'transparent',
+                borderWidth: 2, borderDash: A10_CMP_DASH[i],
+                pointBackgroundColor: colors[i], pointBorderColor: 'transparent',
+                pointRadius: 2, pointHoverRadius: 5,
+                tension: 0.25, fill: false, spanGaps: true,
+            };
+        });
+
+        let xScale;
+        if (useTime) {
+            const tsAll = [].concat.apply([], series.map(s => s.items.map(e => hlDateTs(e.ymd))));
+            let tMin = Math.min.apply(null, tsAll), tMax = Math.max.apply(null, tsAll);
+            const single = (tMin === tMax);   // 점이 하나뿐이면 폭이 0이라 밀리초 눈금이 생긴다
+            if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
+            const tu = chartTimeUnit(tMin, tMax);
+            const xticks = { autoSkip: true, maxRotation: 0, maxTicksLimit: CHART_MAX_TICKS, color: '#9b9797', font: { family: A10_FONT, size: 11 } };
+            if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }
+            xScale = {
+                type: 'time', time: { unit: tu.unit, displayFormats: { [tu.unit]: tu.fmt } },
+                grid: { display: false }, border: { color: '#444141' }, ticks: xticks,
+            };
+            if (single) { xScale.min = tMin; xScale.max = tMax; }
+        } else {
+            xScale = { grid: { display: false }, border: { color: '#444141' }, ticks: { color: '#9b9797', font: { family: A10_FONT, size: 11 } } };
+        }
+
+        // 시작점(100) 자리에 기준선을 하나 그어 오르내림을 바로 읽게 한다
+        const basePlugin = {
+            id: 'a10CmpBase',
+            beforeDatasetsDraw(chart) {
+                const ys = chart.scales.y, ca = chart.chartArea;
+                if (!ys || !ca) return;
+                const y = ys.getPixelForValue(100);
+                if (y < ca.top || y > ca.bottom) return;
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.strokeStyle = 'rgba(232,228,228,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+                ctx.beginPath(); ctx.moveTo(ca.left, y); ctx.lineTo(ca.right, y); ctx.stroke();
+                ctx.restore();
+            }
+        };
+
+        a10ChartInstance = new Chart(canvas, {
+            type: 'line',
+            data: { labels: useTime ? undefined : allDates.map(d => d.substring(5).replace('-', '/')), datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'nearest', intersect: false },
+                plugins: {
+                    legend: { display: false },   // 범례는 차트 위 HTML로 그린다(선 모양까지 보여주려고)
+                    tooltip: {
+                        callbacks: {
+                            title: ctx => {
+                                const r = ctx[0].raw;
+                                return (r && typeof r === 'object' && r.d) ? r.d : (allDates[ctx[0].dataIndex] || '');
+                            },
+                            label: ctx => {
+                                const s = series[ctx.datasetIndex];
+                                const r = ctx.raw;
+                                const orig = (r && typeof r === 'object') ? r.v : s.byDate[allDates[ctx.dataIndex]];
+                                if (orig == null) return null;
+                                return `${s.cfg.label}: ${s.cfg.fmt(orig)} (${ctx.parsed.y.toFixed(1)})`;
+                            },
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: { callback: v => a10FmtNum(v, 0), color: '#9b9797', font: { family: A10_FONT, size: 10 } },
+                        grid: { color: '#444141', tickBorderDash: [2, 2] }, border: { display: false },
+                    },
+                    x: xScale
+                }
+            },
+            plugins: [basePlugin],
+        });
+
+        legendEl.innerHTML = series.map((s, i) =>
+            `<span class="a10-legend-item"><i class="a10-legend-line d${i + 1}" style="color:${colors[i]}"></i>${s.cfg.label}</span>`
+        ).join('');
+
+        // 하단 요약: 지표별 변화율만
+        statsEl.innerHTML = series.map((s, i) => {
+            const first = s.items[0].value, last = s.items[s.items.length - 1].value;
+            const chg = (s.items.length >= 2 && first) ? (last - first) / first * 100 : null;
+            return `<span><i class="a10-swatch" style="color:${colors[i]}"></i>${s.cfg.label}`
+                + `<b>${chg == null ? '—' : (chg > 0 ? '+' : '') + chg.toFixed(2) + '%'}</b></span>`;
+        }).join('');
     }
 
     // 타임라인 항목 클릭 → 해당 날짜를 작성 폼으로
