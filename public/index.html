@@ -35,11 +35,16 @@
             --zm-tone-teal: #21454f;   /* 건강 혈액검사 */
             --zm-tone-moss: #3f4a2a;   /* 건강 검진 */
             --zm-tone-plum: #46304a;   /* 건강 노력 */
-            /* After10 비교 모드 선 색 — 남색 패널(#242a38) 위에서 서로 확실히 갈리는 3색.
-               적색 계열은 쓰지 않고, 색상환에서 120도씩 떨어뜨렸다. 패널 대비 6:1 이상. */
-            --zm-cmp-1: #e8b04b;       /* 앰버 */
-            --zm-cmp-2: #5ec8c8;       /* 청록 */
-            --zm-cmp-3: #a99bec;       /* 연보라 */
+            /* 여러 계열을 겹쳐 그릴 때 쓰는 선 색 (After10 비교 / 건강 묶음 겹쳐보기 공용).
+               어두운 패널(#242a38·#2d2b2b) 위에서 서로 갈리도록 색상환에 흩어 놓았고,
+               적색 계열은 뺐다 — 적색은 이상치 표식(--zm-accent) 몫이라 헷갈리면 안 된다.
+               패널 대비는 모두 5.5:1 이상. */
+            --zm-series-1: #e8b04b;    /* 앰버 */
+            --zm-series-2: #5ec8c8;    /* 청록 */
+            --zm-series-3: #a99bec;    /* 연보라 */
+            --zm-series-4: #8fc866;    /* 연두 */
+            --zm-series-5: #6fa8dc;    /* 하늘 */
+            --zm-series-6: #d78fd0;    /* 연자주 */
             /* 형태 */
             --zm-radius: 0px;          /* 시안은 직각 */
             --zm-shadow: none;
@@ -424,6 +429,7 @@
             border-top: 3px solid currentColor; vertical-align: middle; }
         .a10-legend-line.d2 { border-top-style: dashed; }
         .a10-legend-line.d3 { border-top-style: dotted; }
+        .a10-legend-line.d4 { border-top-width: 5px; border-top-style: double; }
         .a10-swatch { display: inline-block; width: 9px; height: 9px; margin-right: 6px;
             background: currentColor; vertical-align: middle; flex: none; }
         .a10-chip2.cmp { display: inline-flex; align-items: center; }
@@ -462,6 +468,21 @@
         .hl-watch-note { font-size: 12px; color: var(--zm-muted); line-height: 1.7; margin-bottom: 14px;
             padding: 10px 12px; border: 1px dashed var(--zm-border); }
         .hl-group-title { font-family: var(--font-title); font-size: 13px; font-weight: 700; color: var(--zm-ink); margin-bottom: 4px; }
+        /* 묶음 보기 — 위쪽 추세 겹쳐보기 */
+        .hl-ov-head {
+            display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
+            font-family: var(--font-title); font-size: 14px; font-weight: 900; color: var(--zm-ink);
+            padding-bottom: 8px; margin-bottom: 12px; border-bottom: 2px solid var(--zm-ink);
+        }
+        .hl-ov-head2 { margin-top: 28px; }
+        .hl-ov-note { font-family: var(--font-body); font-size: 11px; font-weight: 600; color: var(--zm-muted); word-break: keep-all; }
+        .hl-ov-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 10px; }
+        #hlGroupOverlay .a10-chart-box {
+            background: var(--zm-panel); border: 2px solid var(--zm-ink); border-radius: var(--zm-radius);
+            padding: 14px 14px 10px; height: 300px; box-sizing: border-box; margin-bottom: 0;
+        }
+        @media (max-width: 600px) { #hlGroupOverlay .a10-chart-box { height: 260px; } }
+        #hlOvMsg .a10-empty, #hlOvMsg .a10-hint { margin-top: 12px; }
         .hl-group-box { position: relative; height: 175px; }
         @media (max-width: 600px) { .hl-group-grid { grid-template-columns: 1fr; } }
 
@@ -1122,6 +1143,15 @@
         <!-- 묶음 보기 -->
         <div id="hlChartGroup" style="display:none">
             <div class="hl-types" id="hlGroupSel"></div>
+            <!-- 위: 추세 겹쳐보기 (기간 첫 값을 100으로 맞춘 상대 흐름) -->
+            <div id="hlGroupOverlay">
+                <div class="hl-ov-head">추세 겹쳐보기<span class="hl-ov-note">기간 첫 값을 100으로 맞춘 상대 흐름 · 참고치를 벗어난 시점은 큰 점</span></div>
+                <div class="hl-ov-legend" id="hlOvLegend"></div>
+                <div class="a10-chart-box" id="hlOvBox"><canvas id="hlOvChart"></canvas></div>
+                <div id="hlOvMsg"></div>
+            </div>
+            <!-- 아래: 항목별 개별 차트 (참고치 밴드·이상치·최고/최저 그대로) -->
+            <div class="hl-ov-head hl-ov-head2">항목별 보기</div>
             <div id="hlGroupGrid" class="hl-group-grid"></div>
             <div id="hlGroupMsg"></div>
         </div>
@@ -2210,13 +2240,16 @@
     let a10ChartView = 'single';     // 'single' | 'compare'
     let a10CompareKeys = ['usdkrw', 'spx'];   // 비교 모드에서 겹쳐 볼 지표 (최대 3개)
     const A10_CMP_MAX = 3;
-    // 색만으로 구분하지 않도록 선 모양도 함께 다르게 한다(실선 / 파선 / 점선)
-    const A10_CMP_DASH = [[], [6, 3], [2, 3]];
-    function a10CmpColors() {
+    // 계열 색은 :root의 --zm-series-* 한 곳에서 관리한다(건강 묶음 겹쳐보기와 공용)
+    function chartSeriesColors(n) {
         const cs = getComputedStyle(document.documentElement);
-        return ['--zm-cmp-1', '--zm-cmp-2', '--zm-cmp-3']
-            .map(n => cs.getPropertyValue(n).trim() || '#e8e4e4');
+        const out = [];
+        for (let i = 1; i <= n; i++) out.push(cs.getPropertyValue('--zm-series-' + (((i - 1) % 6) + 1)).trim() || '#e8e4e4');
+        return out;
     }
+    // 범례(.a10-legend-line.dN)와 짝이 맞아야 하므로 4가지만 쓰고 반복한다
+    const CHART_SERIES_DASH = [[], [6, 3], [2, 3], [9, 3, 2, 3]];
+    function a10CmpColors() { return chartSeriesColors(A10_CMP_MAX); }
 
     window.a10SetChartMetric = function(k) { a10ChartMetric = k; a10RenderChart(); };
     window.a10SetChartMode   = function(m) { a10ChartMode = m; a10RenderChart(); };
@@ -2444,7 +2477,7 @@
             return {
                 label: s.cfg.label, data,
                 borderColor: colors[i], backgroundColor: 'transparent',
-                borderWidth: 2, borderDash: A10_CMP_DASH[i],
+                borderWidth: 2, borderDash: CHART_SERIES_DASH[i],
                 pointBackgroundColor: colors[i], pointBorderColor: 'transparent',
                 pointRadius: 2, pointHoverRadius: 5,
                 tension: 0.25, fill: false, spanGaps: true,
@@ -3701,16 +3734,149 @@
         ).join('');
     }
 
+    /* 묶음 '추세 겹쳐보기' — 단위가 다른 항목을 한 차트에 얹기 위해 기간 첫 값을 100으로 맞춘다.
+       참고치 위치가 항목마다 달라 배경 밴드는 그릴 수 없으므로, 벗어난 시점만 큰 적색 점으로 찍는다.
+       (선 색에는 적색을 쓰지 않아 이상치 점과 헷갈리지 않는다) */
+    function hlRenderGroupOverlay(built, domain) {
+        const canvas = document.getElementById('hlOvChart');
+        const legendEl = document.getElementById('hlOvLegend');
+        const msgEl = document.getElementById('hlOvMsg');
+        const box = document.getElementById('hlOvBox');
+        const OUT = getComputedStyle(document.documentElement).getPropertyValue('--zm-accent').trim() || '#ec3013';
+        const CHART_FONT = 'Archivo';
+        const PAL = { grid: '#444141', tick: '#9b9797', ring: '#f3f2f2' };
+
+        // 정규화 기준점이 없는(기록 1건 이하) 항목은 겹쳐보기에서 건너뛴다
+        const series = built.filter(b => b.res.meta.pts.length >= 2);
+        if (!series.length) {
+            box.style.display = 'none'; legendEl.innerHTML = '';
+            msgEl.innerHTML = '<div class="a10-hint">겹쳐 볼 항목이 없습니다.<br>상대 흐름을 그리려면 항목마다 기록이 2건 이상 필요합니다.</div>';
+            return;
+        }
+        box.style.display = '';
+        msgEl.innerHTML = '';
+
+        const colors = chartSeriesColors(series.length);
+        const useTime = series.every(b => b.res.meta.useTime);
+        // 등간격 폴백에서 쓸 날짜 합집합 (항목마다 검사한 날이 다를 수 있다)
+        const allDates = [...new Set([].concat.apply([], series.map(b => b.res.meta.pts.map(p => p.date))))].sort();
+
+        const datasets = series.map((b, i) => {
+            const m = b.res.meta, pts = m.pts, base = pts[0].value;
+            const norm = v => (base ? v / base * 100 : 100);
+            const abn = v => (m.refLow != null && v < m.refLow) || (m.refHigh != null && v > m.refHigh);
+            const byDate = {}; pts.forEach(p => { byDate[p.date] = p.value; });
+            b.byDate = byDate; b.abn = abn; b.norm = norm;
+            const rows = useTime ? pts : allDates.map(d => (byDate[d] != null ? { date: d, value: byDate[d] } : null));
+            return {
+                label: b.item,
+                data: useTime
+                    ? pts.map(p => ({ x: p.ts, y: norm(p.value), v: p.value, d: p.date, a: abn(p.value) }))
+                    : rows.map(r => (r ? norm(r.value) : null)),
+                borderColor: colors[i], backgroundColor: 'transparent',
+                borderWidth: 2, borderDash: CHART_SERIES_DASH[i % CHART_SERIES_DASH.length],
+                pointBackgroundColor: rows.map(r => (r && abn(r.value) ? OUT : colors[i])),
+                pointBorderColor: rows.map(r => (r && abn(r.value) ? PAL.ring : 'transparent')),
+                pointBorderWidth: rows.map(r => (r && abn(r.value) ? 2 : 0)),
+                pointRadius: rows.map(r => (r && abn(r.value) ? 5 : 2)),
+                pointHoverRadius: rows.map(r => (r && abn(r.value) ? 7 : 5)),
+                tension: 0.2, fill: false, spanGaps: true,
+            };
+        });
+
+        let xScale;
+        if (useTime) {
+            let tMin, tMax;
+            if (domain) { tMin = domain.xMin; tMax = domain.xMax; }
+            else {
+                const ts = [].concat.apply([], series.map(b => b.res.meta.pts.map(p => p.ts))).filter(t => t != null);
+                tMin = Math.min.apply(null, ts); tMax = Math.max.apply(null, ts);
+            }
+            const single = (tMin === tMax);   // 폭이 0이면 밀리초 눈금이 생긴다
+            if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
+            const tu = chartTimeUnit(tMin, tMax);
+            const xticks = { autoSkip: true, maxRotation: 0, maxTicksLimit: CHART_MAX_TICKS, color: PAL.tick, font: { family: CHART_FONT, size: 11 } };
+            if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }
+            xScale = {
+                type: 'time', time: { unit: tu.unit, displayFormats: { [tu.unit]: tu.fmt } },
+                grid: { display: false }, border: { color: PAL.grid }, ticks: xticks,
+                min: tMin, max: tMax,
+            };
+        } else {
+            xScale = { grid: { display: false }, border: { color: PAL.grid }, ticks: { color: PAL.tick, font: { family: CHART_FONT, size: 11 } } };
+        }
+
+        // 시작점(100) 기준선 — 오르내림을 바로 읽으라고
+        const basePlugin = {
+            id: 'hlOvBase',
+            beforeDatasetsDraw(chart) {
+                const ys = chart.scales.y, ca = chart.chartArea;
+                if (!ys || !ca) return;
+                const y = ys.getPixelForValue(100);
+                if (y < ca.top || y > ca.bottom) return;
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.strokeStyle = 'rgba(232,228,228,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+                ctx.beginPath(); ctx.moveTo(ca.left, y); ctx.lineTo(ca.right, y); ctx.stroke();
+                ctx.restore();
+            }
+        };
+
+        try {
+            hlGroupCharts.push(new Chart(canvas, {
+                type: 'line',
+                data: { labels: useTime ? undefined : allDates.map(d => d.substring(2).replace(/-/g, '/')), datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', intersect: false },
+                    plugins: {
+                        legend: { display: false },   // 범례는 선 모양까지 보여주려고 HTML로 그린다
+                        tooltip: {
+                            callbacks: {
+                                title: ctx => {
+                                    const r = ctx[0].raw;
+                                    return (r && typeof r === 'object' && r.d) ? r.d : (allDates[ctx[0].dataIndex] || '');
+                                },
+                                label: ctx => {
+                                    const b = series[ctx.datasetIndex], m = b.res.meta;
+                                    const r = ctx.raw;
+                                    const orig = (r && typeof r === 'object') ? r.v : b.byDate[allDates[ctx.dataIndex]];
+                                    if (orig == null) return null;
+                                    const unit = m.unit ? ' ' + m.unit : '';
+                                    return `${b.item}: ${orig}${unit} (${ctx.parsed.y.toFixed(1)})`
+                                        + (b.abn(orig) ? ' · 참고치 벗어남' : '');
+                                },
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { ticks: { color: PAL.tick, font: { family: CHART_FONT, size: 10 } }, grid: { color: PAL.grid, tickBorderDash: [2, 2] }, border: { display: false } },
+                        x: xScale
+                    }
+                },
+                plugins: [basePlugin],
+            }));
+        } catch (e) { console.error('겹쳐보기 차트 실패:', e); }
+
+        legendEl.innerHTML = series.map((b, i) =>
+            `<span class="a10-legend-item"><i class="a10-legend-line d${(i % CHART_SERIES_DASH.length) + 1}" style="color:${colors[i]}"></i>${hlEsc(b.item)}</span>`
+        ).join('');
+    }
+
     // 묶음 보기: 묶음 안 항목들을 작은 선차트로 배치. x축(기간)은 전 항목 공통으로 맞춘다.
     function hlRenderGroup() {
         hlBuildGroupSel();
         const grid = document.getElementById('hlGroupGrid');
         const msg = document.getElementById('hlGroupMsg');
+        const ovWrap = document.getElementById('hlGroupOverlay');
+        const ovHead2 = document.querySelector('.hl-ov-head2');
         hlDestroyGroupCharts();
         grid.innerHTML = '';
+        document.getElementById('hlOvLegend').innerHTML = '';
+        document.getElementById('hlOvMsg').innerHTML = '';
 
         const grp = HL_GROUPS[hlGroupKey];
-        if (!grp) { msg.innerHTML = ''; return; }
+        if (!grp) { msg.innerHTML = ''; ovWrap.style.display = 'none'; ovHead2.style.display = 'none'; return; }
 
         // 1) 각 항목 config를 만들고, time scale로 그릴 수 있는 항목들의 x 범위를 모은다
         const built = [];
@@ -3723,6 +3889,7 @@
         }
 
         if (!built.length) {
+            ovWrap.style.display = 'none'; ovHead2.style.display = 'none';
             msg.innerHTML = `<div class="a10-empty">${hlPerson}의 ‘${hlEsc(grp.label)}’ 묶음에는 표시할 수치가 없습니다.<br>기간을 ‘전체’로 바꿔보거나 다른 묶음을 선택하세요.</div>`;
             return;
         }
@@ -3730,7 +3897,11 @@
 
         const haveDomain = gMin !== Infinity && gMax !== -Infinity && gMin !== gMax;
 
-        // 2) 공통 x범위를 강제해 다시 만들어 그린다(위아래 정렬)
+        // 2) 위쪽 추세 겹쳐보기 (개별 차트와 같은 x범위를 쓴다)
+        ovWrap.style.display = ''; ovHead2.style.display = '';
+        hlRenderGroupOverlay(built, haveDomain ? { xMin: gMin, xMax: gMax } : null);
+
+        // 3) 공통 x범위를 강제해 다시 만들어 그린다(위아래 정렬)
         for (const b of built) {
             const res = haveDomain ? hlMakeChartConfig(b.item, { xMin: gMin, xMax: gMax }) : b.res;
             if (res.kind !== 'ok') continue;
