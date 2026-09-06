@@ -502,7 +502,7 @@
         .hl-effort-effect { display: flex; gap: 2px; margin-bottom: 10px; }
         .hl-chip.effect { padding: 8px 14px; }
         /* 차트 아래 노력/검진 띠 */
-        #hlStrips { margin-top: 10px; }
+        #hlStrips { margin-top: 10px; position: relative; }   /* 상세 팝오버의 위치 기준 */
         .hl-strip { position: relative; margin-top: 8px; }
         .hl-strip-label { font-size: 10px; letter-spacing: 0.06em; color: var(--zm-muted); margin-bottom: 4px; }
         /* 띠는 차트 폭 안에서만 그린다 — 넘친 요소가 페이지 가로 스크롤을 만들지 않게 */
@@ -521,6 +521,44 @@
         /* 라벨이 길면 말줄임 — 전체 내용은 title 툴팁으로 */
         .hl-pt-label { font-size: 10px; color: var(--zm-text-soft); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
         .hl-rec-sign { font-family: var(--font-num); font-weight: 800; color: var(--zm-muted); }  /* 목록 노력 +/− */
+
+        /* 띠 항목 상세 — 누르면 열리는 팝오버.
+           소견·메모가 길 수 있어 여러 줄로 읽혀야 하고, 모바일에는 마우스오버가 없어 클릭(탭) 방식이다. */
+        .hl-pt, .hl-bar, .hl-bar-tag { cursor: pointer; }
+        .hl-pop {
+            position: absolute; z-index: 20; display: none; left: 0; top: 0;
+            width: max-content; max-width: min(320px, 100%);
+            background: var(--zm-card); border: 2px solid var(--zm-ink); border-radius: var(--zm-radius);
+            padding: 12px 30px 12px 14px; box-sizing: border-box;
+        }
+        .hl-pop.open { display: block; }
+        .hl-pop-head {
+            display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px;
+            margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--zm-border);
+        }
+        .hl-pop-date { font-family: var(--font-num); font-size: 13px; font-weight: 800; color: var(--zm-ink); }
+        .hl-pop-kind {
+            font-size: 10px; font-weight: 700; letter-spacing: 0.06em; padding: 1px 6px; white-space: nowrap;
+            background: var(--zm-tone-moss); border: 1px solid var(--zm-tone-moss); color: var(--zm-on-ink);
+        }
+        .hl-pop-kind.effort { background: var(--zm-tone-plum); border-color: var(--zm-tone-plum); }
+        .hl-pop-title {
+            font-family: var(--font-title); font-size: 14px; font-weight: 700; color: var(--zm-ink);
+            line-height: 1.45; word-break: keep-all;
+        }
+        .hl-pop-sub { font-size: 12px; color: var(--zm-muted); margin-top: 3px; }
+        .hl-pop-note {
+            margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--zm-line);
+            font-size: 12px; line-height: 1.75; color: var(--zm-text-soft);
+            white-space: pre-wrap; word-break: break-word; max-height: 190px; overflow-y: auto;
+        }
+        .hl-pop-empty { margin-top: 8px; font-size: 12px; color: var(--zm-muted-2); }
+        .hl-pop-close {
+            position: absolute; top: 6px; right: 6px; flex: none; width: auto;
+            background: none; border: none; padding: 2px 5px; border-radius: var(--zm-radius);
+            font-size: 13px; line-height: 1; font-weight: 700; color: var(--zm-muted); cursor: pointer;
+        }
+        .hl-pop-close:hover { color: var(--zm-ink); }
 
         .hl-btnrow { display: flex; gap: 8px; margin: 10px 0; }
         .hl-analyze-btn { background: var(--zm-ink); color: var(--zm-on-ink); flex: none; padding: 11px 20px; border-radius: var(--zm-radius); }
@@ -924,6 +962,8 @@
             <div id="hlStrips">
                 <div class="hl-strip" id="hlEffortStrip" style="display:none"></div>
                 <div class="hl-strip" id="hlCheckupStrip" style="display:none"></div>
+                <!-- 띠 항목을 누르면 열리는 상세 (날짜·병원·검사·소견) -->
+                <div class="hl-pop" id="hlStripPop"></div>
             </div>
             <div id="hlChartMsg"></div>
             <div class="hl-chart-detail" id="hlChartDetail" style="display:none"></div>
@@ -2384,14 +2424,14 @@
     function hlEffortSpans(person) {
         return hlRecords
             .filter(r => r.person === person && hlNormType(r.type) === 'effort')
-            .map(r => ({ start: hlDateTs(r.date), end: r.endDate ? hlDateTs(r.endDate) : null, title: (r.title || r.note || '노력'), effect: hlEffortEffect(r) }))
+            .map(r => ({ id: r.id, start: hlDateTs(r.date), end: r.endDate ? hlDateTs(r.endDate) : null, title: (r.title || r.note || '노력'), effect: hlEffortEffect(r) }))
             .filter(e => e.start != null);
     }
     // 선택 인물의 '검진' 기록 → {ts, date, label}. 날짜를 못 읽으면 제외.
     function hlCheckupPoints(person) {
         return hlRecords
             .filter(r => r.person === person && hlNormType(r.type) === 'checkup')
-            .map(r => ({ ts: hlDateTs(r.date), date: r.date || '', label: (r.exam || '검진') }))
+            .map(r => ({ id: r.id, ts: hlDateTs(r.date), date: r.date || '', label: (r.exam || '검진') }))
             .filter(p => p.ts != null);
     }
 
@@ -2432,6 +2472,7 @@
                      hlPerson, hlChartRange, timeOk && Math.round(xs.min), timeOk && Math.round(xs.max)].join('|');
         if (chart.$stripKey === key) return;
         chart.$stripKey = key;
+        hlClosePop();   // 다시 그리면 열려 있던 상세는 기준 표식이 사라지므로 닫는다
         if (!timeOk) { effStrip.style.display = 'none'; chkStrip.style.display = 'none'; return; }
 
         effStrip.style.display = hlShowEffort ? '' : 'none';
@@ -2497,14 +2538,15 @@
                     const cls = b.e.effect === 'minus' ? 'hl-bar-minus' : 'hl-bar-plus';
                     const sign = b.e.effect === 'minus' ? '−' : '+';
                     const tip = hlAttr(sign + ' ' + b.e.title);
-                    h += '<div class="hl-bar ' + cls + (b.inside ? '' : ' hl-bar-slim') + '" title="' + tip +
-                         '" style="left:' + b.x1 + 'px;width:' + b.w + 'px;top:' + (b.row * ROW) + 'px">' +
+                    const rec = ' data-hlrec="' + hlAttr(b.e.id) + '"';
+                    h += '<div class="hl-bar ' + cls + (b.inside ? '' : ' hl-bar-slim') + '" title="' + tip + '"' + rec +
+                         ' style="left:' + b.x1 + 'px;width:' + b.w + 'px;top:' + (b.row * ROW) + 'px">' +
                          (b.inside ? hlEsc(b.e.title) : '') + '</div>';
                     if (!b.inside) {   // 막대가 좁으면 이름은 옆에 (자리 없는 쪽이면 왼쪽으로)
                         const pos = b.tagRight
                             ? 'left:' + (b.x1 + b.w + GAP) + 'px;max-width:' + Math.max(8, boxW - (b.x1 + b.w + GAP)) + 'px'
                             : 'right:' + Math.max(0, boxW - b.x1 + GAP) + 'px;max-width:' + Math.max(8, b.x1 - GAP) + 'px';
-                        h += '<div class="hl-bar-tag" title="' + tip + '" style="' + pos + ';top:' + (b.row * ROW) + 'px">' + hlEsc(b.e.title) + '</div>';
+                        h += '<div class="hl-bar-tag" title="' + tip + '"' + rec + ' style="' + pos + ';top:' + (b.row * ROW) + 'px">' + hlEsc(b.e.title) + '</div>';
                     }
                 }
                 effStrip.innerHTML = h + '</div>';
@@ -2540,7 +2582,8 @@
                         ? 'right:' + Math.max(-DOT / 2, boxW - (it.x + DOT)) + 'px;max-width:' + Math.max(DOT, it.x + DOT) + 'px'
                         : 'left:' + it.x + 'px;max-width:' + Math.max(DOT, boxW - it.x) + 'px';
                     h += '<div class="hl-pt' + (it.flip ? ' flip' : '') + '" title="' + hlAttr(it.p.date + ' · ' + it.p.label) +
-                         '" style="' + pos + ';top:' + (it.row * ROW) + 'px"><span class="hl-pt-dot"></span><span class="hl-pt-label">' + hlEsc(it.p.label) + '</span></div>';
+                         '" data-hlrec="' + hlAttr(it.p.id) + '" style="' + pos + ';top:' + (it.row * ROW) +
+                         'px"><span class="hl-pt-dot"></span><span class="hl-pt-label">' + hlEsc(it.p.label) + '</span></div>';
                 }
                 chkStrip.innerHTML = h + '</div>';
             }
@@ -2548,6 +2591,65 @@
 
         mctx.restore();   // 라벨 실측용으로 바꿔 쓴 폰트 원복
     }
+
+    /* ── 띠 항목 상세 팝오버 ────────────────────────────────────────
+       hover 툴팁이 아니라 클릭(탭) 팝오버로 연다:
+         · 소견·메모가 길어 여러 줄로 읽혀야 하는데 hover는 오래 붙들고 있어야 한다
+         · 모바일에는 마우스오버가 없다 — 클릭은 터치에서 그대로 동작한다
+         · 표식(7px 다이아몬드)이 작아 hover로 조준하기 어렵다
+       짧은 이름 확인은 기존 title 툴팁이 계속 담당한다(말줄임된 라벨 확인용). */
+    function hlClosePop() {
+        const pop = document.getElementById('hlStripPop');
+        if (pop) { pop.classList.remove('open'); pop.dataset.open = ''; }
+    }
+    function hlPopHtml(r) {
+        const t = hlNormType(r.type);
+        let head, title;
+        if (t === 'effort') {
+            const period = r.endDate ? `${hlEsc(r.date || '')} ~ ${hlEsc(r.endDate)}` : `${hlEsc(r.date || '')} ~ 진행 중`;
+            head = `<span class="hl-pop-date">${period}</span><span class="hl-pop-kind effort">노력 ${hlEffortEffect(r) === 'minus' ? '−' : '+'}</span>`;
+            title = hlEsc(r.title || '노력');
+        } else {
+            head = `<span class="hl-pop-date">${hlEsc(r.date || '')}</span><span class="hl-pop-kind">검진</span>`;
+            title = hlEsc(r.exam || '검진');
+        }
+        return `<button type="button" class="hl-pop-close" aria-label="닫기">✕</button>`
+             + `<div class="hl-pop-head">${head}</div>`
+             + `<div class="hl-pop-title">${title}</div>`
+             + (r.hospital ? `<div class="hl-pop-sub">${hlEsc(r.hospital)}</div>` : '')
+             + (r.note ? `<div class="hl-pop-note">${hlEsc(r.note)}</div>`
+                       : `<div class="hl-pop-empty">${t === 'effort' ? '메모 없음' : '소견 없음'}</div>`);
+    }
+    function hlOpenPop(anchor, id) {
+        const pop = document.getElementById('hlStripPop'), root = document.getElementById('hlStrips');
+        if (!pop || !root) return;
+        const key = id + '@' + anchor.style.top + anchor.style.left + anchor.style.right;
+        if (pop.classList.contains('open') && pop.dataset.open === key) { hlClosePop(); return; }  // 같은 항목 다시 누르면 닫기
+        const r = hlRecords.find(x => x.id === id);
+        if (!r) { hlClosePop(); return; }
+        pop.innerHTML = hlPopHtml(r);
+        pop.classList.add('open');
+        pop.dataset.open = key;
+        // 표식 아래에 열되, 오른쪽으로 넘치면 왼쪽으로 연다(가로 스크롤 방지)
+        const rr = root.getBoundingClientRect(), ar = anchor.getBoundingClientRect();
+        const popW = pop.getBoundingClientRect().width;
+        let left = ar.left - rr.left;
+        if (left + popW > rr.width) left = rr.width - popW;   // 소수점까지 맞춰 오른쪽 끝을 넘지 않게
+        pop.style.left = Math.max(0, left) + 'px';
+        pop.style.top = (ar.bottom - rr.top + 6) + 'px';
+    }
+    (function bindStripPop() {
+        const root = document.getElementById('hlStrips');
+        if (!root) return;
+        root.addEventListener('click', (e) => {
+            if (e.target.closest('.hl-pop-close')) { hlClosePop(); return; }
+            if (e.target.closest('.hl-pop')) return;              // 팝오버 안쪽(소견 스크롤·복사)은 유지
+            const el = e.target.closest('[data-hlrec]');
+            if (el) hlOpenPop(el, el.dataset.hlrec); else hlClosePop();
+        });
+        document.addEventListener('click', (e) => { if (!e.target.closest('#hlStrips')) hlClosePop(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hlClosePop(); });
+    })();
 
     window.hlToggleAnnot = function () {
         const e = document.getElementById('hlEffortToggle'), c = document.getElementById('hlCheckupToggle');
