@@ -474,7 +474,14 @@
             background: var(--zm-card); padding: 12px 14px 10px; }
         .wo-card.none { border-left-color: var(--zm-muted-2); }
         .wo-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .wo-name { font-family: var(--font-title); font-size: 16px; font-weight: 700; color: var(--zm-ink); }
+        /* 이름은 늘 입력칸이다 — 누르면 바로 고칠 수 있게(모드 전환 없음) */
+        .wo-name-input {
+            flex: 1; min-width: 0; min-height: 40px; padding: 0 8px; margin-left: -8px;
+            font-family: var(--font-title); font-size: 16px; font-weight: 700; color: var(--zm-ink);
+            background: transparent; border: 1px solid transparent; border-radius: var(--zm-radius);
+        }
+        .wo-name-input:hover { border-color: var(--zm-border); }
+        .wo-name-input:focus { outline: none; background: #fff; border-color: var(--zm-ink); }
         .wo-today {
             margin-left: auto; flex: none; width: auto; min-height: 44px; padding: 0 18px;
             font-size: 13px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer;
@@ -510,6 +517,44 @@
         .wo-recent-ago { margin-left: auto; font-family: var(--font-num); font-size: 12px; color: var(--zm-muted); }
         .wo-recent-none { font-size: 12px; color: var(--zm-muted-2); }
         .wo-empty { text-align: center; color: var(--zm-muted-2); font-size: 13px; line-height: 1.7; padding: 30px 12px; border: 1px dashed var(--zm-border); }
+
+        /* 삭제 — 실수로 누르면 곤란하니 조용하게, 대신 누를 수는 있게 */
+        .wo-del {
+            margin-left: auto; flex: none; width: auto; min-height: 32px; padding: 0 10px;
+            font-size: 11px; font-weight: 700; cursor: pointer;
+            background: transparent; color: var(--zm-muted-2); border: 1px dashed var(--zm-border);
+        }
+        .wo-recent-ago + .wo-del { margin-left: 10px; }
+        .wo-del:hover { background: var(--zm-ink); color: var(--zm-on-ink); border: 1px solid var(--zm-ink); }
+
+        /* 기구 추가 — 카드 자리에 점선 칸으로 들어간다 */
+        .wo-add { min-width: 0; border: 1px dashed var(--zm-border); background: transparent;
+            display: flex; align-items: center; justify-content: center; padding: 10px; min-height: 64px; }
+        .wo-add-open { flex: none; width: auto; min-height: 44px; padding: 0 18px; cursor: pointer;
+            background: transparent; color: var(--zm-muted); border: none; font-size: 13px; font-weight: 700; }
+        .wo-add-open:hover { color: var(--zm-ink); }
+        .wo-add-form { display: none; width: 100%; gap: 6px; }
+        .wo-add.open .wo-add-open { display: none; }
+        .wo-add.open .wo-add-form { display: flex; flex-wrap: wrap; }
+        .wo-add-input {
+            flex: 1 1 140px; min-width: 0; min-height: 44px; padding: 0 10px;
+            font-family: var(--font-body); font-size: 14px; color: var(--zm-text);
+            background: #fff; border: 1px solid var(--zm-border); border-radius: var(--zm-radius);
+        }
+        .wo-add-input:focus { outline: none; border-color: var(--zm-ink); }
+        .wo-add-ok { flex: none; width: auto; min-height: 44px; padding: 0 16px; font-weight: 700;
+            background: var(--zm-ink); color: var(--zm-on-ink); border: none; cursor: pointer; }
+        .wo-add-cancel { flex: none; width: auto; min-height: 44px; padding: 0 14px; font-weight: 700;
+            background: transparent; color: var(--zm-muted-2); border: 1px solid var(--zm-border); cursor: pointer; }
+        .wo-add-cancel:hover { color: var(--zm-text-soft); border-color: var(--zm-muted); }
+
+        /* 처음 진입 — 기본 목록을 넣을지 물어본다 */
+        .wo-seed { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+            border: 1px dashed var(--zm-border); padding: 14px; margin-bottom: 24px; }
+        .wo-seed-text { flex: 1 1 220px; font-size: 13px; line-height: 1.7; color: var(--zm-muted); word-break: keep-all; }
+        .wo-seed-btn { flex: none; width: auto; min-height: 44px; padding: 0 18px; font-weight: 700;
+            background: var(--zm-ink); color: var(--zm-on-ink); border: none; cursor: pointer; }
+        .wo-seed-btn:disabled { opacity: 0.5; cursor: default; }
 
         /* ===================== 로그인 게이트 ===================== */
         #loginScreen { width: 100%; max-width: 360px; margin-top: 8vh; }
@@ -3661,12 +3706,18 @@
        짱구 혼자 쓰는 기록이라 인물 구분이 없다.
        기록하는 값은 '그날 실제로 한 양'이 아니라 그 기구에서의 최고 기록이다.
        컨디션이 나빠 덜 한 날은 값을 그대로 두고, 갱신했을 때만 고친다.
-       문서는 기구당 하나(문서 id = 기구 이름)라 갱신이 곧 덮어쓰기다.
+
+       기구 목록은 사용자가 앱에서 직접 관리한다(추가·이름수정·삭제).
+       그래서 문서 id는 자동 생성값을 쓰고 이름은 machine 필드에 담는다 —
+       id에 이름을 쓰면 이름을 고칠 때 문서를 옮겨야 하고 기록이 끊긴다.
        ⚠ Firestore 보안 규칙에 workout 컬렉션을 추가해야 읽기/쓰기가 된다.
     ========================================================== */
     const WORKOUT_COLLECTION = "workout";
-    // 기구 목록 — 여기만 고치면 화면이 따라 바뀐다.
-    const WO_PARTS = [
+    // 부위는 몸의 구획이라 거의 바뀌지 않아 상수로 둔다.
+    // 다만 데이터에 없는 부위가 들어와도 묻히지 않도록, 실제 문서에 있는 부위는 뒤에 덧붙여 보여준다.
+    const WO_PART_ORDER = ['하체', '등', '가슴', '어깨', '팔', '코어'];
+    // 처음 진입했을 때 '기본 목록 넣기'로 한 번에 채워 넣을 기구들
+    const WO_SEED = [
         { part: '하체', machines: ['레그프레스', '레그익스텐션', '레그컬', '힙어브덕션'] },
         { part: '등',   machines: ['랫풀다운', '시티드로우'] },
         { part: '가슴', machines: ['체스트프레스', '펙덱플라이'] },
@@ -3674,8 +3725,6 @@
         { part: '팔',   machines: ['암컬', '트라이셉스'] },
         { part: '코어', machines: ['크런치', '백익스텐션'] },
     ];
-    const WO_MACHINE_PART = {};   // 기구 → 부위
-    WO_PARTS.forEach(g => g.machines.forEach(m => { WO_MACHINE_PART[m] = g.part; }));
     const WO_DEFAULT = { weight: 20, reps: 12, sets: 3 };
     const WO_STEP = { weight: 2.5, reps: 1, sets: 1 };
     const WO_MIN = { weight: 0, reps: 1, sets: 1 };
@@ -3683,13 +3732,11 @@
     const WO_LABEL = { weight: '무게', reps: '횟수', sets: '세트' };
     const WO_MAX_DATES = 10;   // 날짜는 최근 10개만 남긴다
 
-    let woData = {};            // 기구 → {weight, reps, sets, dates[]}
-    const woTimers = {};        // 기구 → 저장 디바운스 타이머
+    let woItems = [];           // [{id, machine, part, weight, reps, sets, dates[]}]
+    const woTimers = {};        // 문서 id → 저장 디바운스 타이머
 
-    function woEntry(m) {
-        if (!woData[m]) woData[m] = { weight: WO_DEFAULT.weight, reps: WO_DEFAULT.reps, sets: WO_DEFAULT.sets, dates: [] };
-        return woData[m];
-    }
+    function woItem(id) { return woItems.find(x => x.id === id) || null; }
+
     // 며칠 전인지 (오늘 0, 어제 1). 날짜를 못 읽으면 null.
     function woDaysAgo(dateStr) {
         const ts = hlDateTs(dateStr);
@@ -3712,21 +3759,35 @@
         const el = document.getElementById('woMsg');
         if (el) el.textContent = text || '';
     }
+    function woLastTs(it) {
+        const d = it.dates && it.dates.length ? it.dates[0] : null;
+        const ts = d ? hlDateTs(d) : null;
+        return ts == null ? -Infinity : ts;
+    }
+    // 상수 순서를 먼저, 데이터에만 있는 부위를 뒤에
+    function woPartList() {
+        const extra = [];
+        woItems.forEach(it => {
+            const p = it.part || '기타';
+            if (WO_PART_ORDER.indexOf(p) === -1 && extra.indexOf(p) === -1) extra.push(p);
+        });
+        return WO_PART_ORDER.concat(extra);
+    }
 
     async function woFetch() {
         const snap = await getDocs(collection(db, WORKOUT_COLLECTION));
-        woData = {};
+        woItems = [];
         snap.forEach(d => {
             const v = d.data() || {};
-            const m = v.machine || d.id;
-            // dates 배열이 없으면 예전 구조의 문서 — 무시한다
-            if (!Array.isArray(v.dates) || !WO_MACHINE_PART[m]) return;
-            woData[m] = {
+            const name = typeof v.machine === 'string' ? v.machine.trim() : '';
+            if (!name) return;
+            woItems.push({
+                id: d.id, machine: name, part: (v.part || '기타'),
                 weight: Number(v.weight) || 0,
                 reps: Number(v.reps) || 0,
                 sets: Number(v.sets) || 0,
-                dates: v.dates.filter(x => typeof x === 'string').sort().reverse().slice(0, WO_MAX_DATES),
-            };
+                dates: Array.isArray(v.dates) ? v.dates.filter(x => typeof x === 'string').sort().reverse().slice(0, WO_MAX_DATES) : [],
+            });
         });
     }
     async function woLoad() {
@@ -3741,18 +3802,18 @@
     }
 
     // 값이 바뀔 때마다 쓰지 않고 잠깐 모았다가 쓴다(±를 연타해도 쓰기는 한 번).
-    function woQueueSave(m, delay) {
-        clearTimeout(woTimers[m]);
-        woTimers[m] = setTimeout(() => { delete woTimers[m]; woSaveNow(m); }, delay);
+    function woQueueSave(id, delay) {
+        clearTimeout(woTimers[id]);
+        woTimers[id] = setTimeout(() => { delete woTimers[id]; woSaveNow(id); }, delay);
     }
-    async function woSaveNow(m) {
-        const e = woData[m];
-        if (!e) return;
+    async function woSaveNow(id) {
+        const it = woItem(id);
+        if (!it) return;
         try {
-            await setDoc(doc(db, WORKOUT_COLLECTION, m), {
-                machine: m, part: WO_MACHINE_PART[m] || '',
-                weight: e.weight, reps: e.reps, sets: e.sets,
-                dates: e.dates.slice(0, WO_MAX_DATES), updatedAt: Date.now(),
+            await updateDoc(doc(db, WORKOUT_COLLECTION, id), {
+                machine: it.machine, part: it.part,
+                weight: it.weight, reps: it.reps, sets: it.sets,
+                dates: it.dates.slice(0, WO_MAX_DATES), updatedAt: Date.now(),
             });
             woMsg('');
         } catch (err) {
@@ -3762,82 +3823,185 @@
     }
     // 화면을 떠날 때 아직 안 쓴 값이 있으면 바로 쓴다
     function woFlush() {
-        Object.keys(woTimers).forEach(m => { clearTimeout(woTimers[m]); delete woTimers[m]; woSaveNow(m); });
+        Object.keys(woTimers).forEach(id => { clearTimeout(woTimers[id]); delete woTimers[id]; woSaveNow(id); });
     }
     document.addEventListener('visibilitychange', () => { if (document.hidden) woFlush(); });
     window.addEventListener('pagehide', woFlush);
 
-    function woStatHtml(m, field, val) {
+    function woStatHtml(id, field, val) {
         return `<div class="wo-stat">
             <span class="wo-stat-label">${WO_LABEL[field]}</span>
             <div class="wo-stat-row">
-                <button type="button" class="wo-step-btn" onclick="woBump('${hlAttr(m)}','${field}',-1)">−</button>
+                <button type="button" class="wo-step-btn" onclick="woBump('${hlAttr(id)}','${field}',-1)">−</button>
                 <span class="wo-stat-val"><b>${val}</b>${WO_UNIT[field]}</span>
-                <button type="button" class="wo-step-btn" onclick="woBump('${hlAttr(m)}','${field}',1)">+</button>
+                <button type="button" class="wo-step-btn" onclick="woBump('${hlAttr(id)}','${field}',1)">+</button>
             </div>
         </div>`;
     }
-    function woCardInner(m) {
-        const e = woEntry(m);
-        const on = e.dates.indexOf(todayStr()) >= 0;
-        const recent = e.dates.slice(0, 3).map(woShortDate).join(' · ');
+    function woCardInner(it) {
+        const on = it.dates.indexOf(todayStr()) >= 0;
+        const recent = it.dates.slice(0, 3).map(woShortDate).join(' · ');
         return `<div class="wo-card-head">
-                <span class="wo-name">${hlEsc(m)}</span>
-                <button type="button" class="wo-today${on ? ' on' : ''}" onclick="woToggleToday('${hlAttr(m)}')">${on ? '오늘 완료' : '오늘'}</button>
+                <input type="text" class="wo-name-input" value="${hlAttr(it.machine)}" aria-label="기구 이름"
+                       oninput="woRename('${hlAttr(it.id)}',this.value)" onchange="woRenameDone('${hlAttr(it.id)}',this)">
+                <button type="button" class="wo-today${on ? ' on' : ''}" onclick="woToggleToday('${hlAttr(it.id)}')">${on ? '오늘 완료' : '오늘'}</button>
             </div>
             <div class="wo-stats">
-                ${woStatHtml(m, 'weight', e.weight)}
-                ${woStatHtml(m, 'reps', e.reps)}
-                ${woStatHtml(m, 'sets', e.sets)}
+                ${woStatHtml(it.id, 'weight', it.weight)}
+                ${woStatHtml(it.id, 'reps', it.reps)}
+                ${woStatHtml(it.id, 'sets', it.sets)}
             </div>
-            <div class="wo-recent">${e.dates.length
-                ? `<span class="wo-recent-dates">${hlEsc(recent)}</span><span class="wo-recent-ago">${hlEsc(woAgoLabel(e.dates[0]))}</span>`
-                : '<span class="wo-recent-none">아직 기록 없음</span>'}</div>`;
+            <div class="wo-recent">${it.dates.length
+                ? `<span class="wo-recent-dates">${hlEsc(recent)}</span><span class="wo-recent-ago">${hlEsc(woAgoLabel(it.dates[0]))}</span>`
+                : '<span class="wo-recent-none">아직 기록 없음</span>'}
+                <button type="button" class="wo-del" onclick="woDelete('${hlAttr(it.id)}')">삭제</button>
+            </div>`;
     }
 
     function woRenderList() {
-        document.getElementById('woParts').innerHTML = WO_PARTS.map(g => {
-            const rows = g.machines
-                .map(m => {
-                    const e = woData[m];
-                    const last = e && e.dates.length ? e.dates[0] : null;
-                    const ts = last ? hlDateTs(last) : null;
-                    return { m, last, ts: ts == null ? -Infinity : ts };
-                })
-                .sort((a, b) => a.ts - b.ts);   // 오래 안 한 것(기록 없음 포함)이 위로
+        const root = document.getElementById('woParts');
+        const seed = woItems.length ? '' :
+            `<div class="wo-seed">
+                <div class="wo-seed-text">기구가 아직 없습니다. 기본 목록으로 시작하거나, 부위별 ‘기구 추가’로 직접 넣으세요.</div>
+                <button type="button" class="wo-seed-btn" id="woSeedBtn" onclick="woSeed()">기본 목록 넣기</button>
+            </div>`;
 
-            const newest = rows.reduce((acc, r) => (r.last && r.ts > acc.ts ? r : acc), { ts: -Infinity, last: null });
-            const head = `<div class="wo-part-head">${hlEsc(g.part)}`
-                + `<span class="wo-part-last">${newest.last ? '마지막 ' + hlEsc(woAgoLabel(newest.last)) : '기록 없음'}</span></div>`;
-            const cards = rows.map(r =>
-                `<div class="wo-card${r.last ? '' : ' none'}" data-m="${hlAttr(r.m)}">${woCardInner(r.m)}</div>`).join('');
-            return `<div class="wo-part">${head}<div class="wo-grid">${cards}</div></div>`;
+        root.innerHTML = seed + woPartList().map(part => {
+            const rows = woItems.filter(it => (it.part || '기타') === part)
+                .sort((a, b) => woLastTs(a) - woLastTs(b));   // 오래 안 한 것(기록 없음 포함)이 위로
+            const newest = rows.reduce((acc, r) => (r.dates.length && woLastTs(r) > woLastTs(acc) ? r : acc), { dates: [] });
+            const head = `<div class="wo-part-head">${hlEsc(part)}`
+                + `<span class="wo-part-last">${newest.dates.length ? '마지막 ' + hlEsc(woAgoLabel(newest.dates[0])) : '기록 없음'}</span></div>`;
+            const cards = rows.map(it =>
+                `<div class="wo-card${it.dates.length ? '' : ' none'}" data-id="${hlAttr(it.id)}">${woCardInner(it)}</div>`).join('');
+            const add = `<div class="wo-add" data-part="${hlAttr(part)}">
+                    <button type="button" class="wo-add-open" onclick="woAddStart('${hlAttr(part)}')">기구 추가</button>
+                    <form class="wo-add-form" onsubmit="return woAddSubmit(event,'${hlAttr(part)}')">
+                        <input type="text" class="wo-add-input" placeholder="기구 이름" maxlength="40">
+                        <button type="submit" class="wo-add-ok">추가</button>
+                        <button type="button" class="wo-add-cancel" onclick="woAddCancel('${hlAttr(part)}')">취소</button>
+                    </form>
+                </div>`;
+            return `<div class="wo-part">${head}<div class="wo-grid">${cards}${add}</div></div>`;
         }).join('');
     }
     // 손가락 밑에서 목록이 재정렬되면 정신없으므로, 누른 카드만 다시 그린다.
     // (정렬은 탭을 다시 열 때 반영된다)
-    function woPaintCard(m) {
-        const el = document.querySelector(`#woParts .wo-card[data-m="${CSS.escape(m)}"]`);
-        if (el) { el.innerHTML = woCardInner(m); el.classList.toggle('none', !woEntry(m).dates.length); }
+    function woPaintCard(id) {
+        const it = woItem(id);
+        const el = document.querySelector(`#woParts .wo-card[data-id="${CSS.escape(id)}"]`);
+        if (it && el) { el.innerHTML = woCardInner(it); el.classList.toggle('none', !it.dates.length); }
         else woRenderList();
     }
 
-    window.woBump = function (m, field, dir) {
-        if (!WO_STEP[field]) return;
-        const e = woEntry(m);
-        const v = Number(e[field]) + WO_STEP[field] * dir;
-        e[field] = Math.max(WO_MIN[field], Math.round(v * 10) / 10);
-        woPaintCard(m);
-        woQueueSave(m, 700);
+    window.woBump = function (id, field, dir) {
+        const it = woItem(id);
+        if (!it || !WO_STEP[field]) return;
+        it[field] = Math.max(WO_MIN[field], Math.round((Number(it[field]) + WO_STEP[field] * dir) * 10) / 10);
+        woPaintCard(id);
+        woQueueSave(id, 700);
     };
-    window.woToggleToday = function (m) {
-        const e = woEntry(m);
+    window.woToggleToday = function (id) {
+        const it = woItem(id);
+        if (!it) return;
         const t = todayStr();
-        const i = e.dates.indexOf(t);
-        if (i >= 0) e.dates.splice(i, 1);                                        // 다시 누르면 취소
-        else e.dates = [t].concat(e.dates).sort().reverse().slice(0, WO_MAX_DATES);
-        woPaintCard(m);
-        woQueueSave(m, 0);   // 눌렀다는 표시는 바로 남긴다
+        const i = it.dates.indexOf(t);
+        if (i >= 0) it.dates.splice(i, 1);                                       // 다시 누르면 취소
+        else it.dates = [t].concat(it.dates).sort().reverse().slice(0, WO_MAX_DATES);
+        woPaintCard(id);
+        woQueueSave(id, 0);   // 눌렀다는 표시는 바로 남긴다
+    };
+    // 이름은 문서 id와 무관한 필드라, 고쳐도 기록(무게·횟수·세트·날짜)이 그대로 남는다
+    window.woRename = function (id, value) {
+        const it = woItem(id);
+        if (!it) return;
+        const name = String(value).trim();
+        if (!name) return;            // 비운 상태로는 저장하지 않는다(아래 onchange에서 되돌린다)
+        it.machine = name;
+        woQueueSave(id, 700);
+    };
+    window.woRenameDone = function (id, el) {
+        const it = woItem(id);
+        if (!it) return;
+        if (!String(el.value).trim()) el.value = it.machine;   // 빈 이름이면 원래 이름으로 되돌린다
+        else el.value = it.machine;                            // 앞뒤 공백 정리한 값으로 맞춘다
+    };
+
+    window.woAddStart = function (part) {
+        const box = document.querySelector(`#woParts .wo-add[data-part="${CSS.escape(part)}"]`);
+        if (!box) return;
+        box.classList.add('open');
+        const input = box.querySelector('.wo-add-input');
+        input.value = '';
+        input.focus();
+    };
+    window.woAddCancel = function (part) {
+        const box = document.querySelector(`#woParts .wo-add[data-part="${CSS.escape(part)}"]`);
+        if (box) box.classList.remove('open');
+    };
+    window.woAddSubmit = function (ev, part) {
+        ev.preventDefault();
+        const box = ev.target.closest('.wo-add');
+        const input = box.querySelector('.wo-add-input');
+        const name = String(input.value || '').trim();
+        if (!name) { input.focus(); return false; }
+        woCreate(name, part);
+        box.classList.remove('open');
+        return false;
+    };
+    async function woCreate(name, part) {
+        try {
+            const now = Date.now();
+            const ref = await addDoc(collection(db, WORKOUT_COLLECTION), {
+                machine: name, part,
+                weight: WO_DEFAULT.weight, reps: WO_DEFAULT.reps, sets: WO_DEFAULT.sets,
+                dates: [], createdAt: now, updatedAt: now,
+            });
+            woItems.push({ id: ref.id, machine: name, part, weight: WO_DEFAULT.weight, reps: WO_DEFAULT.reps, sets: WO_DEFAULT.sets, dates: [] });
+            woRenderList();
+            woMsg('');
+        } catch (e) {
+            console.error('기구 추가 실패:', e);
+            woMsg('기구를 추가하지 못했습니다 — 보안 규칙을 확인해주세요.');
+        }
+    }
+    window.woDelete = async function (id) {
+        const it = woItem(id);
+        if (!it) return;
+        if (!confirm(`‘${it.machine}’을(를) 삭제할까요?\n기록된 무게·횟수·날짜도 함께 사라집니다.`)) return;
+        clearTimeout(woTimers[id]); delete woTimers[id];
+        try {
+            await deleteDoc(doc(db, WORKOUT_COLLECTION, id));
+            woItems = woItems.filter(x => x.id !== id);
+            woRenderList();
+            woMsg('');
+        } catch (e) {
+            console.error('기구 삭제 실패:', e);
+            woMsg('삭제하지 못했습니다 — 보안 규칙을 확인해주세요.');
+        }
+    };
+    window.woSeed = async function () {
+        const btn = document.getElementById('woSeedBtn');
+        if (btn) btn.disabled = true;
+        try {
+            const now = Date.now();
+            for (const g of WO_SEED) {
+                for (const name of g.machines) {
+                    const ref = await addDoc(collection(db, WORKOUT_COLLECTION), {
+                        machine: name, part: g.part,
+                        weight: WO_DEFAULT.weight, reps: WO_DEFAULT.reps, sets: WO_DEFAULT.sets,
+                        dates: [], createdAt: now, updatedAt: now,
+                    });
+                    woItems.push({ id: ref.id, machine: name, part: g.part, weight: WO_DEFAULT.weight, reps: WO_DEFAULT.reps, sets: WO_DEFAULT.sets, dates: [] });
+                }
+            }
+            woRenderList();
+            woMsg('');
+        } catch (e) {
+            console.error('기본 목록 넣기 실패:', e);
+            woMsg('기본 목록을 넣지 못했습니다 — 보안 규칙을 확인해주세요.');
+            if (btn) btn.disabled = false;
+        }
     };
     /* ===================== 로그인 게이트 =====================
        - 로그인 전: #loginScreen 만 표시, 메인(.container) 숨김
