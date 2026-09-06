@@ -509,9 +509,14 @@
         .hl-strip-rows { position: relative; overflow: hidden; }
         .hl-bar { position: absolute; height: 15px; box-sizing: border-box; font-size: 10px; line-height: 14px;
             color: var(--zm-text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+        .hl-bar-slim { padding: 0; }   /* 라벨을 밖에 두는 좁은 막대 — 안쪽 여백 제거 */
+        /* 막대가 좁아 이름이 안 들어갈 때 막대 옆에 따로 적는 라벨 */
+        .hl-bar-tag { position: absolute; height: 15px; line-height: 15px; font-size: 10px;
+            color: var(--zm-text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .hl-bar-plus { background: rgba(32,30,29,0.13); border: 1px solid var(--zm-muted); }   /* + 채움 */
         .hl-bar-minus { border: 1px dashed var(--zm-muted); background: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(32,30,29,0.16) 3px, rgba(32,30,29,0.16) 5px); }  /* − 빗금 */
         .hl-pt { position: absolute; display: flex; align-items: center; gap: 4px; height: 15px; white-space: nowrap; overflow: hidden; }
+        .hl-pt.flip { flex-direction: row-reverse; }   /* 오른쪽 끝 항목 — 라벨을 점 왼쪽으로 */
         .hl-pt-dot { width: 7px; height: 7px; background: var(--zm-ink); transform: rotate(45deg); flex: none; }
         /* 라벨이 길면 말줄임 — 전체 내용은 title 툴팁으로 */
         .hl-pt-label { font-size: 10px; color: var(--zm-text-soft); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -2444,12 +2449,21 @@
                  + (parseFloat(bcs.borderLeftWidth) || 0) + (parseFloat(bcs.paddingLeft) || 0);
         const clamp = px => Math.max(ca.left, Math.min(ca.right, px));
         const tMin = xs.min, tMax = xs.max;   // 화면에 실제로 보이는 기간
-        const areaW = Math.max(1, ca.right - ca.left);   // 띠 상자 = 차트 그림 영역과 같은 폭
-        const ROW = 19;
+        const areaW = Math.max(1, ca.right - ca.left);   // 축이 실제로 차지하는 폭
+        const ROW = 19, DOT = 7, GAP = 4;
+        // 축 오른쪽 끝(ca.right)에 정확히 놓이는 표식이 상자 밖으로 잘려나가지 않도록,
+        // 차트가 마지막 눈금 글자용으로 비워둔 여백만큼만 상자를 더 준다(최대 DOT+3px).
+        const padR = Math.max(0, Math.min(DOT + 3, (chart.canvas.clientWidth || ca.right) - ca.right));
+        const boxW = areaW + padR;
         // 띠 상자를 차트 영역에 정확히 겹쳐 놓는다. 항목 x는 이 상자 기준(ca.left 원점)으로 잡고,
         // 상자는 overflow:hidden이라 어떤 경우에도 차트 밖으로 나가지 않는다.
         const rowsOpen = rows =>
-            '<div class="hl-strip-rows" style="margin-left:' + (dx + ca.left) + 'px;width:' + areaW + 'px;height:' + (rows * ROW) + 'px">';
+            '<div class="hl-strip-rows" style="margin-left:' + (dx + ca.left) + 'px;width:' + boxW + 'px;height:' + (rows * ROW) + 'px">';
+        // 라벨 폭은 캔버스로 실측한다 — 한글은 글자 수로 추정하면 크게 빗나간다.
+        const mctx = chart.ctx;
+        mctx.save();
+        mctx.font = "10px 'Pretendard', 'Pretendard Variable', 'Apple SD Gothic Neo', sans-serif";
+        const textW = s => mctx.measureText(String(s)).width;
 
         // ── 노력 띠 (기간 막대, + 채움 / − 빗금) ──
         if (hlShowEffort) {
@@ -2457,24 +2471,41 @@
             // 보이는 기간과 겹치는 것만. 종료일 없는 '진행 중'은 오른쪽 끝까지로 본다.
             const spans = allSpans.filter(e => e.start <= tMax && (e.end == null || e.end >= tMin))
                                   .sort((a, b) => a.start - b.start);
-            const rowsEnd = [];
             const bars = spans.map(e => {
-                const x1 = clamp(xs.getPixelForValue(e.start));
-                const x2 = clamp(e.end != null ? xs.getPixelForValue(e.end) : ca.right);
-                let row = 0; while (row < rowsEnd.length && rowsEnd[row] + 6 > x1) row++;
-                rowsEnd[row] = Math.max(x1 + 3, x2);
-                return { e, x1, x2, row };
+                const x1 = clamp(xs.getPixelForValue(e.start)) - ca.left;   // 상자 기준(=축 위치)
+                const x2 = clamp(e.end != null ? xs.getPixelForValue(e.end) : ca.right) - ca.left;
+                const w = Math.min(Math.max(3, x2 - x1), boxW - x1);
+                const tw = textW(e.title);
+                const inside = tw <= w - 10;                       // 막대 안(좌우 여백 4px씩)에 다 들어가나
+                const roomR = boxW - (x1 + w) - GAP;
+                const tagRight = !inside && roomR >= Math.min(tw, 24);   // 오른쪽에 쓸 자리가 있으면 오른쪽
+                const tagLeft = !inside && !tagRight;                    // 없으면 막대 왼쪽으로 넘긴다
+                return { e, x1, w, inside, tagRight, tagLeft,
+                         s: tagLeft ? Math.max(0, x1 - GAP - tw) : x1,
+                         t: tagRight ? x1 + w + GAP + tw : x1 + w };
             });
+            const rowsEnd = [];
+            for (const b of bars) {
+                let row = 0; while (row < rowsEnd.length && rowsEnd[row] + 6 > b.s) row++;
+                rowsEnd[row] = Math.max(rowsEnd[row] || 0, b.t);
+                b.row = row;
+            }
             if (!spans.length) effStrip.innerHTML = '<div class="hl-strip-label">노력 — ' + (allSpans.length ? '이 기간에 기록 없음' : '기록 없음') + '</div>';
             else {
                 let h = '<div class="hl-strip-label">노력</div>' + rowsOpen(rowsEnd.length);
                 for (const b of bars) {
                     const cls = b.e.effect === 'minus' ? 'hl-bar-minus' : 'hl-bar-plus';
                     const sign = b.e.effect === 'minus' ? '−' : '+';
-                    // 오른쪽 끝에 딱 붙는 항목도 잘려 사라지지 않게 최소 폭만큼은 남긴다
-                    const left = Math.min(b.x1 - ca.left, areaW - 3);
-                    const w = Math.min(Math.max(3, b.x2 - b.x1), areaW - left);
-                    h += '<div class="hl-bar ' + cls + '" title="' + hlAttr(sign + ' ' + b.e.title) + '" style="left:' + left + 'px;width:' + w + 'px;top:' + (b.row * ROW) + 'px">' + hlEsc(b.e.title) + '</div>';
+                    const tip = hlAttr(sign + ' ' + b.e.title);
+                    h += '<div class="hl-bar ' + cls + (b.inside ? '' : ' hl-bar-slim') + '" title="' + tip +
+                         '" style="left:' + b.x1 + 'px;width:' + b.w + 'px;top:' + (b.row * ROW) + 'px">' +
+                         (b.inside ? hlEsc(b.e.title) : '') + '</div>';
+                    if (!b.inside) {   // 막대가 좁으면 이름은 옆에 (자리 없는 쪽이면 왼쪽으로)
+                        const pos = b.tagRight
+                            ? 'left:' + (b.x1 + b.w + GAP) + 'px;max-width:' + Math.max(8, boxW - (b.x1 + b.w + GAP)) + 'px'
+                            : 'right:' + Math.max(0, boxW - b.x1 + GAP) + 'px;max-width:' + Math.max(8, b.x1 - GAP) + 'px';
+                        h += '<div class="hl-bar-tag" title="' + tip + '" style="' + pos + ';top:' + (b.row * ROW) + 'px">' + hlEsc(b.e.title) + '</div>';
+                    }
                 }
                 effStrip.innerHTML = h + '</div>';
             }
@@ -2484,24 +2515,38 @@
         if (hlShowCheckup) {
             const allPts = hlCheckupPoints(hlPerson);
             const pts = allPts.filter(p => p.ts >= tMin && p.ts <= tMax).sort((a, b) => a.ts - b.ts);
-            const rowsEnd = [];
             const items = pts.map(p => {
-                const x = clamp(xs.getPixelForValue(p.ts));
-                let row = 0; while (row < rowsEnd.length && rowsEnd[row] > x) row++;
-                rowsEnd[row] = x + 14 + p.label.length * 6.5;
-                return { p, x, row };
+                const x = clamp(xs.getPixelForValue(p.ts)) - ca.left;   // 상자 기준(=축 위치). 점은 항상 여기.
+                const need = DOT + GAP + textW(p.label);
+                const roomR = boxW - x;
+                // 오른쪽 여유가 모자라고 왼쪽이 더 넓으면 라벨만 점의 왼쪽으로 보낸다
+                const flip = need > roomR && x > roomR;
+                return { p, x, flip,
+                         s: flip ? Math.max(0, x + DOT - need) : x,
+                         e: flip ? x + DOT : x + need };
             });
+            const rowsEnd = [];
+            for (const it of items) {
+                let row = 0; while (row < rowsEnd.length && rowsEnd[row] > it.s) row++;
+                rowsEnd[row] = Math.max(rowsEnd[row] || 0, it.e);
+                it.row = row;
+            }
             if (!pts.length) chkStrip.innerHTML = '<div class="hl-strip-label">검진 — ' + (allPts.length ? '이 기간에 기록 없음' : '기록 없음') + '</div>';
             else {
                 let h = '<div class="hl-strip-label">검진</div>' + rowsOpen(rowsEnd.length);
                 for (const it of items) {
-                    const left = Math.min(it.x - ca.left, areaW - 5);   // 끝에 딱 붙은 표식도 보이게
-                    const maxW = Math.max(5, areaW - left);             // 라벨은 오른쪽 끝에서 말줄임
-                    h += '<div class="hl-pt" title="' + hlAttr(it.p.date + ' · ' + it.p.label) + '" style="left:' + left + 'px;top:' + (it.row * ROW) + 'px;max-width:' + maxW + 'px"><span class="hl-pt-dot"></span><span class="hl-pt-label">' + hlEsc(it.p.label) + '</span></div>';
+                    // 뒤집을 때는 오른쪽 기준으로 붙여 점이 정확히 같은 x에 오게 한다(row-reverse로 라벨만 왼쪽).
+                    const pos = it.flip
+                        ? 'right:' + Math.max(-DOT / 2, boxW - (it.x + DOT)) + 'px;max-width:' + Math.max(DOT, it.x + DOT) + 'px'
+                        : 'left:' + it.x + 'px;max-width:' + Math.max(DOT, boxW - it.x) + 'px';
+                    h += '<div class="hl-pt' + (it.flip ? ' flip' : '') + '" title="' + hlAttr(it.p.date + ' · ' + it.p.label) +
+                         '" style="' + pos + ';top:' + (it.row * ROW) + 'px"><span class="hl-pt-dot"></span><span class="hl-pt-label">' + hlEsc(it.p.label) + '</span></div>';
                 }
                 chkStrip.innerHTML = h + '</div>';
             }
         } else { chkStrip.innerHTML = ''; }
+
+        mctx.restore();   // 라벨 실측용으로 바꿔 쓴 폰트 원복
     }
 
     window.hlToggleAnnot = function () {
