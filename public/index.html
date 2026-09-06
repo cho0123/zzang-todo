@@ -451,10 +451,10 @@
         @media (max-width: 600px) { .hl-group-grid { grid-template-columns: 1fr; } }
 
         /* ===================== 운동 (workout) — 계기판 톤 =====================
-           헬스장에서 폰으로 쓰는 화면이라 누르는 것은 전부 48px 이상으로 잡는다. */
+           헬스장에서 폰으로 쓰는 화면이라 누르는 것은 전부 44px 이상으로 잡는다. */
         #workoutTab button { border-radius: var(--zm-radius); font-family: var(--font-body); }
-        #workoutTab input { border: 1px solid var(--zm-border); border-radius: var(--zm-radius); background: #fff; color: var(--zm-text); }
-        #workoutTab input:focus { outline: none; border-color: var(--zm-ink); }
+        .wo-msg { min-height: 18px; margin-bottom: 10px; text-align: center;
+            font-size: 13px; font-weight: 600; color: var(--zm-ink); line-height: 1.6; }
 
         /* 부위 묶음 */
         .wo-part { margin-bottom: 26px; }
@@ -464,87 +464,51 @@
             font-family: var(--font-title); font-size: 15px; font-weight: 900; color: var(--zm-ink);
         }
         .wo-part-last { margin-left: auto; font-family: var(--font-num); font-size: 12px; font-weight: 600; color: var(--zm-muted); }
+        /* 카드 안에 조절 버튼 3벌이 들어가므로 최대 2열까지만 */
         .wo-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-        @media (min-width: 700px) { .wo-grid { grid-template-columns: 1fr 1fr; } }
-        @media (min-width: 1020px) { .wo-grid { grid-template-columns: 1fr 1fr 1fr; } }
+        /* 2열은 카드가 세 벌을 한 줄에 담을 만큼 넓어지는 폭부터 */
+        @media (min-width: 1120px) { .wo-grid { grid-template-columns: 1fr 1fr; } }
 
-        /* 기구 카드 — 본문을 누르면 기록, 오른쪽 버튼은 이력 */
-        .wo-card { min-width: 0; display: flex; border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); background: var(--zm-card); }
+        /* 기구 카드 */
+        .wo-card { min-width: 0; border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink);
+            background: var(--zm-card); padding: 12px 14px 10px; }
         .wo-card.none { border-left-color: var(--zm-muted-2); }
-        .wo-card-main {
-            flex: 1; min-width: 0; text-align: left; cursor: pointer;
-            background: none; border: none; padding: 12px 14px; color: inherit; font-weight: 400;
+        .wo-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .wo-name { font-family: var(--font-title); font-size: 16px; font-weight: 700; color: var(--zm-ink); }
+        .wo-today {
+            margin-left: auto; flex: none; width: auto; min-height: 44px; padding: 0 18px;
+            font-size: 13px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer;
+            background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-border);
         }
-        .wo-card-main:hover { background: var(--zm-bg); }
-        .wo-name { display: block; font-family: var(--font-title); font-size: 15px; font-weight: 700; color: var(--zm-ink); }
-        .wo-when { display: block; font-family: var(--font-num); font-size: 12px; font-weight: 600; color: var(--zm-muted); margin-top: 3px; }
-        .wo-when.off { color: var(--zm-muted-2); }
-        .wo-detail { display: block; font-family: var(--font-num); font-size: 13px; color: var(--zm-text-soft); margin-top: 5px; word-break: keep-all; }
-        .wo-hist-btn {
-            flex: none; width: auto; min-width: 52px; padding: 0 12px;
-            background: var(--zm-card); color: var(--zm-muted); border: none; border-left: 1px solid var(--zm-border);
-            font-size: 11px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer;
-        }
-        .wo-hist-btn:hover { background: var(--zm-ink); color: var(--zm-on-ink); }
+        .wo-today:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
+        .wo-today.on { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
 
-        /* 입력·이력 공통 머리 */
-        .wo-input-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px;
-            padding-bottom: 10px; margin-bottom: 12px; border-bottom: 2px solid var(--zm-ink); }
-        .wo-input-title { font-family: var(--font-title); font-size: 20px; font-weight: 900; color: var(--zm-ink); }
-        .wo-input-part { font-size: 12px; font-weight: 700; color: var(--zm-muted); }
-        .wo-prev { font-family: var(--font-num); font-size: 13px; color: var(--zm-muted); margin-bottom: 16px; }
-
-        .wo-date-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
-        #woDate { flex: 0 1 200px; min-height: 48px; padding: 0 12px; font-family: var(--font-num); font-size: 15px; }
-        .wo-today-btn { flex: none; width: auto; min-height: 48px; padding: 0 16px; font-size: 13px; font-weight: 700;
-            background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-border); cursor: pointer; }
-        .wo-today-btn:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
-
-        /* 세트 — ±버튼은 손가락으로 눌러야 하므로 크게 */
-        .wo-set { border: 1px solid var(--zm-border); background: var(--zm-card); padding: 12px; margin-bottom: 10px; }
-        .wo-set-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-        .wo-set-no { font-family: var(--font-num); font-size: 12px; font-weight: 800; letter-spacing: 0.08em; color: var(--zm-muted); }
-        .wo-set-del { margin-left: auto; flex: none; width: auto; min-height: 40px; padding: 8px 14px; font-size: 12px; font-weight: 700;
-            background: var(--zm-card); color: var(--zm-muted); border: 1px dashed var(--zm-muted); cursor: pointer; }
-        .wo-set-del:hover { background: var(--zm-ink); color: var(--zm-on-ink); border: 1px solid var(--zm-ink); }
-        .wo-stepper { display: flex; align-items: stretch; gap: 6px; margin-bottom: 8px; }
-        .wo-stepper:last-child { margin-bottom: 0; }
-        .wo-step-label { flex: none; align-self: center; width: 32px; font-size: 12px; font-weight: 700; color: var(--zm-muted); }
+        /* 무게·횟수·세트 — 자리가 되면 한 줄, 좁으면 접힌다.
+           flex로 접으면 남은 하나가 통째로 늘어나 어색해서 grid의 auto-fit을 쓴다. */
+        .wo-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+        .wo-stat { min-width: 0; }
+        .wo-stat-label { display: block; font-size: 11px; font-weight: 700; color: var(--zm-muted); margin-bottom: 3px; }
+        .wo-stat-row { display: flex; align-items: stretch; gap: 4px; }
         .wo-step-btn {
-            flex: none; width: 54px; min-height: 50px;
+            flex: none; width: 46px; min-height: 46px;
             font-family: var(--font-num); font-size: 20px; font-weight: 700;
             background: var(--zm-card); color: var(--zm-ink); border: 1px solid var(--zm-ink); cursor: pointer;
         }
         .wo-step-btn:hover { background: var(--zm-bg); }
         .wo-step-btn:active { background: var(--zm-ink); color: var(--zm-on-ink); }
-        .wo-step-val { flex: 1; min-width: 0; display: flex; align-items: center; border: 1px solid var(--zm-border); background: #fff; }
-        .wo-step-val input {
-            flex: 1; min-width: 0; width: 100%; text-align: center; border: none; padding: 12px 2px;
-            font-family: var(--font-num); font-size: 21px; font-weight: 700; color: var(--zm-ink); background: transparent;
+        .wo-stat-val {
+            flex: 1; min-width: 0; display: flex; align-items: baseline; justify-content: center; gap: 2px;
+            border: 1px solid var(--zm-border); background: #fff; padding: 0 4px;
+            font-family: var(--font-num); font-size: 12px; font-weight: 700; color: var(--zm-muted);
         }
-        .wo-step-val input:focus { outline: none; }
-        /* 숫자 스피너는 좁은 화면에서 폭만 잡아먹어 숨긴다(±버튼이 그 역할을 한다) */
-        .wo-step-val input[type=number] { -moz-appearance: textfield; }
-        .wo-step-val input::-webkit-outer-spin-button,
-        .wo-step-val input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .wo-step-unit { flex: none; padding: 0 10px 0 2px; font-size: 12px; font-weight: 700; color: var(--zm-muted); }
-        @media (max-width: 420px) { .wo-step-btn { width: 48px; } .wo-step-label { width: 28px; } }
+        .wo-stat-val b { font-size: 20px; font-weight: 800; color: var(--zm-ink); }
 
-        .wo-btnrow { display: flex; gap: 8px; margin-top: 12px; }
-        .wo-add-btn { flex: 1; min-height: 50px; font-weight: 700;
-            background: var(--zm-card); color: var(--zm-text-soft); border: 1px dashed var(--zm-border); cursor: pointer; }
-        .wo-add-btn:hover { border: 1px solid var(--zm-ink); color: var(--zm-ink); }
-        .wo-save-btn { flex: 2; min-height: 54px; font-size: 15px; background: var(--zm-ink); color: var(--zm-on-ink); border: none; }
-        .wo-cancel-btn { flex: 1; min-height: 54px; background: transparent; color: var(--zm-muted-2); border: 1px solid var(--zm-border); }
-        .wo-cancel-btn:hover { color: var(--zm-text-soft); border-color: var(--zm-muted); }
-        .wo-msg { text-align: center; font-size: 13px; font-weight: 600; color: var(--zm-ink); line-height: 1.6; min-height: 18px; margin-top: 10px; }
-
-        /* 이력 */
-        .wo-hist-row { border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); background: var(--zm-card);
-            padding: 10px 14px; margin-bottom: 8px; }
-        .wo-hist-date { font-family: var(--font-num); font-size: 14px; font-weight: 800; color: var(--zm-ink); }
-        .wo-hist-ago { font-family: var(--font-num); font-size: 12px; color: var(--zm-muted); margin-left: 8px; }
-        .wo-hist-sets { font-family: var(--font-num); font-size: 13px; color: var(--zm-text-soft); line-height: 1.7; margin-top: 5px; }
+        /* 최근 날짜 */
+        .wo-recent { display: flex; align-items: baseline; gap: 8px; margin-top: 10px;
+            padding-top: 8px; border-top: 1px solid var(--zm-line); }
+        .wo-recent-dates { font-family: var(--font-num); font-size: 13px; font-weight: 600; color: var(--zm-text-soft); }
+        .wo-recent-ago { margin-left: auto; font-family: var(--font-num); font-size: 12px; color: var(--zm-muted); }
+        .wo-recent-none { font-size: 12px; color: var(--zm-muted-2); }
         .wo-empty { text-align: center; color: var(--zm-muted-2); font-size: 13px; line-height: 1.7; padding: 30px 12px; border: 1px dashed var(--zm-border); }
 
         /* ===================== 로그인 게이트 ===================== */
@@ -1106,49 +1070,10 @@
 <!-- ===== /건강 탭 ===== -->
 
 <!-- ===== 운동 탭 ===== -->
+<!-- 기구 카드 하나에 최고 기록·오늘 표시·최근 날짜를 모두 담는다(별도 입력/이력 화면 없음) -->
 <div id="workoutTab" style="display:none">
-
-    <!-- 목록 (기본 화면) — 부위별 기구, 오래 안 한 것이 위 -->
-    <div id="woViewList">
-        <div id="woParts"></div>
-    </div>
-
-    <!-- 기록 입력 -->
-    <div id="woViewInput" style="display:none">
-        <div class="wo-input-head">
-            <span class="wo-input-title" id="woInputTitle"></span>
-            <span class="wo-input-part" id="woInputPart"></span>
-        </div>
-        <div class="wo-prev" id="woInputPrev"></div>
-        <div class="wo-date-row">
-            <span class="wo-step-label">날짜</span>
-            <input type="date" id="woDate">
-            <button type="button" class="wo-today-btn" id="woTodayBtn">오늘</button>
-        </div>
-        <div id="woSets"></div>
-        <div class="wo-btnrow">
-            <button type="button" class="wo-add-btn" onclick="woAddSet()">세트 추가</button>
-        </div>
-        <div class="wo-btnrow">
-            <button type="button" class="wo-save-btn" id="woSaveBtn" onclick="woSave()">저장</button>
-            <button type="button" class="wo-cancel-btn" onclick="woCancel()">취소</button>
-        </div>
-        <div class="wo-msg" id="woMsg"></div>
-    </div>
-
-    <!-- 기구별 이력 (최근 5회) -->
-    <div id="woViewHistory" style="display:none">
-        <div class="wo-input-head">
-            <span class="wo-input-title" id="woHistTitle"></span>
-            <span class="wo-input-part" id="woHistPart"></span>
-        </div>
-        <div id="woHistBody"></div>
-        <div class="wo-btnrow">
-            <button type="button" class="wo-save-btn" onclick="woOpenInput(woCurrentMachine())">기록하기</button>
-            <button type="button" class="wo-cancel-btn" onclick="woCancel()">목록</button>
-        </div>
-    </div>
-
+    <div class="wo-msg" id="woMsg"></div>
+    <div id="woParts"></div>
 </div>
 <!-- ===== /운동 탭 ===== -->
 
@@ -3734,7 +3659,9 @@
 
     /* ===================== 운동 (workout) =====================
        짱구 혼자 쓰는 기록이라 인물 구분이 없다.
-       목적은 장기 누적이 아니라 '지난번에 뭘 얼마나 했나'를 바로 꺼내 보는 것.
+       기록하는 값은 '그날 실제로 한 양'이 아니라 그 기구에서의 최고 기록이다.
+       컨디션이 나빠 덜 한 날은 값을 그대로 두고, 갱신했을 때만 고친다.
+       문서는 기구당 하나(문서 id = 기구 이름)라 갱신이 곧 덮어쓰기다.
        ⚠ Firestore 보안 규칙에 workout 컬렉션을 추가해야 읽기/쓰기가 된다.
     ========================================================== */
     const WORKOUT_COLLECTION = "workout";
@@ -3749,14 +3676,20 @@
     ];
     const WO_MACHINE_PART = {};   // 기구 → 부위
     WO_PARTS.forEach(g => g.machines.forEach(m => { WO_MACHINE_PART[m] = g.part; }));
-    const WO_DEFAULT_SET = { weight: 20, reps: 12 };
+    const WO_DEFAULT = { weight: 20, reps: 12, sets: 3 };
+    const WO_STEP = { weight: 2.5, reps: 1, sets: 1 };
+    const WO_MIN = { weight: 0, reps: 1, sets: 1 };
+    const WO_UNIT = { weight: 'kg', reps: '회', sets: '세트' };
+    const WO_LABEL = { weight: '무게', reps: '횟수', sets: '세트' };
+    const WO_MAX_DATES = 10;   // 날짜는 최근 10개만 남긴다
 
-    let woRecords = [];      // workout 문서 전체
-    let woMachine = null;    // 입력·이력 중인 기구
-    let woSets = [];         // 입력 중인 세트 [{weight, reps}]
+    let woData = {};            // 기구 → {weight, reps, sets, dates[]}
+    const woTimers = {};        // 기구 → 저장 디바운스 타이머
 
-    window.woCurrentMachine = function () { return woMachine; };
-
+    function woEntry(m) {
+        if (!woData[m]) woData[m] = { weight: WO_DEFAULT.weight, reps: WO_DEFAULT.reps, sets: WO_DEFAULT.sets, dates: [] };
+        return woData[m];
+    }
     // 며칠 전인지 (오늘 0, 어제 1). 날짜를 못 읽으면 null.
     function woDaysAgo(dateStr) {
         const ts = hlDateTs(dateStr);
@@ -3771,182 +3704,141 @@
         if (d === 1) return '어제';
         return d + '일 전';
     }
-    // 중량이 전부 같으면 '60kg 12회 12회 10회', 다르면 세트별로 적는다.
-    function woSetsLabel(sets) {
-        if (!sets || !sets.length) return '';
-        const w = sets[0].weight;
-        return sets.every(s => s.weight === w)
-            ? `${w}kg ` + sets.map(s => s.reps + '회').join(' ')
-            : sets.map(s => `${s.weight}kg ${s.reps}회`).join(' · ');
+    function woShortDate(dateStr) {
+        const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(dateStr || ''));
+        return m ? `${+m[2]}/${+m[3]}` : (dateStr || '');
     }
-    function woHistory(machine) {
-        return woRecords.filter(r => r.machine === machine)
-            .sort((a, b) => (a.date || '') < (b.date || '') ? 1 : (a.date || '') > (b.date || '') ? -1 : 0);
+    function woMsg(text) {
+        const el = document.getElementById('woMsg');
+        if (el) el.textContent = text || '';
     }
-    function woLast(machine) { return woHistory(machine)[0] || null; }
 
     async function woFetch() {
         const snap = await getDocs(collection(db, WORKOUT_COLLECTION));
-        woRecords = [];
-        snap.forEach(d => woRecords.push({ id: d.id, ...d.data() }));
+        woData = {};
+        snap.forEach(d => {
+            const v = d.data() || {};
+            const m = v.machine || d.id;
+            // dates 배열이 없으면 예전 구조의 문서 — 무시한다
+            if (!Array.isArray(v.dates) || !WO_MACHINE_PART[m]) return;
+            woData[m] = {
+                weight: Number(v.weight) || 0,
+                reps: Number(v.reps) || 0,
+                sets: Number(v.sets) || 0,
+                dates: v.dates.filter(x => typeof x === 'string').sort().reverse().slice(0, WO_MAX_DATES),
+            };
+        });
     }
     async function woLoad() {
-        try { await woFetch(); }
+        try { await woFetch(); woMsg(''); }
         catch (e) {
             console.error('운동기록 조회 실패:', e);
             document.getElementById('woParts').innerHTML =
                 '<div class="wo-empty">운동 기록을 불러오지 못했습니다.<br>Firestore 보안 규칙에 workout 컬렉션이 들어가 있는지 확인해주세요.</div>';
-            woShow('list', true);
             return;
         }
-        woShow('list');
+        woRenderList();
     }
-    // skipRender: 위 오류 안내를 덮어쓰지 않기 위해
-    function woShow(v, skipRender) {
-        document.getElementById('woViewList').style.display = v === 'list' ? '' : 'none';
-        document.getElementById('woViewInput').style.display = v === 'input' ? '' : 'none';
-        document.getElementById('woViewHistory').style.display = v === 'history' ? '' : 'none';
-        if (v === 'list' && !skipRender) woRenderList();
+
+    // 값이 바뀔 때마다 쓰지 않고 잠깐 모았다가 쓴다(±를 연타해도 쓰기는 한 번).
+    function woQueueSave(m, delay) {
+        clearTimeout(woTimers[m]);
+        woTimers[m] = setTimeout(() => { delete woTimers[m]; woSaveNow(m); }, delay);
+    }
+    async function woSaveNow(m) {
+        const e = woData[m];
+        if (!e) return;
+        try {
+            await setDoc(doc(db, WORKOUT_COLLECTION, m), {
+                machine: m, part: WO_MACHINE_PART[m] || '',
+                weight: e.weight, reps: e.reps, sets: e.sets,
+                dates: e.dates.slice(0, WO_MAX_DATES), updatedAt: Date.now(),
+            });
+            woMsg('');
+        } catch (err) {
+            console.error('운동기록 저장 실패:', err);
+            woMsg('저장 실패 — Firestore 보안 규칙에 workout이 들어가 있는지 확인해주세요.');
+        }
+    }
+    // 화면을 떠날 때 아직 안 쓴 값이 있으면 바로 쓴다
+    function woFlush() {
+        Object.keys(woTimers).forEach(m => { clearTimeout(woTimers[m]); delete woTimers[m]; woSaveNow(m); });
+    }
+    document.addEventListener('visibilitychange', () => { if (document.hidden) woFlush(); });
+    window.addEventListener('pagehide', woFlush);
+
+    function woStatHtml(m, field, val) {
+        return `<div class="wo-stat">
+            <span class="wo-stat-label">${WO_LABEL[field]}</span>
+            <div class="wo-stat-row">
+                <button type="button" class="wo-step-btn" onclick="woBump('${hlAttr(m)}','${field}',-1)">−</button>
+                <span class="wo-stat-val"><b>${val}</b>${WO_UNIT[field]}</span>
+                <button type="button" class="wo-step-btn" onclick="woBump('${hlAttr(m)}','${field}',1)">+</button>
+            </div>
+        </div>`;
+    }
+    function woCardInner(m) {
+        const e = woEntry(m);
+        const on = e.dates.indexOf(todayStr()) >= 0;
+        const recent = e.dates.slice(0, 3).map(woShortDate).join(' · ');
+        return `<div class="wo-card-head">
+                <span class="wo-name">${hlEsc(m)}</span>
+                <button type="button" class="wo-today${on ? ' on' : ''}" onclick="woToggleToday('${hlAttr(m)}')">${on ? '오늘 완료' : '오늘'}</button>
+            </div>
+            <div class="wo-stats">
+                ${woStatHtml(m, 'weight', e.weight)}
+                ${woStatHtml(m, 'reps', e.reps)}
+                ${woStatHtml(m, 'sets', e.sets)}
+            </div>
+            <div class="wo-recent">${e.dates.length
+                ? `<span class="wo-recent-dates">${hlEsc(recent)}</span><span class="wo-recent-ago">${hlEsc(woAgoLabel(e.dates[0]))}</span>`
+                : '<span class="wo-recent-none">아직 기록 없음</span>'}</div>`;
     }
 
     function woRenderList() {
         document.getElementById('woParts').innerHTML = WO_PARTS.map(g => {
             const rows = g.machines
-                .map(m => { const last = woLast(m); return { m, last, ts: last ? (hlDateTs(last.date) != null ? hlDateTs(last.date) : -Infinity) : -Infinity }; })
+                .map(m => {
+                    const e = woData[m];
+                    const last = e && e.dates.length ? e.dates[0] : null;
+                    const ts = last ? hlDateTs(last) : null;
+                    return { m, last, ts: ts == null ? -Infinity : ts };
+                })
                 .sort((a, b) => a.ts - b.ts);   // 오래 안 한 것(기록 없음 포함)이 위로
 
             const newest = rows.reduce((acc, r) => (r.last && r.ts > acc.ts ? r : acc), { ts: -Infinity, last: null });
             const head = `<div class="wo-part-head">${hlEsc(g.part)}`
-                + `<span class="wo-part-last">${newest.last ? '마지막 ' + hlEsc(woAgoLabel(newest.last.date)) : '기록 없음'}</span></div>`;
-
-            const cards = rows.map(r => `<div class="wo-card${r.last ? '' : ' none'}">`
-                + `<button type="button" class="wo-card-main" onclick="woOpenInput('${hlAttr(r.m)}')">`
-                + `<span class="wo-name">${hlEsc(r.m)}</span>`
-                + (r.last
-                    ? `<span class="wo-when">${hlEsc(woAgoLabel(r.last.date))} · ${hlEsc(r.last.date || '')}</span>`
-                      + `<span class="wo-detail">${hlEsc(woSetsLabel(r.last.sets))}</span>`
-                    : `<span class="wo-when off">기록 없음</span>`)
-                + `</button>`
-                + `<button type="button" class="wo-hist-btn" onclick="woOpenHistory('${hlAttr(r.m)}')">이력</button>`
-                + `</div>`).join('');
-
+                + `<span class="wo-part-last">${newest.last ? '마지막 ' + hlEsc(woAgoLabel(newest.last)) : '기록 없음'}</span></div>`;
+            const cards = rows.map(r =>
+                `<div class="wo-card${r.last ? '' : ' none'}" data-m="${hlAttr(r.m)}">${woCardInner(r.m)}</div>`).join('');
             return `<div class="wo-part">${head}<div class="wo-grid">${cards}</div></div>`;
         }).join('');
     }
-
-    window.woOpenInput = function (machine) {
-        if (!machine) return;
-        woMachine = machine;
-        const last = woLast(machine);
-        // 지난번 값을 그대로 채워둔다 — 타이핑을 최대한 줄이는 것이 목적
-        woSets = (last && last.sets && last.sets.length)
-            ? last.sets.map(s => ({ weight: Number(s.weight) || 0, reps: Number(s.reps) || 0 }))
-            : [Object.assign({}, WO_DEFAULT_SET), Object.assign({}, WO_DEFAULT_SET), Object.assign({}, WO_DEFAULT_SET)];
-        document.getElementById('woInputTitle').textContent = machine;
-        document.getElementById('woInputPart').textContent = WO_MACHINE_PART[machine] || '';
-        document.getElementById('woInputPrev').textContent = last
-            ? `지난번 ${last.date} · ${woAgoLabel(last.date)} · ${woSetsLabel(last.sets)}`
-            : '지난 기록이 없습니다 — 오늘 한 만큼 넣어주세요.';
-        document.getElementById('woDate').value = todayStr();
-        document.getElementById('woMsg').textContent = '';
-        woRenderSets();
-        woShow('input');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
-    function woRenderSets() {
-        document.getElementById('woSets').innerHTML = woSets.map((s, i) => `
-            <div class="wo-set" data-i="${i}">
-                <div class="wo-set-head">
-                    <span class="wo-set-no">SET ${i + 1}</span>
-                    ${woSets.length > 1 ? `<button type="button" class="wo-set-del" onclick="woRemoveSet(${i})">세트 삭제</button>` : ''}
-                </div>
-                <div class="wo-stepper">
-                    <span class="wo-step-label">중량</span>
-                    <button type="button" class="wo-step-btn" onclick="woAdjust(${i},'weight',-2.5)">−</button>
-                    <span class="wo-step-val"><input type="number" step="2.5" inputmode="decimal" data-f="weight" value="${s.weight}" oninput="woType(${i},'weight',this.value)"><span class="wo-step-unit">kg</span></span>
-                    <button type="button" class="wo-step-btn" onclick="woAdjust(${i},'weight',2.5)">+</button>
-                </div>
-                <div class="wo-stepper">
-                    <span class="wo-step-label">횟수</span>
-                    <button type="button" class="wo-step-btn" onclick="woAdjust(${i},'reps',-1)">−</button>
-                    <span class="wo-step-val"><input type="number" step="1" inputmode="numeric" data-f="reps" value="${s.reps}" oninput="woType(${i},'reps',this.value)"><span class="wo-step-unit">회</span></span>
-                    <button type="button" class="wo-step-btn" onclick="woAdjust(${i},'reps',1)">+</button>
-                </div>
-            </div>`).join('');
+    // 손가락 밑에서 목록이 재정렬되면 정신없으므로, 누른 카드만 다시 그린다.
+    // (정렬은 탭을 다시 열 때 반영된다)
+    function woPaintCard(m) {
+        const el = document.querySelector(`#woParts .wo-card[data-m="${CSS.escape(m)}"]`);
+        if (el) { el.innerHTML = woCardInner(m); el.classList.toggle('none', !woEntry(m).dates.length); }
+        else woRenderList();
     }
-    window.woAdjust = function (i, field, delta) {
-        const s = woSets[i]; if (!s) return;
-        const min = field === 'weight' ? 0 : 1;
-        s[field] = Math.max(min, Math.round((Number(s[field]) + delta) * 10) / 10);
-        // 값만 갈아끼운다(전체를 다시 그리면 연타할 때 포커스가 튄다)
-        const el = document.querySelector(`#woSets .wo-set[data-i="${i}"] input[data-f="${field}"]`);
-        if (el) el.value = s[field]; else woRenderSets();
-    };
-    window.woType = function (i, field, v) {
-        const s = woSets[i]; if (!s) return;
-        const n = parseFloat(v);
-        s[field] = isNaN(n) ? 0 : n;   // 입력 중에는 다시 그리지 않는다
-    };
-    window.woAddSet = function () {
-        const last = woSets[woSets.length - 1] || WO_DEFAULT_SET;
-        woSets.push({ weight: last.weight, reps: last.reps });
-        woRenderSets();
-    };
-    window.woRemoveSet = function (i) {
-        if (woSets.length <= 1) return;
-        woSets.splice(i, 1);
-        woRenderSets();
-    };
 
-    window.woSave = async function () {
-        if (!woMachine) return;
-        const btn = document.getElementById('woSaveBtn');
-        const msgEl = document.getElementById('woMsg');
-        const date = document.getElementById('woDate').value || todayStr();
-        const sets = woSets
-            .map(s => ({ weight: Number(s.weight) || 0, reps: Math.max(0, Math.round(Number(s.reps) || 0)) }))
-            .filter(s => s.reps > 0);
-        if (!sets.length) { msgEl.textContent = '횟수가 0인 세트뿐입니다. 확인해주세요.'; return; }
-
-        btn.disabled = true;
-        try {
-            const now = Date.now();
-            // 같은 기구·같은 날짜 기록이 있으면 덮어쓴다(저장을 두 번 눌러도 중복이 생기지 않게)
-            const dup = woRecords.find(r => r.machine === woMachine && r.date === date);
-            const data = { date, machine: woMachine, part: WO_MACHINE_PART[woMachine] || '', sets, updatedAt: now };
-            if (dup) await updateDoc(doc(db, WORKOUT_COLLECTION, dup.id), data);
-            else { data.createdAt = now; await addDoc(collection(db, WORKOUT_COLLECTION), data); }
-            await woFetch();
-            woShow('list');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        } catch (e) {
-            console.error('운동기록 저장 실패:', e);
-            msgEl.textContent = '저장 실패 — Firestore 보안 규칙에 workout이 들어가 있는지 확인해주세요.';
-        } finally { btn.disabled = false; }
+    window.woBump = function (m, field, dir) {
+        if (!WO_STEP[field]) return;
+        const e = woEntry(m);
+        const v = Number(e[field]) + WO_STEP[field] * dir;
+        e[field] = Math.max(WO_MIN[field], Math.round(v * 10) / 10);
+        woPaintCard(m);
+        woQueueSave(m, 700);
     };
-    window.woCancel = function () { woShow('list'); };
-
-    window.woOpenHistory = function (machine) {
-        if (!machine) return;
-        woMachine = machine;
-        const list = woHistory(machine).slice(0, 5);   // 최근 5회면 충분하다
-        document.getElementById('woHistTitle').textContent = machine;
-        document.getElementById('woHistPart').textContent = WO_MACHINE_PART[machine] || '';
-        document.getElementById('woHistBody').innerHTML = list.length
-            ? list.map(r => `<div class="wo-hist-row">`
-                + `<div><span class="wo-hist-date">${hlEsc(r.date || '')}</span><span class="wo-hist-ago">${hlEsc(woAgoLabel(r.date))}</span></div>`
-                + `<div class="wo-hist-sets">${(r.sets || []).map((s, i) => `${i + 1}세트 ${hlEsc(s.weight)}kg ${hlEsc(s.reps)}회`).join('  ·  ')}</div>`
-                + `</div>`).join('')
-            : '<div class="wo-empty">아직 기록이 없습니다.</div>';
-        woShow('history');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.woToggleToday = function (m) {
+        const e = woEntry(m);
+        const t = todayStr();
+        const i = e.dates.indexOf(t);
+        if (i >= 0) e.dates.splice(i, 1);                                        // 다시 누르면 취소
+        else e.dates = [t].concat(e.dates).sort().reverse().slice(0, WO_MAX_DATES);
+        woPaintCard(m);
+        woQueueSave(m, 0);   // 눌렀다는 표시는 바로 남긴다
     };
-
-    document.getElementById('woTodayBtn').addEventListener('click', () => {
-        document.getElementById('woDate').value = todayStr();
-    });
-
     /* ===================== 로그인 게이트 =====================
        - 로그인 전: #loginScreen 만 표시, 메인(.container) 숨김
        - 로그인 후: 메인 표시 + startTodoData()로 tasks 구독 시작
