@@ -426,9 +426,17 @@
         .hl-group-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; margin-bottom: 10px; }
         /* min-width:0 이 없으면 캔버스의 예전 폭이 칸의 최소폭이 돼 화면이 좁아져도 칸이 안 줄고,
            그 칸이 다시 캔버스를 넓게 유지하는 악순환이 생긴다(가로 스크롤 발생) */
-        #hlGroupGrid > div, #hlWatchGrid > div { min-width: 0; border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); background: var(--zm-card); padding: 10px 12px; }
+        #hlGroupGrid > div, #hlWatchGrid > .hl-watch-cell { min-width: 0; border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); background: var(--zm-card); padding: 10px 12px; }
         /* 관찰 요망 — 벗어난 적 있는 항목이라 좌측 바를 적색으로(건강 탭 이상치 색) */
-        #hlWatchGrid > div { border-left-color: var(--zm-accent); }
+        #hlWatchGrid > .hl-watch-cell { border-left-color: var(--zm-accent); }
+        /* 3순위(1회만 벗어남) — 참고용이므로 가라앉힌다 */
+        #hlWatchGrid > .hl-watch-once { border-left-color: var(--zm-muted-2); }
+        .hl-watch-once .hl-watch-count { color: var(--zm-muted-3); }
+        .hl-watch-divider {
+            grid-column: 1 / -1; margin: 6px 0 0; padding-bottom: 6px;
+            border-bottom: 1px solid var(--zm-border);
+            font-family: var(--font-title); font-size: 12px; font-weight: 700; color: var(--zm-muted);
+        }
         .hl-watch-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; margin: 2px 0 6px; font-size: 11px; color: var(--zm-muted); }
         .hl-watch-count { font-family: var(--font-num); font-weight: 800; color: var(--zm-accent); }
         .hl-watch-date { font-family: var(--font-num); }
@@ -3464,12 +3472,22 @@
                     }
                 });
             });
+        // 확인 우선순위: 지금 벗어나 있는 것 > 반복되는 것 > 한 번 튄 것.
+        // 병원마다 참고치가 달라(예: MCHC 상한 36.0 / 37.0) 한 번만 걸리는 항목이 있는데,
+        // 그런 항목이 위로 올라오지 않게 3단계로 나눈다.
+        const tierOf = s => s.lastAbn ? 1 : (s.n >= 2 ? 2 : 3);
+        const abnTs = s => (s.lastAbnTs === -Infinity ? 0 : s.lastAbnTs);   // 날짜를 못 읽은 경우 NaN 비교 방지
         return [...stat.entries()]
             // 벗어난 적이 있는 항목만. 참고치도 없고 이상 표시도 없던 항목은 판정 자체가 안 되므로
             // n이 0으로 남아 여기서 자연히 빠진다.
             .filter(([, s]) => s.n > 0)
-            .sort((a, b) => (b[1].lastAbnTs - a[1].lastAbnTs) || (b[1].n - a[1].n))   // 최근 벗어난 순 → 횟수 많은 순
-            .map(([name, s]) => Object.assign({ name }, s));
+            .sort((a, b) => {
+                const ta = tierOf(a[1]), tb = tierOf(b[1]);
+                if (ta !== tb) return ta - tb;
+                if (ta === 1) return (b[1].n - a[1].n) || (abnTs(b[1]) - abnTs(a[1]));   // 지금 밖: 횟수 많은 순
+                return (abnTs(b[1]) - abnTs(a[1])) || (b[1].n - a[1].n);                // 나머지: 최근 벗어난 순
+            })
+            .map(([name, s]) => Object.assign({ name, tier: tierOf(s) }, s));
     }
 
     // 관찰 요망 보기: 대상 항목들을 묶음 보기와 같은 그리드에 작은 차트로 나열한다.
@@ -3491,6 +3509,7 @@
         if (note) {
             note.style.display = '';
             note.textContent = `최근 ${label} 안에 참고치를 한 번이라도 벗어난 항목 ${items.length}개입니다. `
+                + '지금 벗어나 있는 항목 → 여러 번 벗어난 항목 → 한 번만 벗어난 항목 순입니다. '
                 + '병원마다 참고치가 달라 같은 값도 다르게 판정될 수 있어, 넓게 잡아 보여줍니다.';
         }
 
@@ -3510,11 +3529,22 @@
         }
         const haveDomain = gMin !== Infinity && gMax !== -Infinity && gMin !== gMax;
 
+        let dividerDone = false;
         for (const b of built) {
             const res = haveDomain ? hlMakeChartConfig(b.it.name, { xMin: gMin, xMax: gMax }) : b.res;
             if (res.kind !== 'ok') continue;
 
+            // 3순위(한 번만 벗어남)가 시작되는 자리에 한 줄 구분. 해당 항목이 없으면 나오지 않는다.
+            if (b.it.tier === 3 && !dividerDone) {
+                dividerDone = true;
+                const sep = document.createElement('p');
+                sep.className = 'hl-watch-divider';
+                sep.textContent = '참고 — 1회만 벗어남';
+                grid.appendChild(sep);
+            }
+
             const cell = document.createElement('div');
+            cell.className = 'hl-watch-cell' + (b.it.tier === 3 ? ' hl-watch-once' : '');
             const title = document.createElement('div');
             title.className = 'hl-group-title';
             const inf = hlInfo(b.it.name);
