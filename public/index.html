@@ -424,7 +424,18 @@
         .hl-chart-detail b { display: block; margin-bottom: 4px; font-family: var(--font-title); font-weight: 700; color: var(--zm-ink); font-size: 14px; }
         /* 묶음 보기 — 지표 카드 그리드(좌측 잉크 바로 같은 계열 묶음) */
         .hl-group-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; margin-bottom: 10px; }
-        #hlGroupGrid > div { border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); background: var(--zm-card); padding: 10px 12px; }
+        /* min-width:0 이 없으면 캔버스의 예전 폭이 칸의 최소폭이 돼 화면이 좁아져도 칸이 안 줄고,
+           그 칸이 다시 캔버스를 넓게 유지하는 악순환이 생긴다(가로 스크롤 발생) */
+        #hlGroupGrid > div, #hlWatchGrid > div { min-width: 0; border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); background: var(--zm-card); padding: 10px 12px; }
+        /* 관찰 요망 — 벗어난 적 있는 항목이라 좌측 바를 적색으로(건강 탭 이상치 색) */
+        #hlWatchGrid > div { border-left-color: var(--zm-accent); }
+        .hl-watch-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; margin: 2px 0 6px; font-size: 11px; color: var(--zm-muted); }
+        .hl-watch-count { font-family: var(--font-num); font-weight: 800; color: var(--zm-accent); }
+        .hl-watch-date { font-family: var(--font-num); }
+        .hl-watch-now { font-weight: 700; color: var(--zm-muted-3); }
+        .hl-watch-now.out { color: var(--zm-accent); }
+        .hl-watch-note { font-size: 12px; color: var(--zm-muted); line-height: 1.7; margin-bottom: 14px;
+            padding: 10px 12px; border: 1px dashed var(--zm-border); }
         .hl-group-title { font-family: var(--font-title); font-size: 13px; font-weight: 700; color: var(--zm-ink); margin-bottom: 4px; }
         .hl-group-box { position: relative; height: 175px; }
         @media (max-width: 600px) { .hl-group-grid { grid-template-columns: 1fr; } }
@@ -943,13 +954,11 @@
             <div class="hl-views" id="hlChartModeRow">
                 <button class="hl-chip cmode active" data-hcmode="single" onclick="hlSetChartMode('single')">개별 보기</button>
                 <button class="hl-chip cmode" data-hcmode="group" onclick="hlSetChartMode('group')">묶음 보기</button>
+                <button class="hl-chip cmode" data-hcmode="watch" onclick="hlSetChartMode('watch')">관찰 요망</button>
             </div>
             <span class="hl-toolbar-sep"></span>
-            <div class="hl-ranges" id="hlChartRangeRow">
-                <button class="hl-chip range active" data-hrange="all" onclick="hlSetChartRange('all')">전체</button>
-                <button class="hl-chip range" data-hrange="3y" onclick="hlSetChartRange('3y')">3년</button>
-                <button class="hl-chip range" data-hrange="1y" onclick="hlSetChartRange('1y')">1년</button>
-            </div>
+            <!-- 기간 칩은 보기 방식에 따라 hlBuildRangeRow()가 다시 그린다(관찰 요망만 5년 포함) -->
+            <div class="hl-ranges" id="hlChartRangeRow"></div>
             <span class="hl-toolbar-sep"></span>
             <label class="hl-effort-toggle"><input type="checkbox" id="hlEffortToggle" checked onchange="hlToggleAnnot()"> 노력</label>
             <label class="hl-effort-toggle"><input type="checkbox" id="hlCheckupToggle" checked onchange="hlToggleAnnot()"> 검진</label>
@@ -973,6 +982,12 @@
             <div class="hl-types" id="hlGroupSel"></div>
             <div id="hlGroupGrid" class="hl-group-grid"></div>
             <div id="hlGroupMsg"></div>
+        </div>
+        <!-- 관찰 요망 — 기간 안에서 참고치를 벗어난 적 있는 항목만 모아 보여준다 -->
+        <div id="hlChartWatch" style="display:none">
+            <div class="hl-watch-note" id="hlWatchNote"></div>
+            <div id="hlWatchGrid" class="hl-group-grid"></div>
+            <div id="hlWatchMsg"></div>
         </div>
     </div>
 
@@ -2405,7 +2420,8 @@
     let hlEditId = null;
     let hlChartInstance = null;
     let hlChartRange = 'all';   // 'all' | '3y' | '1y'
-    let hlChartMode = 'single'; // 'single'(개별) | 'group'(묶음)
+    let hlChartMode = 'single'; // 'single'(개별) | 'group'(묶음) | 'watch'(관찰 요망)
+    let hlWatchRange = '3y';    // 관찰 요망 전용 기간 (개별·묶음의 hlChartRange와 분리)
     let hlGroupKey = 'thyroid'; // 선택된 묶음 키
     let hlGroupCharts = [];     // 묶음 보기의 작은 차트 인스턴스들 (정리용)
     let hlShowEffort = true;      // 차트에 '노력' 표시 여부 (기본 켜짐)
@@ -3097,16 +3113,32 @@
         } catch (e) { hlDateAdapterState = false; }
         return hlDateAdapterState;
     }
-    const HL_RANGE_LABEL = { '1y': '1년', '3y': '3년', 'all': '전체' };
+    const HL_RANGE_LABEL = { '1y': '1년', '3y': '3년', '5y': '5년', 'all': '전체' };
+    const HL_RANGE_YEARS = { '1y': 1, '3y': 3, '5y': 5 };
+    // 관찰 요망은 기간 기본값이 다르므로(3년) 개별·묶음과 기간 상태를 분리한다.
+    // 그래야 관찰 요망을 켰다 꺼도 개별 보기의 기간 선택이 바뀌지 않는다.
+    function hlActiveRange() { return hlChartMode === 'watch' ? hlWatchRange : hlChartRange; }
     // 선택한 기간의 시작 시각. '전체'면 null(자르지 않음).
     function hlRangeCutoff() {
+        const y = HL_RANGE_YEARS[hlActiveRange()];
+        if (!y) return null;
         const t = new Date();
-        if (hlChartRange === '1y') return new Date(t.getFullYear() - 1, t.getMonth(), t.getDate()).getTime();
-        if (hlChartRange === '3y') return new Date(t.getFullYear() - 3, t.getMonth(), t.getDate()).getTime();
-        return null;
+        return new Date(t.getFullYear() - y, t.getMonth(), t.getDate()).getTime();
+    }
+    // 기간 칩은 보기 방식에 따라 다르게 그린다(관찰 요망만 5년 포함)
+    function hlBuildRangeRow() {
+        const row = document.getElementById('hlChartRangeRow');
+        if (!row) return;
+        const cur = hlActiveRange();
+        const opts = hlChartMode === 'watch'
+            ? [['all', '전체'], ['5y', '5년'], ['3y', '3년'], ['1y', '1년']]
+            : [['all', '전체'], ['3y', '3년'], ['1y', '1년']];
+        row.innerHTML = opts.map(([k, l]) =>
+            `<button class="hl-chip range${k === cur ? ' active' : ''}" data-hrange="${k}" onclick="hlSetChartRange('${k}')">${l}</button>`
+        ).join('');
     }
     window.hlSetChartRange = function (v) {
-        hlChartRange = v;
+        if (hlChartMode === 'watch') hlWatchRange = v; else hlChartRange = v;
         document.querySelectorAll('[data-hrange]').forEach(b => b.classList.toggle('active', b.dataset.hrange === v));
         hlRenderChart();
     };
@@ -3251,13 +3283,17 @@
         const detailEl = document.getElementById('hlChartDetail');
         const singleWrap = document.getElementById('hlChartSingle');
         const groupWrap = document.getElementById('hlChartGroup');
+        const watchWrap = document.getElementById('hlChartWatch');
         document.querySelectorAll('[data-hcmode]').forEach(b => b.classList.toggle('active', b.dataset.hcmode === hlChartMode));
+        hlBuildRangeRow();
 
         // 항목 자체가 없으면 모드 상관없이 공통 빈 안내
         if (typeof Chart === 'undefined' || !names.length) {
             if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
             hlDestroyGroupCharts();
-            singleWrap.style.display = ''; groupWrap.style.display = 'none';
+            singleWrap.style.display = ''; groupWrap.style.display = 'none'; watchWrap.style.display = 'none';
+            document.getElementById('hlGroupGrid').innerHTML = '';   // 지난 화면의 빈 캔버스가 남지 않게
+            document.getElementById('hlWatchGrid').innerHTML = '';
             if (modeRow) modeRow.style.display = 'none';
             if (rangeRow) rangeRow.style.display = 'none';
             if (detailEl) detailEl.style.display = 'none';
@@ -3270,17 +3306,20 @@
         if (modeRow) modeRow.style.display = '';
         if (rangeRow) rangeRow.style.display = '';
 
-        // 묶음 보기로 위임
-        if (hlChartMode === 'group') {
+        // 여러 작은 차트를 쓰는 보기(묶음 / 관찰 요망)로 위임
+        if (hlChartMode === 'group' || hlChartMode === 'watch') {
             if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
-            singleWrap.style.display = 'none'; groupWrap.style.display = '';
-            hlRenderGroup();
+            const isGroup = hlChartMode === 'group';
+            singleWrap.style.display = 'none';
+            groupWrap.style.display = isGroup ? '' : 'none';
+            watchWrap.style.display = isGroup ? 'none' : '';
+            if (isGroup) hlRenderGroup(); else hlRenderWatch();
             return;
         }
 
         // ── 개별 보기 ──
         hlDestroyGroupCharts();
-        singleWrap.style.display = ''; groupWrap.style.display = 'none';
+        singleWrap.style.display = ''; groupWrap.style.display = 'none'; watchWrap.style.display = 'none';
         sel.style.display = '';
         if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
         // 띠는 일단 숨겼다가, 차트가 실제로 그려질 때 플러그인이 다시 채운다
@@ -3390,6 +3429,114 @@
 
             try { hlGroupCharts.push(new Chart(cv, res.config)); }
             catch (e) { console.error('묶음 차트 실패:', b.item, e); }
+        }
+    }
+
+    /* ── 관찰 요망 ────────────────────────────────────────────────
+       선택 인물 · 선택 기간 안에서 참고치를 한 번이라도 벗어난 항목만 모은다.
+       판정은 각 기록에 저장된 abnormal 플래그를 그대로 쓴다 — 그 기록을 낸 병원의
+       참고치(또는 결과지의 ▲▼ 표시)를 기준으로 이미 계산돼 있기 때문이다.
+       병원마다 참고치가 달라 같은 값이 정상/이상으로 갈릴 수 있지만,
+       '한 번이라도 걸렸으면 일단 보자'는 취지라 넓게 잡히는 편이 목적에 맞다. */
+    function hlWatchItems() {
+        const cutoff = hlRangeCutoff();
+        const stat = new Map();   // 표시용 항목명 → 통계
+        hlRecords.filter(r => r.person === hlPerson && (r.type || 'blood') === 'blood')
+            .forEach(r => {
+                const ts = hlDateTs(r.date);
+                // 날짜를 못 읽은 기록은 차트도 버리지 않으므로(hlMakeChartConfig와 동일) 여기서도 남긴다
+                if (cutoff != null && ts != null && ts < cutoff) return;      // 기간 밖
+                (r.items || []).forEach(i => {
+                    if (!i.name || i.value == null) return;                  // 숫자 못 읽은 항목 제외
+                    const name = hlNormalizeName(i.name);
+                    let s = stat.get(name);
+                    if (!s) { s = { total: 0, n: 0, lastAbnTs: -Infinity, lastAbnDate: '', lastTs: -Infinity, lastAbn: false }; stat.set(name, s); }
+                    s.total++;
+                    if (i.abnormal) {
+                        s.n++;
+                        if (ts != null && ts >= s.lastAbnTs) { s.lastAbnTs = ts; s.lastAbnDate = r.date || ''; }
+                        else if (!s.lastAbnDate) s.lastAbnDate = r.date || '';   // 날짜를 못 읽어도 표기는 남긴다
+                    }
+                    // '현재' = 가장 최근 값. 날짜를 하나도 못 읽었으면 마지막으로 본 기록을 쓴다.
+                    if (s.lastTs === -Infinity || (ts != null && ts >= s.lastTs)) {
+                        if (ts != null) s.lastTs = ts;
+                        s.lastAbn = !!i.abnormal;
+                    }
+                });
+            });
+        return [...stat.entries()]
+            // 벗어난 적이 있는 항목만. 참고치도 없고 이상 표시도 없던 항목은 판정 자체가 안 되므로
+            // n이 0으로 남아 여기서 자연히 빠진다.
+            .filter(([, s]) => s.n > 0)
+            .sort((a, b) => (b[1].lastAbnTs - a[1].lastAbnTs) || (b[1].n - a[1].n))   // 최근 벗어난 순 → 횟수 많은 순
+            .map(([name, s]) => Object.assign({ name }, s));
+    }
+
+    // 관찰 요망 보기: 대상 항목들을 묶음 보기와 같은 그리드에 작은 차트로 나열한다.
+    function hlRenderWatch() {
+        const grid = document.getElementById('hlWatchGrid');
+        const msg = document.getElementById('hlWatchMsg');
+        const note = document.getElementById('hlWatchNote');
+        hlDestroyGroupCharts();
+        grid.innerHTML = '';
+
+        const label = HL_RANGE_LABEL[hlActiveRange()] || '';
+        const items = hlWatchItems();
+        if (!items.length) {
+            if (note) note.style.display = 'none';
+            msg.innerHTML = `<div class="a10-empty">관찰이 필요한 항목이 없습니다.<br>${hlPerson}의 최근 ${label} 기록에는 참고치를 벗어난 수치가 없습니다.</div>`;
+            return;
+        }
+        msg.innerHTML = '';
+        if (note) {
+            note.style.display = '';
+            note.textContent = `최근 ${label} 안에 참고치를 한 번이라도 벗어난 항목 ${items.length}개입니다. `
+                + '병원마다 참고치가 달라 같은 값도 다르게 판정될 수 있어, 넓게 잡아 보여줍니다.';
+        }
+
+        // 묶음 보기와 같은 방식으로 x축(기간)을 전 항목 공통으로 맞춘다
+        const built = [];
+        let gMin = Infinity, gMax = -Infinity;
+        for (const it of items) {
+            const r = hlMakeChartConfig(it.name);
+            if (r.kind !== 'ok') continue;           // 기간 안에 그릴 점이 없으면 건너뜀
+            built.push({ it, res: r });
+            if (r.meta.useTime) r.meta.pts.forEach(p => { if (p.ts != null) { if (p.ts < gMin) gMin = p.ts; if (p.ts > gMax) gMax = p.ts; } });
+        }
+        if (!built.length) {
+            if (note) note.style.display = 'none';
+            msg.innerHTML = `<div class="a10-empty">관찰이 필요한 항목이 없습니다.</div>`;
+            return;
+        }
+        const haveDomain = gMin !== Infinity && gMax !== -Infinity && gMin !== gMax;
+
+        for (const b of built) {
+            const res = haveDomain ? hlMakeChartConfig(b.it.name, { xMin: gMin, xMax: gMax }) : b.res;
+            if (res.kind !== 'ok') continue;
+
+            const cell = document.createElement('div');
+            const title = document.createElement('div');
+            title.className = 'hl-group-title';
+            const inf = hlInfo(b.it.name);
+            title.textContent = inf && inf.short ? `${b.it.name} — ${inf.short}` : b.it.name;
+
+            const meta = document.createElement('div');
+            meta.className = 'hl-watch-meta';
+            meta.innerHTML = `<span class="hl-watch-count">${b.it.n}/${b.it.total}회</span>`
+                + (b.it.lastAbnDate ? `<span>마지막 <span class="hl-watch-date">${hlEsc(b.it.lastAbnDate)}</span></span>` : '')
+                + `<span class="hl-watch-now${b.it.lastAbn ? ' out' : ''}">현재 범위 ${b.it.lastAbn ? '밖' : '안'}</span>`;
+
+            const box = document.createElement('div');
+            box.className = 'hl-group-box';
+            const cv = document.createElement('canvas');
+            box.appendChild(cv);
+            cell.appendChild(title);
+            cell.appendChild(meta);
+            cell.appendChild(box);
+            grid.appendChild(cell);
+
+            try { hlGroupCharts.push(new Chart(cv, res.config)); }
+            catch (e) { console.error('관찰 요망 차트 실패:', b.it.name, e); }
         }
     }
 
