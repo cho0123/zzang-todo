@@ -481,6 +481,7 @@
         .hl-ov-head2 { margin-top: 28px; }
         .hl-ov-note { font-family: var(--font-body); font-size: 11px; font-weight: 600; color: var(--zm-muted); word-break: keep-all; }
         .hl-ov-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 10px; }
+        #hlGroupOverlay { position: relative; }   /* 노력 표시 팝오버의 위치 기준 */
         #hlGroupOverlay .a10-chart-box {
             background: var(--zm-panel); border: 2px solid var(--zm-ink); border-radius: var(--zm-radius);
             padding: 14px 14px 10px; height: 300px; box-sizing: border-box; margin-bottom: 0;
@@ -1193,6 +1194,8 @@
                 <div class="hl-ov-legend" id="hlOvLegend"></div>
                 <div class="a10-chart-box" id="hlOvBox"><canvas id="hlOvChart"></canvas></div>
                 <div id="hlOvMsg"></div>
+                <!-- 차트 안 노력 표시에 올리거나 누르면 열리는 상세 (측정 보기와 같은 컴포넌트) -->
+                <div class="hl-pop" id="hlOvMarkPop"></div>
             </div>
             <!-- 아래: 항목별 개별 차트 (참고치 밴드·이상치·최고/최저 그대로) -->
             <div class="hl-ov-head hl-ov-head2">항목별 보기</div>
@@ -3144,7 +3147,7 @@
          · 표식(7px 다이아몬드)이 작아 hover로 조준하기 어렵다
        짧은 이름 확인은 기존 title 툴팁이 계속 담당한다(말줄임된 라벨 확인용). */
     function hlClosePop() {
-        ['hlStripPop', 'hlMarkPop'].forEach(id => {
+        ['hlStripPop', 'hlMarkPop', 'hlOvMarkPop'].forEach(id => {
             const pop = document.getElementById(id);
             if (pop) { pop.classList.remove('open'); pop.dataset.open = ''; pop.dataset.pin = ''; }
         });
@@ -3197,7 +3200,9 @@
             const el = e.target.closest('[data-hlrec]');
             if (el) hlOpenPop(el, el.dataset.hlrec); else hlClosePop();
         });
-        document.addEventListener('click', (e) => { if (!e.target.closest('#hlStrips') && !e.target.closest('#hlChartMeasure')) hlClosePop(); });
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#hlStrips') && !e.target.closest('#hlChartMeasure') && !e.target.closest('#hlGroupOverlay')) hlClosePop();
+        });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hlClosePop(); });
     })();
 
@@ -4162,12 +4167,13 @@
         };
 
         try {
-            hlGroupCharts.push(new Chart(canvas, {
+            const ovChart = new Chart(canvas, {
                 type: 'line',
                 data: { labels: useTime ? undefined : allDates.map(d => d.substring(2).replace(/-/g, '/')), datasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     interaction: { mode: 'nearest', intersect: false },
+                    layout: { padding: { top: 34 } },   // 노력 라벨이 앉을 자리(데이터 선을 덮지 않게)
                     plugins: {
                         legend: { display: false },   // 범례는 선 모양까지 보여주려고 HTML로 그린다
                         tooltip: {
@@ -4193,8 +4199,11 @@
                         x: xScale
                     }
                 },
-                plugins: [basePlugin],
-            }));
+                // 아래 개별 차트에는 띠가 없으므로, 노력은 차트 안에 밴드·세로선·라벨로 그린다(검진은 넣지 않음)
+                plugins: [basePlugin, hlEffortPlugin(true, false, true)],
+            });
+            hlGroupCharts.push(ovChart);
+            hlBindMarkPop(canvas, ovChart, 'ov@', 'hlOvMarkPop', 'hlGroupOverlay');
         } catch (e) { console.error('겹쳐보기 차트 실패:', e); }
 
         legendEl.innerHTML = series.map((b, i) =>
@@ -4205,6 +4214,7 @@
     // 묶음 보기: 묶음 안 항목들을 작은 선차트로 배치. x축(기간)은 전 항목 공통으로 맞춘다.
     function hlRenderGroup() {
         hlBuildGroupSel();
+        hlClosePop();   // 다시 그리면 기준 표식이 사라지므로 닫는다
         const grid = document.getElementById('hlGroupGrid');
         const msg = document.getElementById('hlGroupMsg');
         const ovWrap = document.getElementById('hlGroupOverlay');
@@ -4404,8 +4414,8 @@
             .sort((a, b) => a.d - b.d)
             .map(o => o.m);
     }
-    function hlOpenMarkPop(marks, rect, key, pinned) {
-        const pop = document.getElementById('hlMarkPop'), root = document.getElementById('hlChartMeasure');
+    function hlOpenMarkPop(marks, rect, key, pinned, popId, rootId) {
+        const pop = document.getElementById(popId), root = document.getElementById(rootId);
         if (!pop || !root) return;
         if (pop.classList.contains('open') && pop.dataset.open === key) {
             if (pinned) pop.dataset.pin = '1';
@@ -4422,20 +4432,26 @@
         pop.dataset.pin = pinned ? '1' : '';
         hlPopPlace(pop, root, rect);
     }
-    // 마우스오버로 열고, 탭(클릭)하면 고정한다 — 모바일에는 오버가 없다.
-    function hlBindMarkPop(canvas, chart, key) {
-        const pop = () => document.getElementById('hlMarkPop');
+    /* 마우스오버로 열고, 탭(클릭)하면 고정한다 — 모바일에는 오버가 없다.
+       겹쳐보기 캔버스는 다시 그려도 같은 것을 재사용하므로, 리스너는 한 번만 걸고
+       차트만 갈아 끼운다(옛 차트를 붙든 리스너가 쌓이면 엉뚱한 자리에 열린다). */
+    function hlBindMarkPop(canvas, chart, key, popId, rootId) {
+        const st = canvas.$hlPop || (canvas.$hlPop = {});
+        st.chart = chart; st.key = key; st.popId = popId; st.rootId = rootId;
+        if (st.bound) return;
+        st.bound = true;
+        const pop = () => document.getElementById(st.popId);
         const rectFor = m => {
             const cr = canvas.getBoundingClientRect();
-            const ca = chart.chartArea || { bottom: cr.height };
+            const ca = st.chart.chartArea || { bottom: cr.height };
             return { left: cr.left + m.x - 8, bottom: cr.top + ca.bottom, width: 16 };
         };
-        const idsKey = ms => key + ms.map(m => m.id).join(',');
+        const idsKey = ms => st.key + ms.map(m => m.id).join(',');
         canvas.addEventListener('mousemove', ev => {
-            const ms = hlMarksAt(chart, ev.offsetX);
+            const ms = hlMarksAt(st.chart, ev.offsetX);
             canvas.style.cursor = ms.length ? 'pointer' : '';
             const p = pop();
-            if (ms.length) hlOpenMarkPop(ms, rectFor(ms[0]), idsKey(ms), false);
+            if (ms.length) hlOpenMarkPop(ms, rectFor(ms[0]), idsKey(ms), false, st.popId, st.rootId);
             else if (p && p.classList.contains('open') && p.dataset.pin !== '1') hlClosePop();
         });
         canvas.addEventListener('mouseleave', () => {
@@ -4443,14 +4459,16 @@
             if (p && p.classList.contains('open') && p.dataset.pin !== '1') hlClosePop();
         });
         canvas.addEventListener('click', ev => {
-            const ms = hlMarksAt(chart, ev.offsetX);
-            if (ms.length) hlOpenMarkPop(ms, rectFor(ms[0]), idsKey(ms), true);
+            const ms = hlMarksAt(st.chart, ev.offsetX);
+            if (ms.length) hlOpenMarkPop(ms, rectFor(ms[0]), idsKey(ms), true, st.popId, st.rootId);
             else hlClosePop();
         });
     }
     (function bindMarkPopClose() {
-        const root = document.getElementById('hlChartMeasure');
-        if (root) root.addEventListener('click', e => { if (e.target.closest('.hl-pop-close')) hlClosePop(); });
+        ['hlChartMeasure', 'hlGroupOverlay'].forEach(id => {
+            const root = document.getElementById(id);
+            if (root) root.addEventListener('click', e => { if (e.target.closest('.hl-pop-close')) hlClosePop(); });
+        });
         // 창 크기가 바뀌면 차트 좌표가 달라져 팝오버 자리가 어긋난다 — 닫고 다시 열게 한다
         window.addEventListener('resize', hlClosePop);
     })();
@@ -4516,7 +4534,7 @@
             try {
                 const ch = new Chart(cv, res.config);
                 hlGroupCharts.push(ch);
-                hlBindMarkPop(cv, ch, b.name + '@');   // 세로선/표식에 올리거나 누르면 상세
+                hlBindMarkPop(cv, ch, b.name + '@', 'hlMarkPop', 'hlChartMeasure');   // 세로선/표식에 올리거나 누르면 상세
             } catch (e) { console.error('측정 차트 실패:', b.name, e); }
         }
     }
