@@ -1168,7 +1168,7 @@
             <div class="hl-ranges" id="hlChartRangeRow"></div>
             <span class="hl-toolbar-sep"></span>
             <label class="hl-effort-toggle"><input type="checkbox" id="hlEffortToggle" checked onchange="hlToggleAnnot()"> 노력</label>
-            <label class="hl-effort-toggle"><input type="checkbox" id="hlCheckupToggle" checked onchange="hlToggleAnnot()"> 검진</label>
+            <label class="hl-effort-toggle" id="hlCheckupToggleLabel"><input type="checkbox" id="hlCheckupToggle" checked onchange="hlToggleAnnot()"> 검진</label>
         </div>
         <!-- 개별 보기 -->
         <div id="hlChartSingle">
@@ -2902,19 +2902,29 @@
 
     // 차트 안에는 '노력' 시작 세로선만 그린다(라벨·구간 밴드는 아래 띠로 분리).
     // +는 실선, −는 점선으로 구분(색은 쓰지 않음). withStrips면 차트 아래 띠도 그린다(개별 보기).
-    // withMarks: 아래 띠가 없는 보기(측정)에서 검진 표식까지 그리고, 마우스오버용 좌표를 남긴다.
+    /* withMarks: 아래 띠가 없는 보기(측정) 전용.
+       노력을 구간 밴드 + 시작선 + 짧은 라벨로 진하게 그리고, 마우스오버용 좌표를 남긴다.
+       ⚠ 축 범위는 측정 기록의 첫날~마지막날이라, 그 이전에 시작한 노력은 시작선이 화면 밖이다.
+          그런 노력도 밴드는 왼쪽 끝부터 그려 "이 기간 내내 하고 있었다"가 보이게 한다. */
     function hlEffortPlugin(dark, withStrips, withMarks) {
         const line = dark ? 'rgba(232,228,228,0.5)' : 'rgba(32,30,29,0.4)';
-        const faint = dark ? 'rgba(232,228,228,0.20)' : 'rgba(32,30,29,0.18)';
-        const mark = dark ? 'rgba(232,228,228,0.75)' : 'rgba(32,30,29,0.6)';
+        const strong = dark ? 'rgba(232,228,228,0.72)' : 'rgba(32,30,29,0.6)';
+        const band = dark ? 'rgba(232,228,228,0.06)' : 'rgba(32,30,29,0.045)';
+        const chip = dark ? '#2d2b2b' : '#f8f4f4';
+        const text = dark ? '#e8e4e4' : '#201e1d';
+        const LABEL_ROWS = 2, ROW_H = 14, LABEL_TOP = -19;   // 차트 영역 위 여백에 그린다
+        const short = t => { const v = String(t || '노력').trim(); return v.length > 7 ? v.slice(0, 7) + '…' : v; };
         return {
             id: 'hlEffort',
             afterDatasetsDraw(chart) {
                 chart.$marks = [];
                 const xs = chart.scales.x; if (!xs || xs.type !== 'time') return;
+                if (!hlShowEffort) return;
                 const ca = chart.chartArea, ctx = chart.ctx;
                 ctx.save();
-                if (hlShowEffort) {
+
+                if (!withMarks) {
+                    // 개별·묶음·관찰 보기: 예전 그대로 시작 세로선만
                     for (const e of hlEffortSpans(hlPerson)) {
                         const x = xs.getPixelForValue(e.start);
                         if (x < ca.left || x > ca.right) continue;
@@ -2922,23 +2932,60 @@
                         ctx.setLineDash(e.effect === 'minus' ? [2, 3] : []);  // + 실선, − 점선
                         ctx.beginPath(); ctx.moveTo(x, ca.top); ctx.lineTo(x, ca.bottom); ctx.stroke();
                         ctx.setLineDash([]);
-                        if (withMarks) chart.$marks.push({ x, id: e.id });
                     }
+                    ctx.restore();
+                    return;
                 }
-                // 검진은 시점 하나라 옅은 선 + 위쪽 마름모로 둔다(노력의 세로선과 헷갈리지 않게)
-                if (withMarks && hlShowCheckup) {
-                    for (const p of hlCheckupPoints(hlPerson)) {
-                        const x = xs.getPixelForValue(p.ts);
-                        if (x < ca.left || x > ca.right) continue;
-                        ctx.strokeStyle = faint; ctx.lineWidth = 1;
-                        ctx.beginPath(); ctx.moveTo(x, ca.top); ctx.lineTo(x, ca.bottom); ctx.stroke();
-                        ctx.fillStyle = mark;
-                        ctx.save();
-                        ctx.translate(x, ca.top + 4); ctx.rotate(Math.PI / 4);
-                        ctx.fillRect(-3, -3, 6, 6);
-                        ctx.restore();
-                        chart.$marks.push({ x, id: p.id });
-                    }
+
+                // 보이는 기간과 겹치는 노력만 (끝난 것은 끝난 데까지, 진행 중은 오른쪽 끝까지)
+                const clamp = v => Math.max(ca.left, Math.min(ca.right, v));
+                const spans = hlEffortSpans(hlPerson)
+                    .filter(e => e.start <= xs.max && (e.end == null || e.end >= xs.min))
+                    .map(e => ({
+                        e,
+                        x1: clamp(xs.getPixelForValue(e.start)),
+                        x2: e.end != null ? clamp(xs.getPixelForValue(e.end)) : ca.right,
+                        inside: xs.getPixelForValue(e.start) >= ca.left,   // 시작선을 그릴 수 있나
+                    }))
+                    .sort((a, b) => a.x1 - b.x1);
+
+                // 1) 구간 밴드 — 그 기간 동안의 수치 변화가 보이게
+                ctx.fillStyle = band;
+                for (const s of spans) if (s.x2 > s.x1) ctx.fillRect(s.x1, ca.top, s.x2 - s.x1, ca.bottom - ca.top);
+
+                // 2) 시작 세로선 (+ 실선 / − 점선)
+                ctx.lineWidth = 1;
+                for (const s of spans) {
+                    if (!s.inside) continue;
+                    ctx.strokeStyle = strong;
+                    ctx.setLineDash(s.e.effect === 'minus' ? [2, 3] : []);
+                    ctx.beginPath(); ctx.moveTo(s.x1, ca.top); ctx.lineTo(s.x1, ca.bottom); ctx.stroke();
+                }
+                ctx.setLineDash([]);
+
+                // 3) 짧은 라벨 — 겹치면 아랫줄로 내리고, 줄이 모자라면 라벨만 생략한다
+                ctx.font = "700 10px 'Pretendard','Apple SD Gothic Neo',sans-serif";
+                ctx.textBaseline = 'alphabetic';
+                const rowEnd = [];
+                for (const s of spans) {
+                    const minus = s.e.effect === 'minus';
+                    const label = (minus ? '－ ' : '＋ ') + short(s.e.title);
+                    const w = ctx.measureText(label).width;
+                    const lx = Math.min(s.x1 + 4, ca.right - w - 6);
+                    let row = 0; while (row < rowEnd.length && rowEnd[row] > lx - 4) row++;
+                    // 마우스오버 지점: 시작선이 화면 밖이면 라벨 자리를 잡아준다
+                    chart.$marks.push({ x: s.inside ? s.x1 : lx + w / 2, id: s.e.id });
+                    if (row >= LABEL_ROWS) continue;
+                    rowEnd[row] = lx + w + 4;
+                    const ly = ca.top + LABEL_TOP + row * ROW_H;
+                    ctx.fillStyle = chip;
+                    ctx.fillRect(lx - 3, ly - 9, w + 6, 13);
+                    ctx.strokeStyle = strong;
+                    ctx.setLineDash(minus ? [2, 2] : []);
+                    ctx.strokeRect(lx - 3.5, ly - 9.5, w + 7, 14);
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = text;
+                    ctx.fillText(label, lx, ly);
                 }
                 ctx.restore();
             },
@@ -3710,6 +3757,7 @@
             options: {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { mode: 'nearest', intersect: false },
+                layout: { padding: { top: 34 } },   // 노력 라벨이 앉을 자리(데이터 위를 덮지 않게)
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -3885,6 +3933,9 @@
         const mWrap = document.getElementById('hlChartMeasure');
         document.querySelectorAll('[data-hcmode]').forEach(b => b.classList.toggle('active', b.dataset.hcmode === hlChartMode));
         hlBuildRangeRow();
+        // 측정 보기에는 검진 표시가 없다(측정값과 관계가 약해 뺐다) — 토글도 숨긴다
+        const chkLabel = document.getElementById('hlCheckupToggleLabel');
+        if (chkLabel) chkLabel.style.display = (hlChartMode === 'measure') ? 'none' : '';
 
         // 항목 자체가 없으면 모드 상관없이 공통 빈 안내
         if (typeof Chart === 'undefined' || (!names.length && !mNames.length)) {
