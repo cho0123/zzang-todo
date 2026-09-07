@@ -452,6 +452,7 @@
            그 칸이 다시 캔버스를 넓게 유지하는 악순환이 생긴다(가로 스크롤 발생) */
         #hlGroupGrid > div, #hlWatchGrid > .hl-watch-cell, #hlMChartGrid > div { min-width: 0; border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); background: var(--zm-card); padding: 10px 12px; }
         #hlMChartGrid > div { border-left-color: var(--zm-tone-bronze); }   /* 측정은 목록 배지와 같은 색 */
+        #hlChartMeasure { position: relative; }   /* 표식 팝오버의 위치 기준 */
         .hl-m-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 2px 0 6px; }
         /* 관찰 요망 — 벗어난 적 있는 항목이라 좌측 바를 적색으로(건강 탭 이상치 색) */
         #hlWatchGrid > .hl-watch-cell { border-left-color: var(--zm-accent); }
@@ -728,6 +729,8 @@
             white-space: pre-wrap; word-break: break-word; max-height: 190px; overflow-y: auto;
         }
         .hl-pop-empty { margin-top: 8px; font-size: 12px; color: var(--zm-muted-2); }
+        /* 같은 날 표식이 겹치면 한 팝오버에 나란히 담는다 */
+        .hl-pop-multi + .hl-pop-multi { margin-top: 12px; padding-top: 12px; border-top: 2px solid var(--zm-border); }
         .hl-pop-close {
             position: absolute; top: 6px; right: 6px; flex: none; width: auto;
             background: none; border: none; padding: 2px 5px; border-radius: var(--zm-radius);
@@ -1200,6 +1203,8 @@
         <div id="hlChartMeasure" style="display:none">
             <div id="hlMChartGrid" class="hl-group-grid"></div>
             <div id="hlMChartMsg"></div>
+            <!-- 차트 안 세로선/표식에 올리거나 누르면 열리는 상세 (개별 보기와 같은 컴포넌트) -->
+            <div class="hl-pop" id="hlMarkPop"></div>
         </div>
         <!-- 관찰 요망 — 기간 안에서 참고치를 벗어난 적 있는 항목만 모아 보여준다 -->
         <div id="hlChartWatch" style="display:none">
@@ -2897,22 +2902,43 @@
 
     // 차트 안에는 '노력' 시작 세로선만 그린다(라벨·구간 밴드는 아래 띠로 분리).
     // +는 실선, −는 점선으로 구분(색은 쓰지 않음). withStrips면 차트 아래 띠도 그린다(개별 보기).
-    function hlEffortPlugin(dark, withStrips) {
+    // withMarks: 아래 띠가 없는 보기(측정)에서 검진 표식까지 그리고, 마우스오버용 좌표를 남긴다.
+    function hlEffortPlugin(dark, withStrips, withMarks) {
         const line = dark ? 'rgba(232,228,228,0.5)' : 'rgba(32,30,29,0.4)';
+        const faint = dark ? 'rgba(232,228,228,0.20)' : 'rgba(32,30,29,0.18)';
+        const mark = dark ? 'rgba(232,228,228,0.75)' : 'rgba(32,30,29,0.6)';
         return {
             id: 'hlEffort',
             afterDatasetsDraw(chart) {
-                if (!hlShowEffort) return;
+                chart.$marks = [];
                 const xs = chart.scales.x; if (!xs || xs.type !== 'time') return;
                 const ca = chart.chartArea, ctx = chart.ctx;
                 ctx.save();
-                for (const e of hlEffortSpans(hlPerson)) {
-                    const x = xs.getPixelForValue(e.start);
-                    if (x < ca.left || x > ca.right) continue;
-                    ctx.strokeStyle = line; ctx.lineWidth = 1;
-                    ctx.setLineDash(e.effect === 'minus' ? [2, 3] : []);  // + 실선, − 점선
-                    ctx.beginPath(); ctx.moveTo(x, ca.top); ctx.lineTo(x, ca.bottom); ctx.stroke();
-                    ctx.setLineDash([]);
+                if (hlShowEffort) {
+                    for (const e of hlEffortSpans(hlPerson)) {
+                        const x = xs.getPixelForValue(e.start);
+                        if (x < ca.left || x > ca.right) continue;
+                        ctx.strokeStyle = line; ctx.lineWidth = 1;
+                        ctx.setLineDash(e.effect === 'minus' ? [2, 3] : []);  // + 실선, − 점선
+                        ctx.beginPath(); ctx.moveTo(x, ca.top); ctx.lineTo(x, ca.bottom); ctx.stroke();
+                        ctx.setLineDash([]);
+                        if (withMarks) chart.$marks.push({ x, id: e.id });
+                    }
+                }
+                // 검진은 시점 하나라 옅은 선 + 위쪽 마름모로 둔다(노력의 세로선과 헷갈리지 않게)
+                if (withMarks && hlShowCheckup) {
+                    for (const p of hlCheckupPoints(hlPerson)) {
+                        const x = xs.getPixelForValue(p.ts);
+                        if (x < ca.left || x > ca.right) continue;
+                        ctx.strokeStyle = faint; ctx.lineWidth = 1;
+                        ctx.beginPath(); ctx.moveTo(x, ca.top); ctx.lineTo(x, ca.bottom); ctx.stroke();
+                        ctx.fillStyle = mark;
+                        ctx.save();
+                        ctx.translate(x, ca.top + 4); ctx.rotate(Math.PI / 4);
+                        ctx.fillRect(-3, -3, 6, 6);
+                        ctx.restore();
+                        chart.$marks.push({ x, id: p.id });
+                    }
                 }
                 ctx.restore();
             },
@@ -3059,10 +3085,22 @@
          · 표식(7px 다이아몬드)이 작아 hover로 조준하기 어렵다
        짧은 이름 확인은 기존 title 툴팁이 계속 담당한다(말줄임된 라벨 확인용). */
     function hlClosePop() {
-        const pop = document.getElementById('hlStripPop');
-        if (pop) { pop.classList.remove('open'); pop.dataset.open = ''; }
+        ['hlStripPop', 'hlMarkPop'].forEach(id => {
+            const pop = document.getElementById(id);
+            if (pop) { pop.classList.remove('open'); pop.dataset.open = ''; pop.dataset.pin = ''; }
+        });
     }
-    function hlPopHtml(r) {
+    // 팝오버를 root 기준으로 rect 아래에 연다. 오른쪽으로 넘치면 왼쪽에 붙여 밖으로 나가지 않게.
+    function hlPopPlace(pop, root, rect) {
+        const rr = root.getBoundingClientRect();
+        const popW = pop.getBoundingClientRect().width;
+        let left = rect.left - rr.left;
+        if (left + popW > rr.width) left = rr.width - popW;
+        pop.style.left = Math.max(0, left) + 'px';
+        pop.style.top = (rect.bottom - rr.top + 6) + 'px';
+    }
+    function hlPopHtml(r) { return `<button type="button" class="hl-pop-close" aria-label="닫기">✕</button>` + hlPopBody(r); }
+    function hlPopBody(r) {
         const t = hlNormType(r.type);
         let head, title;
         if (t === 'effort') {
@@ -3073,8 +3111,7 @@
             head = `<span class="hl-pop-date">${hlEsc(r.date || '')}</span><span class="hl-pop-kind">검진</span>`;
             title = hlEsc(r.exam || '검진');
         }
-        return `<button type="button" class="hl-pop-close" aria-label="닫기">✕</button>`
-             + `<div class="hl-pop-head">${head}</div>`
+        return `<div class="hl-pop-head">${head}</div>`
              + `<div class="hl-pop-title">${title}</div>`
              + (r.hospital ? `<div class="hl-pop-sub">${hlEsc(r.hospital)}</div>` : '')
              + (r.note ? `<div class="hl-pop-note">${hlEsc(r.note)}</div>`
@@ -3090,13 +3127,7 @@
         pop.innerHTML = hlPopHtml(r);
         pop.classList.add('open');
         pop.dataset.open = key;
-        // 표식 아래에 열되, 오른쪽으로 넘치면 왼쪽으로 연다(가로 스크롤 방지)
-        const rr = root.getBoundingClientRect(), ar = anchor.getBoundingClientRect();
-        const popW = pop.getBoundingClientRect().width;
-        let left = ar.left - rr.left;
-        if (left + popW > rr.width) left = rr.width - popW;   // 소수점까지 맞춰 오른쪽 끝을 넘지 않게
-        pop.style.left = Math.max(0, left) + 'px';
-        pop.style.top = (ar.bottom - rr.top + 6) + 'px';
+        hlPopPlace(pop, root, anchor.getBoundingClientRect());
     }
     (function bindStripPop() {
         const root = document.getElementById('hlStrips');
@@ -3107,7 +3138,7 @@
             const el = e.target.closest('[data-hlrec]');
             if (el) hlOpenPop(el, el.dataset.hlrec); else hlClosePop();
         });
-        document.addEventListener('click', (e) => { if (!e.target.closest('#hlStrips')) hlClosePop(); });
+        document.addEventListener('click', (e) => { if (!e.target.closest('#hlStrips') && !e.target.closest('#hlChartMeasure')) hlClosePop(); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hlClosePop(); });
     })();
 
@@ -3694,7 +3725,7 @@
                     x: xScale
                 }
             },
-            plugins: [hlEffortPlugin(dark, !!opts.strips)],
+            plugins: [hlEffortPlugin(dark, !!opts.strips, true)],   // 측정 보기엔 아래 띠가 없어 표식을 차트 안에 둔다
         };
         // 계열별 요약(최근값·범위)을 만들 재료
         const series = spec.keys.map((k, i) => {
@@ -4299,12 +4330,75 @@
         }
     }
 
+    /* 차트 안 세로선/표식의 상세 — 측정 보기는 아래 띠가 없어 차트 위에서 바로 열어준다.
+       선이 1px이라 정확히 겨누기 어려우므로 좌우 여유를 두고 가장 가까운 것을 고른다. */
+    const HL_MARK_HIT = 7;
+    // 같은 날 노력과 검진이 겹칠 수 있으므로 반경 안의 표식을 모두 돌려준다(가까운 순)
+    function hlMarksAt(chart, offsetX) {
+        return (chart.$marks || [])
+            .map(m => ({ m, d: Math.abs(m.x - offsetX) }))
+            .filter(o => o.d <= HL_MARK_HIT)
+            .sort((a, b) => a.d - b.d)
+            .map(o => o.m);
+    }
+    function hlOpenMarkPop(marks, rect, key, pinned) {
+        const pop = document.getElementById('hlMarkPop'), root = document.getElementById('hlChartMeasure');
+        if (!pop || !root) return;
+        if (pop.classList.contains('open') && pop.dataset.open === key) {
+            if (pinned) pop.dataset.pin = '1';
+            hlPopPlace(pop, root, rect);   // 내용은 그대로 두고 위치만 갱신(창 크기가 바뀌었을 수 있다)
+            return;
+        }
+        const recs = marks.map(m => hlRecords.find(x => x.id === m.id)).filter(Boolean);
+        if (!recs.length) { hlClosePop(); return; }
+        hlClosePop();
+        pop.innerHTML = `<button type="button" class="hl-pop-close" aria-label="닫기">✕</button>`
+            + recs.map(r => `<div class="hl-pop-multi">${hlPopBody(r)}</div>`).join('');
+        pop.classList.add('open');
+        pop.dataset.open = key;
+        pop.dataset.pin = pinned ? '1' : '';
+        hlPopPlace(pop, root, rect);
+    }
+    // 마우스오버로 열고, 탭(클릭)하면 고정한다 — 모바일에는 오버가 없다.
+    function hlBindMarkPop(canvas, chart, key) {
+        const pop = () => document.getElementById('hlMarkPop');
+        const rectFor = m => {
+            const cr = canvas.getBoundingClientRect();
+            const ca = chart.chartArea || { bottom: cr.height };
+            return { left: cr.left + m.x - 8, bottom: cr.top + ca.bottom, width: 16 };
+        };
+        const idsKey = ms => key + ms.map(m => m.id).join(',');
+        canvas.addEventListener('mousemove', ev => {
+            const ms = hlMarksAt(chart, ev.offsetX);
+            canvas.style.cursor = ms.length ? 'pointer' : '';
+            const p = pop();
+            if (ms.length) hlOpenMarkPop(ms, rectFor(ms[0]), idsKey(ms), false);
+            else if (p && p.classList.contains('open') && p.dataset.pin !== '1') hlClosePop();
+        });
+        canvas.addEventListener('mouseleave', () => {
+            const p = pop();
+            if (p && p.classList.contains('open') && p.dataset.pin !== '1') hlClosePop();
+        });
+        canvas.addEventListener('click', ev => {
+            const ms = hlMarksAt(chart, ev.offsetX);
+            if (ms.length) hlOpenMarkPop(ms, rectFor(ms[0]), idsKey(ms), true);
+            else hlClosePop();
+        });
+    }
+    (function bindMarkPopClose() {
+        const root = document.getElementById('hlChartMeasure');
+        if (root) root.addEventListener('click', e => { if (e.target.closest('.hl-pop-close')) hlClosePop(); });
+        // 창 크기가 바뀌면 차트 좌표가 달라져 팝오버 자리가 어긋난다 — 닫고 다시 열게 한다
+        window.addEventListener('resize', hlClosePop);
+    })();
+
     /* 측정 보기 — 체중·체지방률·혈압·안압을 묶음 보기와 같은 그리드에 나열한다.
        참고치가 없는 항목이라 밴드도 이상치 판정도 없다(hlMakeMeasureConfig와 동일). */
     function hlRenderMeasureView() {
         const grid = document.getElementById('hlMChartGrid');
         const msg = document.getElementById('hlMChartMsg');
         hlDestroyGroupCharts();
+        hlClosePop();          // 다시 그리면 기준 표식이 사라지므로 닫는다
         grid.innerHTML = '';
 
         const names = hlMeasureChartNames(hlPerson);
@@ -4356,8 +4450,11 @@
             cell.appendChild(box);
             grid.appendChild(cell);
 
-            try { hlGroupCharts.push(new Chart(cv, res.config)); }
-            catch (e) { console.error('측정 차트 실패:', b.name, e); }
+            try {
+                const ch = new Chart(cv, res.config);
+                hlGroupCharts.push(ch);
+                hlBindMarkPop(cv, ch, b.name + '@');   // 세로선/표식에 올리거나 누르면 상세
+            } catch (e) { console.error('측정 차트 실패:', b.name, e); }
         }
     }
 
