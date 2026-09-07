@@ -35,6 +35,7 @@
             --zm-tone-teal: #21454f;   /* 건강 혈액검사 */
             --zm-tone-moss: #3f4a2a;   /* 건강 검진 */
             --zm-tone-plum: #46304a;   /* 건강 노력 */
+            --zm-tone-bronze: #4a3a2b; /* 건강 측정 — 위 셋과 색상환에서 떨어진 짙은 갈색 */
             /* 여러 계열을 겹쳐 그릴 때 쓰는 선 색 (After10 비교 / 건강 묶음 겹쳐보기 공용).
                어두운 패널(#242a38·#2d2b2b) 위에서 서로 갈리도록 색상환에 흩어 놓았고,
                적색 계열은 뺐다 — 적색은 이상치 표식(--zm-accent) 몫이라 헷갈리면 안 된다.
@@ -763,6 +764,27 @@
         .hl-badge-blood { background: var(--zm-tone-teal); color: var(--zm-on-ink); border-color: var(--zm-tone-teal); }
         .hl-badge-checkup, .hl-badge-endoscopy { background: var(--zm-tone-moss); color: var(--zm-on-ink); border-color: var(--zm-tone-moss); }
         .hl-badge-effort, .hl-badge-other { background: var(--zm-tone-plum); color: var(--zm-on-ink); border-color: var(--zm-tone-plum); }
+        .hl-badge-measure { background: var(--zm-tone-bronze); color: var(--zm-on-ink); border-color: var(--zm-tone-bronze); }
+        .hl-rec-measure { border-left: 3px solid var(--zm-muted-3); }
+
+        /* 측정 입력 — 그날 잰 것만 넣으면 되므로 전부 선택 입력이다 */
+        .hl-m-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+        .hl-m-field { min-width: 0; }
+        .hl-m-label { display: block; font-size: 11px; font-weight: 700; color: var(--zm-muted); margin-bottom: 3px; }
+        .hl-m-row { display: flex; align-items: stretch; border: 1px solid var(--zm-border); background: #fff; }
+        .hl-m-row:focus-within { border-color: var(--zm-ink); }
+        .hl-m-row input {
+            flex: 1; min-width: 0; border: none; padding: 12px 4px 12px 10px; background: transparent;
+            font-family: var(--font-num); font-size: 17px; font-weight: 700; color: var(--zm-ink);
+        }
+        .hl-m-row input:focus { outline: none; }
+        .hl-m-row input[type=number] { -moz-appearance: textfield; }
+        .hl-m-row input::-webkit-outer-spin-button,
+        .hl-m-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .hl-m-unit { flex: none; align-self: center; padding: 0 10px; font-size: 11px; font-weight: 700; color: var(--zm-muted); }
+        #hlMeasureNote { width: 100%; padding: 12px 14px; box-sizing: border-box;
+            border: 1px solid var(--zm-border); border-radius: var(--zm-radius); font-family: inherit; font-size: 14px; background: #fff; }
+        #hlMeasureNote:focus { outline: none; border-color: var(--zm-ink); }
         /* 종류별 카드 구분 — 좌측 바 굵기/색 차이 */
         .hl-rec-checkup { border-left: 3px solid var(--zm-muted); }
         .hl-rec-effort { border-left: 3px solid var(--zm-ink); }
@@ -1070,6 +1092,7 @@
             <button class="hl-chip type active" data-htype="blood" onclick="hlSetType('blood')">혈액검사</button>
             <button class="hl-chip type" data-htype="checkup" onclick="hlSetType('checkup')">검진</button>
             <button class="hl-chip type" data-htype="effort" onclick="hlSetType('effort')">노력</button>
+            <button class="hl-chip type" data-htype="measure" onclick="hlSetType('measure')">측정</button>
         </div>
 
         <div class="hl-meta">
@@ -1105,6 +1128,12 @@
                 <input type="date" id="hlEffortEnd">
             </div>
             <textarea id="hlEffortNote" placeholder="메모 (선택)"></textarea>
+        </div>
+
+        <!-- 측정: 그날 잰 것만 넣으면 된다(빈 칸은 저장하지 않음) -->
+        <div id="hlMeasureInput" style="display:none">
+            <div class="hl-m-grid" id="hlMeasureGrid"></div>
+            <input type="text" id="hlMeasureNote" placeholder="측정 장소 / 메모 (선택)">
         </div>
 
         <div class="hl-btnrow">
@@ -2794,6 +2823,48 @@
     let hlEffortEffectSel = 'plus'; // 노력 입력 폼의 현재 +/− 선택
 
     // 기록 종류 — 저장된 옛 값(endoscopy/other)도 읽는 시점에 새 값으로 매핑 (저장 데이터는 그대로).
+    /* 측정 — 결과지를 붙여넣는 검사가 아니라 그때그때 잰 값.
+       참고치가 없는 항목이라 이상치 판정도, 배경 밴드도 없다. */
+    const HL_MEASURES = [
+        { key: 'weight',      label: '체중',      unit: 'kg',   step: '0.1' },
+        { key: 'bodyFat',     label: '체지방률',  unit: '%',    step: '0.1' },
+        { key: 'bpSystolic',  label: '혈압 수축기', unit: 'mmHg', step: '1' },
+        { key: 'bpDiastolic', label: '혈압 이완기', unit: 'mmHg', step: '1' },
+        { key: 'iopLeft',     label: '안압 좌',   unit: 'mmHg', step: '0.1' },
+        { key: 'iopRight',    label: '안압 우',   unit: 'mmHg', step: '0.1' },
+    ];
+    // 수치 흐름에서 고를 수 있는 측정 차트. 혈압·안압은 두 계열을 한 차트에 겹친다.
+    const HL_M_PREFIX = '측정:';
+    const HL_MEASURE_CHARTS = {
+        '체중':     { keys: ['weight'],                    labels: ['체중'],        unit: 'kg' },
+        '체지방률': { keys: ['bodyFat'],                   labels: ['체지방률'],    unit: '%' },
+        '혈압':     { keys: ['bpSystolic', 'bpDiastolic'], labels: ['수축기', '이완기'], unit: 'mmHg' },
+        '안압':     { keys: ['iopLeft', 'iopRight'],       labels: ['좌', '우'],    unit: 'mmHg' },
+    };
+    function hlMeasureSummary(m) {
+        if (!m) return '';
+        const out = [];
+        const has = k => m[k] != null;
+        if (has('weight')) out.push(`체중 ${m.weight}kg`);
+        if (has('bodyFat')) out.push(`체지방 ${m.bodyFat}%`);
+        if (has('bpSystolic') || has('bpDiastolic'))
+            out.push(`혈압 ${has('bpSystolic') ? m.bpSystolic : '—'}/${has('bpDiastolic') ? m.bpDiastolic : '—'}`);
+        if (has('iopLeft') || has('iopRight'))
+            out.push(`안압 ${has('iopLeft') ? m.iopLeft : '—'}/${has('iopRight') ? m.iopRight : '—'}`);
+        return out.join(' · ');
+    }
+    function hlBuildMeasureGrid() {
+        const el = document.getElementById('hlMeasureGrid');
+        if (!el || el.children.length) return;   // 한 번만 만든다
+        el.innerHTML = HL_MEASURES.map(d => `<div class="hl-m-field">
+            <label class="hl-m-label" for="hlM_${d.key}">${d.label}</label>
+            <div class="hl-m-row">
+                <input type="number" id="hlM_${d.key}" step="${d.step}" inputmode="decimal" placeholder="—">
+                <span class="hl-m-unit">${d.unit}</span>
+            </div>
+        </div>`).join('');
+    }
+
     function hlNormType(t) {
         if (t === 'endoscopy') return 'checkup';
         if (t === 'other') return 'effort';
@@ -3196,7 +3267,10 @@
         document.getElementById('hlBloodInput').style.display = (tp === 'blood') ? 'block' : 'none';
         document.getElementById('hlCheckupInput').style.display = (tp === 'checkup') ? 'block' : 'none';
         document.getElementById('hlEffortInput').style.display = (tp === 'effort') ? 'block' : 'none';
-        document.getElementById('hlHospital').style.display = (tp === 'effort') ? 'none' : '';  // 노력엔 병원 칸 숨김
+        document.getElementById('hlMeasureInput').style.display = (tp === 'measure') ? 'block' : 'none';
+        // 노력·측정은 병원 칸을 쓰지 않는다(측정은 자체 메모 칸이 있다)
+        document.getElementById('hlHospital').style.display = (tp === 'effort' || tp === 'measure') ? 'none' : '';
+        if (tp === 'measure') hlBuildMeasureGrid();
     };
 
     // ---------- 입력: 편집 표 ----------
@@ -3294,6 +3368,18 @@
             data.note = document.getElementById('hlEffortNote').value;
             if (!data.title) { return hlMsg('무엇을 시작/중단했는지 입력해주세요.'); }
         }
+        else if (hlType === 'measure') {
+            data.items = []; data.hospital = '';
+            const m = {};
+            HL_MEASURES.forEach(d => {
+                const raw = document.getElementById('hlM_' + d.key).value;
+                const v = parseFloat(raw);
+                if (String(raw).trim() !== '' && !isNaN(v)) m[d.key] = v;   // 빈 칸은 키 자체를 넣지 않는다
+            });
+            if (!Object.keys(m).length) { return hlMsg('측정값을 하나 이상 입력해주세요.'); }
+            data.measures = m;
+            data.note = document.getElementById('hlMeasureNote').value.trim();
+        }
         else { data.items = []; data.note = ''; }
 
         const btn = document.getElementById('hlSaveBtn');
@@ -3319,6 +3405,9 @@
         document.getElementById('hlEffortTitle').value = '';
         document.getElementById('hlEffortEnd').value = '';
         document.getElementById('hlEffortNote').value = '';
+        hlBuildMeasureGrid();
+        HL_MEASURES.forEach(d => { const el = document.getElementById('hlM_' + d.key); if (el) el.value = ''; });
+        document.getElementById('hlMeasureNote').value = '';
         hlSetEffortEffect('plus');
         document.getElementById('hlCancelEdit').style.display = 'none';
         document.getElementById('hlSaveBtn').textContent = '저장';
@@ -3339,6 +3428,11 @@
         if (type === 'blood') { hlRenderItemsTable(r.items || []); document.getElementById('hlParseInfo').innerHTML = '수정 중 — 표를 고치고 저장하세요.'; }
         else if (type === 'checkup') { document.getElementById('hlExam').value = r.exam || ''; document.getElementById('hlCheckupNote').value = r.note || ''; }
         else if (type === 'effort') { hlSetEffortEffect(hlEffortEffect(r)); document.getElementById('hlEffortTitle').value = r.title || ''; document.getElementById('hlEffortEnd').value = r.endDate || ''; document.getElementById('hlEffortNote').value = r.note || ''; }
+        else if (type === 'measure') {
+            const m = r.measures || {};
+            HL_MEASURES.forEach(d => { const el = document.getElementById('hlM_' + d.key); if (el) el.value = (m[d.key] != null ? m[d.key] : ''); });
+            document.getElementById('hlMeasureNote').value = r.note || '';
+        }
         document.getElementById('hlSaveBtn').textContent = '수정 저장';
         document.getElementById('hlCancelEdit').style.display = 'block';
         hlSetView('input');
@@ -3355,7 +3449,7 @@
     };
 
     // ---------- 기록 목록 ----------
-    const HL_TYPE_LABEL = { blood: '혈액', checkup: '검진', effort: '노력', endoscopy: '검진', other: '노력' };
+    const HL_TYPE_LABEL = { blood: '혈액', checkup: '검진', effort: '노력', measure: '측정', endoscopy: '검진', other: '노력' };
     function hlEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function hlAttr(s) { return hlEsc(s).replace(/"/g, '&quot;'); }
     // 항목 설명 물음표 토글 (마우스오버는 title, 클릭은 아래 desc 표시)
@@ -3398,6 +3492,9 @@
                 const period = e ? `${hlEsc(s)} ~ ${hlEsc(e)}` : `${hlEsc(s)} ~ 진행 중`;
                 const sign = hlEffortEffect(r) === 'minus' ? '－' : '＋';
                 headMid = `<span class="hl-rec-sign">${sign}</span><span class="hl-rec-hosp">${hlEsc(r.title || '노력')}</span><span class="hl-rec-period">${period}</span>`;
+                body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none"><div class="hl-rec-note">${r.note ? hlEsc(r.note) : '<span style="color:var(--zm-muted)">메모 없음</span>'}</div></div>`;
+            } else if (type === 'measure') {
+                headMid = `<span class="hl-rec-hosp">${hlEsc(hlMeasureSummary(r.measures))}</span>`;
                 body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none"><div class="hl-rec-note">${r.note ? hlEsc(r.note) : '<span style="color:var(--zm-muted)">메모 없음</span>'}</div></div>`;
             } else {
                 body = `<div class="hl-rec-body" id="hlbody-${r.id}" style="display:none"><div class="hl-rec-note">${hlEsc(r.note)}</div></div>`;
@@ -3512,9 +3609,97 @@
     // 반환 kind: 'lib'(라이브러리 없음) | 'no-item'(항목 기록 없음)
     //          | 'no-range'(기간 밖) | 'ok'(config, meta 포함)
     // opts.xMin/xMax: time scale일 때 x축 범위를 강제로 맞춘다(묶음 정렬용).
+    /* 측정 항목 차트 — 참고치가 없어 배경 밴드도 이상치 표시도 없다.
+       혈압(수축기·이완기)과 안압(좌·우)은 두 계열을 한 차트에 겹쳐 그린다. */
+    function hlMakeMeasureConfig(chartKey, opts) {
+        const spec = HL_MEASURE_CHARTS[chartKey];
+        if (!spec) return { kind: 'no-item' };
+        const dark = !!opts.dark;
+        const PAL = dark
+            ? { grid: '#444141', tick: '#9b9797' }
+            : { grid: '#e2dede', tick: '#9b9797' };
+        const CHART_FONT = 'Archivo';
+
+        // 그 차트가 쓰는 키 중 하나라도 값이 있는 기록만
+        const all = hlRecords
+            .filter(r => r.person === hlPerson && hlNormType(r.type) === 'measure')
+            .map(r => ({ date: r.date, ts: hlDateTs(r.date), m: r.measures || {} }))
+            .filter(r => spec.keys.some(k => r.m[k] != null))
+            .sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
+        if (!all.length) return { kind: 'no-item' };
+
+        const cutoff = hlRangeCutoff();
+        const pts = (cutoff == null) ? all : all.filter(p => p.ts == null || p.ts >= cutoff);
+        if (!pts.length) return { kind: 'no-range', all };
+
+        const useTime = hlDateAdapterOk() && pts.every(p => p.ts != null);
+        const labels = pts.map(p => (p.date || '').substring(2).replace(/-/g, '/'));
+        const colors = chartSeriesColors(spec.keys.length);
+        const datasets = spec.keys.map((k, i) => ({
+            label: spec.labels[i],
+            data: pts.map(p => (p.m[k] == null ? null : (useTime ? { x: p.ts, y: p.m[k] } : p.m[k]))),
+            borderColor: colors[i], backgroundColor: 'transparent',
+            borderWidth: 2, borderDash: CHART_SERIES_DASH[i % CHART_SERIES_DASH.length],
+            pointBackgroundColor: colors[i], pointBorderColor: 'transparent',
+            pointRadius: 3, pointHoverRadius: 6,
+            tension: 0.2, fill: false, spanGaps: true,
+        }));
+
+        let xScale;
+        if (useTime) {
+            const tsArr = pts.map(p => p.ts);
+            let tMin = Math.min.apply(null, tsArr), tMax = Math.max.apply(null, tsArr);
+            const forced = (opts.xMin != null && opts.xMax != null && opts.xMin !== opts.xMax);
+            const single = !forced && (tMin === tMax);
+            if (forced) { tMin = opts.xMin; tMax = opts.xMax; }
+            else if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
+            const tu = chartTimeUnit(tMin, tMax);
+            const xticks = { autoSkip: true, maxRotation: 0, maxTicksLimit: CHART_MAX_TICKS, color: PAL.tick, font: { family: CHART_FONT, size: 11 } };
+            if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }
+            xScale = {
+                type: 'time', time: { unit: tu.unit, displayFormats: { [tu.unit]: tu.fmt } },
+                grid: { display: false }, border: { color: PAL.grid }, ticks: xticks,
+                min: tMin, max: tMax,
+            };
+        } else {
+            xScale = { grid: { display: false }, border: { color: PAL.grid }, ticks: { color: PAL.tick, font: { family: CHART_FONT, size: 11 } } };
+        }
+
+        const config = {
+            type: 'line',
+            data: { labels: useTime ? undefined : labels, datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'nearest', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: ctx => pts[ctx[0].dataIndex] ? pts[ctx[0].dataIndex].date : '',
+                            label: ctx => (ctx.parsed.y == null) ? null
+                                : `${ctx.dataset.label}: ${ctx.parsed.y}${spec.unit ? ' ' + spec.unit : ''}`,
+                        }
+                    }
+                },
+                scales: {
+                    y: { ticks: { color: PAL.tick, font: { family: CHART_FONT, size: 10 } }, grid: { color: PAL.grid, tickBorderDash: [2, 2] }, border: { display: false } },
+                    x: xScale
+                }
+            },
+            plugins: [hlEffortPlugin(dark, !!opts.strips)],
+        };
+        // 계열별 요약(최근값·범위)을 만들 재료
+        const series = spec.keys.map((k, i) => {
+            const vals = pts.map(p => p.m[k]).filter(v => v != null);
+            return { key: k, label: spec.labels[i], color: colors[i], values: vals };
+        }).filter(s => s.values.length);
+        return { kind: 'ok', config, meta: { measure: true, spec, series, pts, all, cutoff, useTime, unit: spec.unit } };
+    }
+
     function hlMakeChartConfig(itemName, opts) {
         opts = opts || {};
         if (typeof Chart === 'undefined') return { kind: 'lib' };
+        if (String(itemName).indexOf(HL_M_PREFIX) === 0) return hlMakeMeasureConfig(String(itemName).slice(HL_M_PREFIX.length), opts);
 
         // 시안 팔레트(무채 + 적색). opts.dark = 어두운 계기판 패널(개별 보기)용.
         const dark = !!opts.dark;
@@ -3629,16 +3814,27 @@
         hlGroupCharts = [];
     }
 
+    // 선택 인물이 실제로 기록한 측정 차트만 (기록이 없으면 셀렉트에 넣지 않는다)
+    function hlMeasureChartNames(person) {
+        const recs = hlRecords.filter(r => r.person === person && hlNormType(r.type) === 'measure');
+        return Object.keys(HL_MEASURE_CHARTS).filter(k =>
+            HL_MEASURE_CHARTS[k].keys.some(key => recs.some(r => (r.measures || {})[key] != null)));
+    }
+
     function hlRenderChart() {
         const sel = document.getElementById('hlChartItem');
         const names = hlBloodItemNames(hlPerson);
+        const mNames = hlMeasureChartNames(hlPerson);
         const prev = sel.value;
         sel.innerHTML = names.map(n => {
             const inf = hlInfo(n);
             const label = inf && inf.short ? `${n} — ${inf.short}` : n;
             return `<option value="${hlEsc(n)}">${hlEsc(label)}</option>`;
-        }).join('');
-        if (names.includes(prev)) sel.value = prev;
+        }).join('')
+            + (mNames.length ? `<optgroup label="측정">` + mNames.map(n =>
+                `<option value="${hlEsc(HL_M_PREFIX + n)}">${hlEsc(n)}</option>`).join('') + `</optgroup>` : '');
+        const allValues = names.concat(mNames.map(n => HL_M_PREFIX + n));
+        if (allValues.includes(prev)) sel.value = prev;
 
         const canvas = document.getElementById('hlChart');
         const statsEl = document.getElementById('hlChartStats');
@@ -3653,7 +3849,7 @@
         hlBuildRangeRow();
 
         // 항목 자체가 없으면 모드 상관없이 공통 빈 안내
-        if (typeof Chart === 'undefined' || !names.length) {
+        if (typeof Chart === 'undefined' || !allValues.length) {
             if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
             hlDestroyGroupCharts();
             singleWrap.style.display = ''; groupWrap.style.display = 'none'; watchWrap.style.display = 'none';
@@ -3665,7 +3861,7 @@
             statsEl.innerHTML = ''; sel.style.display = 'none'; canvas.style.display = 'none';
             msgEl.innerHTML = (typeof Chart === 'undefined')
                 ? '<div class="a10-empty">차트 라이브러리를 불러오지 못했습니다.</div>'
-                : `<div class="a10-empty">${hlPerson}의 혈액검사 수치가 없습니다.</div>`;
+                : `<div class="a10-empty">${hlPerson}의 수치 기록이 없습니다.<br>‘기록 입력’에서 혈액검사나 측정을 추가하세요.</div>`;
             return;
         }
         if (modeRow) modeRow.style.display = '';
@@ -3720,6 +3916,26 @@
         }
 
         const m = res.meta;
+        if (m.measure) {
+            // 계열마다 한 칸: 라벨 · 최소~최대 / 큰 숫자는 가장 최근 값
+            let mh = m.series.map(s => {
+                const last = s.values[s.values.length - 1];
+                const mn = Math.min.apply(null, s.values), mx = Math.max.apply(null, s.values);
+                const range = (mn === mx) ? `${mn}` : `${mn}~${mx}`;
+                // 계열이 둘이면 색 점을 붙여 선과 짝을 맞춘다(혈압 수축기/이완기, 안압 좌/우)
+                const dot = m.series.length > 1 ? `<i class="a10-swatch" style="color:${s.color}"></i>` : '';
+                return `<span>${dot}${hlEsc(s.label)} · ${range}<b>${last}${m.unit ? ' ' + m.unit : ''}</b></span>`;
+            }).join('');
+            if (m.cutoff != null && m.pts.length < m.all.length) mh += `<span>${HL_RANGE_LABEL[hlChartRange]} <b>${m.pts.length}건</b></span>`;
+            statsEl.innerHTML = mh;
+            const mnotes = [];
+            if (m.pts.length === 1) mnotes.push('기록이 1건이라 흐름은 다음 기록부터 보입니다.');
+            if (!m.useTime) mnotes.push(hlDateAdapterOk()
+                ? '날짜를 읽지 못한 기록이 있어 예전처럼 등간격으로 그렸습니다.'
+                : '날짜 축 라이브러리를 불러오지 못해 등간격으로 그렸습니다. (간격이 실제 기간과 다릅니다)');
+            msgEl.innerHTML = mnotes.length ? `<div class="a10-hint">${mnotes.join('<br>')}</div>` : '';
+            return;
+        }
         const values = m.values, refLow = m.refLow, refHigh = m.refHigh, unit = m.unit, pts = m.pts, all = m.all, cutoff = m.cutoff;
         const mn = Math.min(...values), mx = Math.max(...values), first = values[0], last = values[values.length - 1];
         let html = `<span>최소 <b>${mn}</b></span><span>최대 <b>${mx}</b></span>`;
