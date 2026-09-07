@@ -491,6 +491,9 @@
         #workoutTab button { border-radius: var(--zm-radius); font-family: var(--font-body); }
         .wo-msg { min-height: 18px; margin-bottom: 10px; text-align: center;
             font-size: 13px; font-weight: 600; color: var(--zm-ink); line-height: 1.6; }
+        .wo-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 18px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--zm-border); }
+        .wo-legend-label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; color: var(--zm-muted); margin-right: 2px; }
 
         /* 부위 묶음 */
         .wo-part { margin-bottom: 26px; }
@@ -549,7 +552,13 @@
         /* 최근 날짜 */
         .wo-recent { display: flex; align-items: baseline; gap: 8px; margin-top: 10px;
             padding-top: 8px; border-top: 1px solid var(--zm-line); }
-        .wo-recent-dates { font-family: var(--font-num); font-size: 13px; font-weight: 600; color: var(--zm-text-soft); }
+        .wo-recent-dates { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+        /* 날짜 칩 — 같은 날 한 기구는 같은 색이 되어 그날 뭘 함께 했는지 바로 보인다.
+           --zm-series-*는 어두운 패널용이라 글자색으로 쓰면 옅다. 칩 배경으로 깔고 글자는 잉크로. */
+        .wo-date { display: inline-block; font-family: var(--font-num); font-size: 12px; font-weight: 800;
+            padding: 2px 6px; color: var(--zm-ink); background: var(--zm-bg); border: 1px solid var(--zm-border); }
+        .wo-date.hit { border-color: transparent; }
+        .wo-date b { margin-left: 4px; font-size: 10px; font-weight: 700; opacity: 0.7; }
         .wo-recent-ago { margin-left: auto; font-family: var(--font-num); font-size: 12px; color: var(--zm-muted); }
         .wo-recent-none { font-size: 12px; color: var(--zm-muted-2); }
         .wo-empty { text-align: center; color: var(--zm-muted-2); font-size: 13px; line-height: 1.7; padding: 30px 12px; border: 1px dashed var(--zm-border); }
@@ -1170,6 +1179,8 @@
 <!-- 기구 카드 하나에 최고 기록·오늘 표시·최근 날짜를 모두 담는다(별도 입력/이력 화면 없음) -->
 <div id="workoutTab" style="display:none">
     <div class="wo-msg" id="woMsg"></div>
+    <!-- 최근 운동일 색 안내 — 카드의 날짜 색과 짝이 맞아 로테이션이 한눈에 보인다 -->
+    <div class="wo-legend" id="woLegend" style="display:none"></div>
     <div id="woParts"></div>
 </div>
 <!-- ===== /운동 탭 ===== -->
@@ -4158,6 +4169,7 @@
             console.error('운동기록 조회 실패:', e);
             document.getElementById('woParts').innerHTML =
                 '<div class="wo-empty">운동 기록을 불러오지 못했습니다.<br>Firestore 보안 규칙에 workout 컬렉션이 들어가 있는지 확인해주세요.</div>';
+            document.getElementById('woLegend').style.display = 'none';
             return;
         }
         woRenderList();
@@ -4200,13 +4212,43 @@
             </div>
         </div>`;
     }
+    /* 날짜별 색 — 최근 운동일 6개에 --zm-series-* 를 최신순으로 물린다.
+       같은 날 한 기구들은 같은 색이 되어, 그날 무엇을 함께 했는지·로테이션이 한눈에 보인다.
+       그보다 오래된 날짜는 무채 칩으로 둔다(색이 돌아 겹치면 오히려 헷갈린다). */
+    const WO_DATE_COLORS = 6;
+    let woDateColorMap = {};   // 'YYYY-MM-DD' → 색
+    let woRecentDates = [];    // 색이 붙은 날짜 (최신순)
+    function woBuildDateColors() {
+        const all = [...new Set([].concat.apply([], woItems.map(it => it.dates)))].sort().reverse();
+        const colors = chartSeriesColors(WO_DATE_COLORS);
+        woRecentDates = all.slice(0, WO_DATE_COLORS);
+        woDateColorMap = {};
+        woRecentDates.forEach((d, i) => { woDateColorMap[d] = colors[i]; });
+    }
+    function woDateChip(d, extra) {
+        const c = woDateColorMap[d];
+        return `<span class="wo-date${c ? ' hit' : ''}"${c ? ` style="background:${c}"` : ''}>`
+            + `${hlEsc(woShortDate(d))}${extra || ''}</span>`;
+    }
+    function woRenderLegend() {
+        const el = document.getElementById('woLegend');
+        if (!el) return;
+        if (!woRecentDates.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+        el.style.display = 'flex';
+        el.innerHTML = '<span class="wo-legend-label">최근 운동일</span>' + woRecentDates.map(d => {
+            const names = woItems.filter(it => it.dates.indexOf(d) >= 0).map(it => it.machine);
+            return `<span title="${hlAttr(names.join(', '))}">${woDateChip(d, `<b>${names.length}</b>`)}</span>`;
+        }).join('');
+    }
+
     function woCardInner(it) {
-        const on = it.dates.indexOf(todayStr()) >= 0;
-        const recent = it.dates.slice(0, 3).map(woShortDate).join(' · ');
+        const today = todayStr();
+        const on = it.dates.indexOf(today) >= 0;
+        const recent = it.dates.slice(0, 3).map(d => woDateChip(d)).join('');
         return `<div class="wo-card-head">
                 <input type="text" class="wo-name-input" value="${hlAttr(it.machine)}" aria-label="기구 이름"
                        oninput="woRename('${hlAttr(it.id)}',this.value)" onchange="woRenameDone('${hlAttr(it.id)}',this)">
-                <button type="button" class="wo-today${on ? ' on' : ''}" onclick="woToggleToday('${hlAttr(it.id)}')">${on ? '오늘 완료' : '오늘'}</button>
+                <button type="button" class="wo-today${on ? ' on' : ''}" onclick="woToggleToday('${hlAttr(it.id)}')">${on ? `${woShortDate(today)} 완료` : `오늘 ${woShortDate(today)}`}</button>
             </div>
             <div class="wo-stats">
                 ${woStatHtml(it.id, 'weight', it.weight)}
@@ -4214,13 +4256,15 @@
                 ${woStatHtml(it.id, 'sets', it.sets)}
             </div>
             <div class="wo-recent">${it.dates.length
-                ? `<span class="wo-recent-dates">${hlEsc(recent)}</span><span class="wo-recent-ago">${hlEsc(woAgoLabel(it.dates[0]))}</span>`
+                ? `<span class="wo-recent-dates">${recent}</span><span class="wo-recent-ago">${hlEsc(woAgoLabel(it.dates[0]))}</span>`
                 : '<span class="wo-recent-none">아직 기록 없음</span>'}
                 <button type="button" class="wo-del" onclick="woDelete('${hlAttr(it.id)}')">삭제</button>
             </div>`;
     }
 
     function woRenderList() {
+        woBuildDateColors();
+        woRenderLegend();
         const root = document.getElementById('woParts');
         const seed = woItems.length ? '' :
             `<div class="wo-seed">
@@ -4247,8 +4291,19 @@
             return `<div class="wo-part">${head}<div class="wo-grid">${cards}${add}</div></div>`;
         }).join('');
     }
-    // 손가락 밑에서 목록이 재정렬되면 정신없으므로, 누른 카드만 다시 그린다.
-    // (정렬은 탭을 다시 열 때 반영된다)
+    // '오늘'을 켜고 끄면 날짜 색 순위가 바뀌므로 범례와 모든 카드를 다시 칠한다.
+    // 다만 정렬은 건드리지 않는다 — 손가락 밑에서 카드가 움직이면 정신없다.
+    function woRepaintAll() {
+        woBuildDateColors();
+        woRenderLegend();
+        document.querySelectorAll('#woParts .wo-card[data-id]').forEach(el => {
+            const it = woItem(el.dataset.id);
+            if (!it) return;
+            el.innerHTML = woCardInner(it);
+            el.classList.toggle('none', !it.dates.length);
+        });
+    }
+    // 값만 바뀔 때는 누른 카드만 다시 그린다.
     function woPaintCard(id) {
         const it = woItem(id);
         const el = document.querySelector(`#woParts .wo-card[data-id="${CSS.escape(id)}"]`);
@@ -4270,7 +4325,7 @@
         const i = it.dates.indexOf(t);
         if (i >= 0) it.dates.splice(i, 1);                                       // 다시 누르면 취소
         else it.dates = [t].concat(it.dates).sort().reverse().slice(0, WO_MAX_DATES);
-        woPaintCard(id);
+        woRepaintAll();
         woQueueSave(id, 0);   // 눌렀다는 표시는 바로 남긴다
     };
     // 이름은 문서 id와 무관한 필드라, 고쳐도 기록(무게·횟수·세트·날짜)이 그대로 남는다
