@@ -89,15 +89,7 @@ exports.handler = async (event) => {
   }
   const targetEpoch = toEpoch(date);
 
-  // only=dxy,usdjpy → 그 항목만 조회한다(소급 채우기용). 없으면 전 항목.
-  // 공통 기준일은 '요청한 항목들' 안에서만 잡히므로, 부분 조회 결과의 basisDate를
-  // 기존 문서에 덮어쓰면 안 된다. 값만 골라 쓸 것.
-  const only = (event.queryStringParameters && event.queryStringParameters.only) || "";
-  const wanted = only ? only.split(",").map(s => s.trim()).filter(s => SYMBOLS[s]) : null;
-  if (only && !wanted.length) {
-    return { statusCode: 400, body: JSON.stringify({ error: "only= 에 알 수 없는 항목" }) };
-  }
-  const keys = wanted || Object.keys(SYMBOLS);
+  const keys = Object.keys(SYMBOLS);
   // 병렬 조회 — 일부 실패해도 나머지는 유지 (전체 실패 처리 금지)
   const settled = await Promise.allSettled(
     keys.map(k => fetchSeries(SYMBOLS[k], targetEpoch))
@@ -121,30 +113,6 @@ exports.handler = async (event) => {
       errors[k] = String((res.reason && res.reason.message) || res.reason);
     }
   });
-
-  // only 모드(소급 채우기): 이미 기준일이 정해진 문서에 값만 채워 넣는 용도다.
-  // 요청한 항목끼리 다시 공통 기준일을 잡으면 원래 기준일보다 앞으로 당겨져
-  // 기존 값들과 다른 날짜가 되어버린다. 그래서 항목별로 '요청일 이하 마지막 종가'를
-  // 그대로 고른다 — 전체 조회가 그 기준일에서 고르는 값과 같아진다.
-  if (wanted) {
-    const picked = {};
-    for (const k of Object.keys(seriesByKey)) {
-      let chosen = null;
-      for (const p of seriesByKey[k]) chosen = p;   // 이미 요청일 이하만 담겨 있다
-      if (chosen) { market[k] = roundVal(k, chosen.close); picked[k] = chosen.ymd; }
-      else errors[k] = "요청일 이전 데이터 없음";
-    }
-    market.basisDate = date;      // 호출자가 준 기준일 그대로 (덮어쓰기 금지)
-    market.stale = false;
-    market.pickedDates = picked;  // 항목별 실제 종가 날짜 (확인용)
-    market.partial = true;
-    if (Object.keys(errors).length) market.errors = errors;
-    return {
-      statusCode: 200,
-      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=3600" },
-      body: JSON.stringify(market),
-    };
-  }
 
   // 2단계: 모든 심볼 값을 '공통 기준일 이하 마지막 종가'로 재선택 → 전 값이 같은 날짜.
   if (basisDate) {
