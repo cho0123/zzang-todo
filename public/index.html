@@ -450,7 +450,9 @@
         .hl-group-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; margin-bottom: 10px; }
         /* min-width:0 이 없으면 캔버스의 예전 폭이 칸의 최소폭이 돼 화면이 좁아져도 칸이 안 줄고,
            그 칸이 다시 캔버스를 넓게 유지하는 악순환이 생긴다(가로 스크롤 발생) */
-        #hlGroupGrid > div, #hlWatchGrid > .hl-watch-cell { min-width: 0; border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); background: var(--zm-card); padding: 10px 12px; }
+        #hlGroupGrid > div, #hlWatchGrid > .hl-watch-cell, #hlMChartGrid > div { min-width: 0; border: 1px solid var(--zm-border); border-left: 3px solid var(--zm-ink); background: var(--zm-card); padding: 10px 12px; }
+        #hlMChartGrid > div { border-left-color: var(--zm-tone-bronze); }   /* 측정은 목록 배지와 같은 색 */
+        .hl-m-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 2px 0 6px; }
         /* 관찰 요망 — 벗어난 적 있는 항목이라 좌측 바를 적색으로(건강 탭 이상치 색) */
         #hlWatchGrid > .hl-watch-cell { border-left-color: var(--zm-accent); }
         /* 3순위(1회만 벗어남) — 참고용이므로 가라앉힌다 */
@@ -1156,6 +1158,7 @@
                 <button class="hl-chip cmode active" data-hcmode="single" onclick="hlSetChartMode('single')">개별 보기</button>
                 <button class="hl-chip cmode" data-hcmode="group" onclick="hlSetChartMode('group')">묶음 보기</button>
                 <button class="hl-chip cmode" data-hcmode="watch" onclick="hlSetChartMode('watch')">관찰 요망</button>
+                <button class="hl-chip cmode" data-hcmode="measure" onclick="hlSetChartMode('measure')">측정</button>
             </div>
             <span class="hl-toolbar-sep"></span>
             <!-- 기간 칩은 보기 방식에 따라 hlBuildRangeRow()가 다시 그린다(관찰 요망만 5년 포함) -->
@@ -1192,6 +1195,11 @@
             <div class="hl-ov-head hl-ov-head2">항목별 보기</div>
             <div id="hlGroupGrid" class="hl-group-grid"></div>
             <div id="hlGroupMsg"></div>
+        </div>
+        <!-- 측정 — 체중·체지방률·혈압·안압을 한 화면에 (참고치 밴드·이상치 판정 없음) -->
+        <div id="hlChartMeasure" style="display:none">
+            <div id="hlMChartGrid" class="hl-group-grid"></div>
+            <div id="hlMChartMsg"></div>
         </div>
         <!-- 관찰 요망 — 기간 안에서 참고치를 벗어난 적 있는 항목만 모아 보여준다 -->
         <div id="hlChartWatch" style="display:none">
@@ -3826,15 +3834,13 @@
         const names = hlBloodItemNames(hlPerson);
         const mNames = hlMeasureChartNames(hlPerson);
         const prev = sel.value;
+        // 셀렉트에는 혈액검사 항목만 둔다 — 측정은 '측정' 보기로 분리했다
         sel.innerHTML = names.map(n => {
             const inf = hlInfo(n);
             const label = inf && inf.short ? `${n} — ${inf.short}` : n;
             return `<option value="${hlEsc(n)}">${hlEsc(label)}</option>`;
-        }).join('')
-            + (mNames.length ? `<optgroup label="측정">` + mNames.map(n =>
-                `<option value="${hlEsc(HL_M_PREFIX + n)}">${hlEsc(n)}</option>`).join('') + `</optgroup>` : '');
-        const allValues = names.concat(mNames.map(n => HL_M_PREFIX + n));
-        if (allValues.includes(prev)) sel.value = prev;
+        }).join('');
+        if (names.includes(prev)) sel.value = prev;
 
         const canvas = document.getElementById('hlChart');
         const statsEl = document.getElementById('hlChartStats');
@@ -3845,16 +3851,18 @@
         const singleWrap = document.getElementById('hlChartSingle');
         const groupWrap = document.getElementById('hlChartGroup');
         const watchWrap = document.getElementById('hlChartWatch');
+        const mWrap = document.getElementById('hlChartMeasure');
         document.querySelectorAll('[data-hcmode]').forEach(b => b.classList.toggle('active', b.dataset.hcmode === hlChartMode));
         hlBuildRangeRow();
 
         // 항목 자체가 없으면 모드 상관없이 공통 빈 안내
-        if (typeof Chart === 'undefined' || !allValues.length) {
+        if (typeof Chart === 'undefined' || (!names.length && !mNames.length)) {
             if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
             hlDestroyGroupCharts();
-            singleWrap.style.display = ''; groupWrap.style.display = 'none'; watchWrap.style.display = 'none';
+            singleWrap.style.display = ''; groupWrap.style.display = 'none'; watchWrap.style.display = 'none'; mWrap.style.display = 'none';
             document.getElementById('hlGroupGrid').innerHTML = '';   // 지난 화면의 빈 캔버스가 남지 않게
             document.getElementById('hlWatchGrid').innerHTML = '';
+            document.getElementById('hlMChartGrid').innerHTML = '';
             if (modeRow) modeRow.style.display = 'none';
             if (rangeRow) rangeRow.style.display = 'none';
             if (detailEl) detailEl.style.display = 'none';
@@ -3867,20 +3875,30 @@
         if (modeRow) modeRow.style.display = '';
         if (rangeRow) rangeRow.style.display = '';
 
-        // 여러 작은 차트를 쓰는 보기(묶음 / 관찰 요망)로 위임
-        if (hlChartMode === 'group' || hlChartMode === 'watch') {
+        // 여러 작은 차트를 쓰는 보기(묶음 / 관찰 요망 / 측정)로 위임
+        if (hlChartMode === 'group' || hlChartMode === 'watch' || hlChartMode === 'measure') {
             if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
-            const isGroup = hlChartMode === 'group';
             singleWrap.style.display = 'none';
-            groupWrap.style.display = isGroup ? '' : 'none';
-            watchWrap.style.display = isGroup ? 'none' : '';
-            if (isGroup) hlRenderGroup(); else hlRenderWatch();
+            groupWrap.style.display = (hlChartMode === 'group') ? '' : 'none';
+            watchWrap.style.display = (hlChartMode === 'watch') ? '' : 'none';
+            mWrap.style.display = (hlChartMode === 'measure') ? '' : 'none';
+            if (hlChartMode === 'group') hlRenderGroup();
+            else if (hlChartMode === 'watch') hlRenderWatch();
+            else hlRenderMeasureView();
             return;
         }
 
         // ── 개별 보기 ──
         hlDestroyGroupCharts();
-        singleWrap.style.display = ''; groupWrap.style.display = 'none'; watchWrap.style.display = 'none';
+        singleWrap.style.display = ''; groupWrap.style.display = 'none'; watchWrap.style.display = 'none'; mWrap.style.display = 'none';
+        // 측정만 있고 혈액검사가 없을 수도 있다
+        if (!names.length) {
+            if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
+            if (detailEl) detailEl.style.display = 'none';
+            statsEl.innerHTML = ''; sel.style.display = 'none'; canvas.style.display = 'none';
+            msgEl.innerHTML = `<div class="a10-empty">${hlPerson}의 혈액검사 수치가 없습니다.<br>측정 기록은 위 ‘측정’ 보기에서 볼 수 있습니다.</div>`;
+            return;
+        }
         sel.style.display = '';
         if (hlChartInstance) { hlChartInstance.destroy(); hlChartInstance = null; }
         // 띠는 일단 숨겼다가, 차트가 실제로 그려질 때 플러그인이 다시 채운다
@@ -4278,6 +4296,68 @@
 
             try { hlGroupCharts.push(new Chart(cv, res.config)); }
             catch (e) { console.error('관찰 요망 차트 실패:', b.it.name, e); }
+        }
+    }
+
+    /* 측정 보기 — 체중·체지방률·혈압·안압을 묶음 보기와 같은 그리드에 나열한다.
+       참고치가 없는 항목이라 밴드도 이상치 판정도 없다(hlMakeMeasureConfig와 동일). */
+    function hlRenderMeasureView() {
+        const grid = document.getElementById('hlMChartGrid');
+        const msg = document.getElementById('hlMChartMsg');
+        hlDestroyGroupCharts();
+        grid.innerHTML = '';
+
+        const names = hlMeasureChartNames(hlPerson);
+        if (!names.length) {
+            msg.innerHTML = `<div class="a10-empty">${hlPerson}의 측정 기록이 없습니다.<br>‘기록 입력 → 측정’에서 체중·혈압·안압 등을 남겨보세요.</div>`;
+            return;
+        }
+
+        // 기간 안에 그릴 점이 있는 것만 만들고, x축은 전 차트 공통으로 맞춘다
+        const built = [];
+        let gMin = Infinity, gMax = -Infinity;
+        for (const n of names) {
+            const r = hlMakeChartConfig(HL_M_PREFIX + n);
+            if (r.kind !== 'ok') continue;
+            built.push({ name: n, res: r });
+            if (r.meta.useTime) r.meta.pts.forEach(p => { if (p.ts != null) { if (p.ts < gMin) gMin = p.ts; if (p.ts > gMax) gMax = p.ts; } });
+        }
+        if (!built.length) {
+            msg.innerHTML = `<div class="a10-empty">최근 ${HL_RANGE_LABEL[hlActiveRange()] || ''} 안에는 측정 기록이 없습니다.<br>기간을 ‘전체’로 바꿔보세요.</div>`;
+            return;
+        }
+        msg.innerHTML = '';
+        const haveDomain = gMin !== Infinity && gMax !== -Infinity && gMin !== gMax;
+
+        for (const b of built) {
+            const res = haveDomain ? hlMakeChartConfig(HL_M_PREFIX + b.name, { xMin: gMin, xMax: gMax }) : b.res;
+            if (res.kind !== 'ok') continue;
+            const series = res.meta.series;
+
+            const cell = document.createElement('div');
+            const title = document.createElement('div');
+            title.className = 'hl-group-title';
+            title.textContent = res.meta.unit ? `${b.name} (${res.meta.unit})` : b.name;
+            cell.appendChild(title);
+
+            // 두 계열이면 어느 선이 무엇인지 색으로 짚어준다
+            if (series.length > 1) {
+                const lg = document.createElement('div');
+                lg.className = 'hl-m-legend';
+                lg.innerHTML = series.map(s =>
+                    `<span class="a10-legend-item"><i class="a10-swatch" style="color:${s.color}"></i>${hlEsc(s.label)}</span>`).join('');
+                cell.appendChild(lg);
+            }
+
+            const box = document.createElement('div');
+            box.className = 'hl-group-box';
+            const cv = document.createElement('canvas');
+            box.appendChild(cv);
+            cell.appendChild(box);
+            grid.appendChild(cell);
+
+            try { hlGroupCharts.push(new Chart(cv, res.config)); }
+            catch (e) { console.error('측정 차트 실패:', b.name, e); }
         }
     }
 
