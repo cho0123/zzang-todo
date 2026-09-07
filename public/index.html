@@ -605,6 +605,22 @@
             background: var(--zm-ink); color: var(--zm-on-ink); border: none; cursor: pointer; }
         .wo-seed-btn:disabled { opacity: 0.5; cursor: default; }
 
+        /* ===== 임시: 신규 지표 소급 채우기 (백필 끝나면 이 블록 삭제) ===== */
+        .a10-backfill { margin-top: 28px; padding: 14px; border: 1px dashed var(--zm-border); }
+        .a10-bf-head { font-family: var(--font-title); font-size: 12px; font-weight: 700;
+            letter-spacing: 0.04em; color: var(--zm-muted); margin-bottom: 6px; }
+        .a10-bf-note { font-size: 12px; line-height: 1.7; color: var(--zm-muted); word-break: keep-all; margin-bottom: 10px; }
+        .a10-bf-row { display: flex; flex-wrap: wrap; gap: 6px; }
+        .a10-bf-btn { flex: none; width: auto; min-height: 44px; padding: 0 16px; font-weight: 700;
+            background: var(--zm-ink); color: var(--zm-on-ink); border: none; border-radius: var(--zm-radius); cursor: pointer; }
+        .a10-bf-btn:disabled { opacity: 0.5; cursor: default; }
+        .a10-bf-sub { flex: none; width: auto; min-height: 44px; padding: 0 14px; font-weight: 700;
+            background: transparent; color: var(--zm-muted); border: 1px solid var(--zm-border);
+            border-radius: var(--zm-radius); cursor: pointer; }
+        .a10-bf-sub:hover { color: var(--zm-text-soft); border-color: var(--zm-muted); }
+        .a10-bf-status { margin-top: 10px; font-family: var(--font-num); font-size: 13px; color: var(--zm-text-soft); line-height: 1.7; }
+        .a10-bf-fail { margin-top: 8px; font-size: 12px; line-height: 1.8; color: var(--zm-muted); word-break: break-word; }
+
         /* ===================== 로그인 게이트 ===================== */
         #loginScreen { width: 100%; max-width: 360px; margin-top: 8vh; }
         .login-card {
@@ -1069,6 +1085,24 @@
         <div class="a10-chart-box"><canvas id="a10Chart"></canvas></div>
         <div class="a10-chart-stats" id="a10ChartStats"></div>
         <div id="a10ChartMsg"></div>
+
+        <!-- ===== 임시: 신규 지표 소급 채우기 (백필 끝나면 지울 것) =====
+             달러지수·달러/엔을 뒤늦게 추가해 예전 일지에는 없다. 다 채우고 나면
+             ① 이 마크업 블록 ② 아래 '임시: 소급 채우기' JS 블록 ③ .a10-bf-* CSS
+             ④ market.js의 only= 처리 — 네 군데만 지우면 원상복구된다. -->
+        <div class="a10-backfill" id="a10Backfill">
+            <div class="a10-bf-head">임시 · 신규 지표 채우기</div>
+            <div class="a10-bf-note">달러지수·달러/엔이 없는 예전 일지에 그 두 값만 넣습니다.
+                일지 본문과 기존 지표·기준일은 건드리지 않습니다.</div>
+            <div class="a10-bf-row">
+                <button type="button" class="a10-bf-btn" id="a10BfRunBtn">대상 확인하고 채우기</button>
+                <button type="button" class="a10-bf-sub" id="a10BfStopBtn" style="display:none">중단</button>
+                <button type="button" class="a10-bf-sub" id="a10BfRetryBtn" style="display:none">실패한 날짜만 다시 시도</button>
+            </div>
+            <div class="a10-bf-status" id="a10BfStatus"></div>
+            <div class="a10-bf-fail" id="a10BfFail"></div>
+        </div>
+        <!-- ===== /임시 ===== -->
     </div>
 
 </div>
@@ -2630,6 +2664,99 @@
                 + `<b>${chg == null ? '—' : (chg > 0 ? '+' : '') + chg.toFixed(2) + '%'}</b></span>`;
         }).join('');
     }
+
+    /* ===== 임시: 신규 지표(달러지수·달러/엔) 소급 채우기 ==========================
+       뒤늦게 추가한 두 항목이 예전 일지에 없어서, 그 두 필드만 채워 넣는다.
+       · 기존 7종 값·basisDate·v·본문(content)은 손대지 않는다.
+         updateDoc에 'market.dxy' 같은 점 경로만 넘겨 그 필드만 병합한다.
+       · 조회는 일지 날짜가 아니라 그 문서의 basisDate로 한다.
+         전체 조회는 9종 공통 기준일을 다시 잡아 기존 값과 다른 날짜가 나올 수 있어서,
+         only= 부분 조회로 '그 기준일 이하 마지막 종가'만 항목별로 받아온다.
+       다 채우고 나면 이 블록 / 마크업 / .a10-bf-* CSS / market.js의 only= 처리를 지우면 된다.
+    ========================================================================= */
+    let a10BfBusy = false, a10BfAbort = false, a10BfFailed = [];
+    const A10_BF_GAP = 700;   // Yahoo에 몰리지 않게 요청 사이 간격(ms)
+
+    function a10BfSay(msg) { const el = document.getElementById('a10BfStatus'); if (el) el.innerHTML = msg; }
+    function a10BfShowFailed() {
+        const el = document.getElementById('a10BfFail');
+        const btn = document.getElementById('a10BfRetryBtn');
+        if (!el) return;
+        if (!a10BfFailed.length) { el.innerHTML = ''; if (btn) btn.style.display = 'none'; return; }
+        el.innerHTML = '실패 ' + a10BfFailed.length + '건 — '
+            + a10BfFailed.map(f => `${hlEsc(f.id)}(${hlEsc(f.why)})`).join(', ');
+        if (btn) btn.style.display = '';
+    }
+    // 두 항목 중 하나라도 빠진 일지 (market 자체가 없는 문서는 대상 아님)
+    function a10BfTargets() {
+        return a10Entries
+            .filter(e => e.market && (e.market.dxy == null || e.market.usdjpy == null))
+            .map(e => e.id)
+            .sort();
+    }
+    async function a10BfFill(ids) {
+        if (a10BfBusy || !ids.length) return;
+        a10BfBusy = true; a10BfAbort = false; a10BfFailed = [];
+        const runBtn = document.getElementById('a10BfRunBtn');
+        const stopBtn = document.getElementById('a10BfStopBtn');
+        const retryBtn = document.getElementById('a10BfRetryBtn');
+        runBtn.disabled = true; stopBtn.style.display = ''; retryBtn.style.display = 'none';
+        document.getElementById('a10BfFail').innerHTML = '';
+
+        let done = 0;
+        for (let i = 0; i < ids.length; i++) {
+            if (a10BfAbort) break;
+            const id = ids[i];
+            a10BfSay(`${i + 1}/${ids.length} 처리 중 · ${hlEsc(id)}`);
+            try {
+                const e = a10Entries.find(x => x.id === id);
+                const basis = (e && e.market && e.market.basisDate) || id;   // 기준일 없으면(옛 포맷) 일지 날짜
+                const res = await fetch(`/.netlify/functions/market?date=${encodeURIComponent(basis)}&only=dxy,usdjpy`);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const m = await res.json();
+                if (!m || m.error) throw new Error(String((m && m.error) || '응답 오류'));
+                const patch = {};
+                if (m.dxy != null) patch['market.dxy'] = m.dxy;          // 없는 필드만 채운다
+                if (m.usdjpy != null) patch['market.usdjpy'] = m.usdjpy;
+                if (!Object.keys(patch).length) throw new Error('값 없음');
+                await updateDoc(doc(db, DIARY_COLLECTION, id), patch);
+                done++;
+            } catch (err) {
+                console.warn('[소급 채우기] 실패', id, err);
+                a10BfFailed.push({ id, why: String((err && err.message) || err).slice(0, 40) });
+            }
+            if (i < ids.length - 1 && !a10BfAbort) await new Promise(r => setTimeout(r, A10_BF_GAP));
+        }
+
+        a10BfBusy = false;
+        runBtn.disabled = false; stopBtn.style.display = 'none';
+        a10BfSay(`${a10BfAbort ? '중단됨 — ' : '완료 — '}성공 ${done}건 / 실패 ${a10BfFailed.length}건`);
+        a10BfShowFailed();
+        await a10LoadEntries();   // 채운 값이 화면에 바로 보이게 다시 읽는다
+    }
+    (function bindA10Backfill() {
+        const runBtn = document.getElementById('a10BfRunBtn');
+        if (!runBtn) return;
+        runBtn.addEventListener('click', () => {
+            a10BfSay('');   // 지난 실행 결과가 남아 헷갈리지 않게
+            const ids = a10BfTargets();
+            if (!ids.length) { a10BfSay('채울 일지가 없습니다 — 모든 기록에 두 항목이 이미 있습니다.'); return; }
+            const sec = Math.ceil(ids.length * (A10_BF_GAP + 400) / 1000);
+            if (!confirm(`${ids.length}건의 일지에 달러지수·달러/엔을 채웁니다.\n`
+                + `${ids[0]} ~ ${ids[ids.length - 1]}\n\n`
+                + `요청 사이 ${A10_BF_GAP}ms를 두므로 약 ${sec}초 걸립니다.\n`
+                + `일지 본문과 기존 지표는 건드리지 않습니다.\n\n진행할까요?`)) return;
+            a10BfFill(ids);
+        });
+        document.getElementById('a10BfStopBtn').addEventListener('click', () => {
+            a10BfAbort = true; a10BfSay('중단하는 중… 진행 중인 건까지만 마칩니다.');
+        });
+        document.getElementById('a10BfRetryBtn').addEventListener('click', () => {
+            const ids = a10BfFailed.map(f => f.id);
+            if (ids.length) a10BfFill(ids);
+        });
+    })();
+    /* ===== /임시: 소급 채우기 ===== */
 
     // 타임라인 항목 클릭 → 해당 날짜를 작성 폼으로
     window.a10EditDate = function(dateStr) {
