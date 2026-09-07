@@ -1,6 +1,6 @@
 // 경제지표 프록시 (After10 일지용)
 // 소스: Yahoo Finance chart API (서버측 호출 → CORS 무관)
-// 쿼리: ?date=YYYY-MM-DD → 그 날짜의(없으면 직전 거래일) 지표 7종 반환
+// 쿼리: ?date=YYYY-MM-DD → 그 날짜의(없으면 직전 거래일) 지표 9종 반환
 //
 // ⚠️ 소스가 막히면 아래 SOURCE / SYMBOLS / fetchOne 만 교체하면 된다.
 
@@ -10,6 +10,8 @@ const SOURCE = "yahoo";
 const SYMBOLS = {
   usdkrw: "KRW=X",     // 원/달러
   jpykrw: "JPYKRW=X",  // 원/엔
+  usdjpy: "JPY=X",     // 달러/엔 (Yahoo 표기 USD/JPY)
+  dxy:    "DX-Y.NYB",  // 달러지수 (ICE US Dollar Index)
   spx:    "^GSPC",     // S&P500
   ndq:    "^IXIC",     // 나스닥
   kospi:  "^KS11",     // 코스피

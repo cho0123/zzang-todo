@@ -1048,7 +1048,7 @@
             <button class="a10-chip" data-cview="compare" onclick="a10SetChartView('compare')">비교</button>
         </div>
 
-        <!-- 지표 선택 (7종) -->
+        <!-- 지표 선택 (9종) -->
         <div class="a10-chart-metrics" id="a10ChartMetrics"></div>
 
         <!-- 기간 모드 (단일에서만) -->
@@ -1995,6 +1995,9 @@
         const parts = [];
         if (m.usdkrw != null) parts.push(`원/달러 <b>${a10FmtNum(m.usdkrw, 2)}</b>`);
         if (m.jpykrw != null) parts.push(`원/엔 <b>${a10FmtNum(m.jpykrw, 2)}</b>`);
+        // 아래 둘은 나중에 추가된 항목이라 예전 일지에는 없다 — 없으면 그냥 빠진다
+        if (m.usdjpy != null) parts.push(`달러/엔 <b>${a10FmtNum(m.usdjpy, 2)}</b>`);
+        if (m.dxy    != null) parts.push(`달러지수 <b>${a10FmtNum(m.dxy, 2)}</b>`);
         if (m.kospi  != null) parts.push(`코스피 <b>${a10FmtNum(m.kospi, 2)}</b>`);
         if (m.spx    != null) parts.push(`S&amp;P500 <b>${a10FmtNum(m.spx, 2)}</b>`);
         if (m.ndq    != null) parts.push(`나스닥 <b>${a10FmtNum(m.ndq, 2)}</b>`);
@@ -2282,11 +2285,13 @@
 
     /* ===================== 뷰4: 지표 흐름 (차트) =====================
        - a10Entries(탭 진입 시 1회 조회)를 재사용 → 추가 읽기 없음
-       - 7종 단위가 달라 한 번에 하나만 그림, 값 없는 날은 건너뜀(0 채우기 X)
+       - 단위가 서로 달라 한 번에 하나만 그림, 값 없는 날은 건너뜀(0 채우기 X)
     ============================================================== */
     const A10_METRICS = {
         usdkrw: { label: '원/달러',        dec: 2, fmt: v => a10FmtNum(v, 2) },
         jpykrw: { label: '원/엔',          dec: 2, fmt: v => a10FmtNum(v, 2) },
+        usdjpy: { label: '달러/엔',        dec: 2, fmt: v => a10FmtNum(v, 2) },
+        dxy:    { label: '달러지수',       dec: 2, fmt: v => a10FmtNum(v, 2) },
         kospi:  { label: '코스피',         dec: 2, fmt: v => a10FmtNum(v, 2) },
         spx:    { label: 'S&P500',         dec: 2, fmt: v => a10FmtNum(v, 2) },
         ndq:    { label: '나스닥',         dec: 2, fmt: v => a10FmtNum(v, 2) },
