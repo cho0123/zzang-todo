@@ -2264,6 +2264,13 @@
         return { unit: 'year', fmt: 'yyyy' };                         // 전체(>2년): 연
     }
     const CHART_MAX_TICKS = 8;
+    /* x축 눈금 공통 설정 — 다섯 군데 차트가 똑같이 쓰던 것을 한곳으로 모았다.
+       autoSkipPadding은 눈금 사이 최소 여백이라, 폭이 좁아지면 눈금이 알아서 솎인다.
+       (모바일에서 'MM/DD' 라벨이 붙어 뭉개지던 문제 — maxTicksLimit만으로는 폭을 모른다) */
+    function chartXTicks() {
+        return { autoSkip: true, autoSkipPadding: 12, maxRotation: 0, maxTicksLimit: CHART_MAX_TICKS,
+                 color: '#9b9797', font: { family: 'Archivo', size: 11 } };
+    }
     // month 단위 눈금 라벨: 연초(1월)에만 연도를 붙인다. 예: "11월"·"12월"·"2026 1월"·"2월"
     // (같은 해 안이면 "7월"만, 연도가 바뀌는 1월에만 연도 표기)
     function chartMonthTickLabel(value, index, ticks) {
@@ -2425,7 +2432,7 @@
             const single = (tMin === tMax);
             if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
             const tu = chartTimeUnit(tMin, tMax);  // 기간에 맞는 단위·형식 (공유 규칙)
-            const xticks = { autoSkip: true, maxRotation: 0, maxTicksLimit: CHART_MAX_TICKS, color: '#9b9797', font: { family: A10_FONT, size: 11 } };
+            const xticks = chartXTicks();
             if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }  // 연초에 연도 표기
             xScale = {
                 type: 'time',
@@ -2544,7 +2551,7 @@
             const single = (tMin === tMax);   // 점이 하나뿐이면 폭이 0이라 밀리초 눈금이 생긴다
             if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
             const tu = chartTimeUnit(tMin, tMax);
-            const xticks = { autoSkip: true, maxRotation: 0, maxTicksLimit: CHART_MAX_TICKS, color: '#9b9797', font: { family: A10_FONT, size: 11 } };
+            const xticks = chartXTicks();
             if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }
             xScale = {
                 type: 'time', time: { unit: tu.unit, displayFormats: { [tu.unit]: tu.fmt } },
@@ -3740,7 +3747,7 @@
             if (forced) { tMin = opts.xMin; tMax = opts.xMax; }
             else if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
             const tu = chartTimeUnit(tMin, tMax);
-            const xticks = { autoSkip: true, maxRotation: 0, maxTicksLimit: CHART_MAX_TICKS, color: PAL.tick, font: { family: CHART_FONT, size: 11 } };
+            const xticks = chartXTicks();
             if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }
             xScale = {
                 type: 'time', time: { unit: tu.unit, displayFormats: { [tu.unit]: tu.fmt } },
@@ -3862,7 +3869,7 @@
             if (forced) { tMin = opts.xMin; tMax = opts.xMax; }
             else if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
             const tu = chartTimeUnit(tMin, tMax);
-            const xticks = { autoSkip: true, maxRotation: 0, maxTicksLimit: CHART_MAX_TICKS, color: PAL.tick, font: { family: CHART_FONT, size: 11 } };
+            const xticks = chartXTicks();
             if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }  // 연초에 연도 표기
             xScale = {
                 type: 'time',
@@ -4122,7 +4129,7 @@
             const single = (tMin === tMax);   // 폭이 0이면 밀리초 눈금이 생긴다
             if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
             const tu = chartTimeUnit(tMin, tMax);
-            const xticks = { autoSkip: true, maxRotation: 0, maxTicksLimit: CHART_MAX_TICKS, color: PAL.tick, font: { family: CHART_FONT, size: 11 } };
+            const xticks = chartXTicks();
             if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }
             xScale = {
                 type: 'time', time: { unit: tu.unit, displayFormats: { [tu.unit]: tu.fmt } },
