@@ -32,6 +32,18 @@ function epochToYmd(sec) {             // epoch(초) → YYYY-MM-DD (UTC)
   const p = n => String(n).padStart(2, "0");
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
 }
+/* 봉의 '거래일'은 UTC 날짜가 아니라 거래소 현지 날짜다.
+   Yahoo는 일봉 timestamp를 그 거래일의 현지 장 시작 시각으로 준다.
+   · ^KS11  00:00Z (서울 09:00)  · ^GSPC 13:30Z (뉴욕 09:30)  → UTC 날짜와 같은 날
+   · KRW=X  전날 23:00Z (런던 00:00)                          → UTC 날짜가 하루 앞선다
+   그래서 UTC로만 날짜를 붙이면 환율 3종만 하루 밀린 라벨이 되고,
+   공통 기준일(min)이 그 심볼에 끌려 과거로 역행했다.
+   meta.gmtoffset을 더해 현지 날짜로 읽으면 전 심볼의 라벨이 실제 거래일과 맞는다.
+   덧붙여, 장중 진행봉은 '현재 시각'으로 찍히고 장 마감 후 '전날 23:00Z'로 확정되는데,
+   현지 날짜로 읽으면 둘 다 같은 날짜가 되어 확정 전후로 라벨이 움직이지 않는다. */
+function barYmd(sec, gmtOffset) {
+  return epochToYmd(sec + (Number(gmtOffset) || 0));
+}
 
 // 값 반올림 (지표별)
 function roundVal(key, v) {
@@ -41,10 +53,12 @@ function roundVal(key, v) {
 }
 
 // 한 심볼의 시계열(요청일 이하, 종가가 있는 날들) 반환.
-// 반환: [{ ymd:"YYYY-MM-DD", close:number }, ...] 오름차순
-async function fetchSeries(yahooSym, targetEpoch) {
+// 반환: [{ ymd:"YYYY-MM-DD", close:number }, ...] 오름차순 — ymd는 거래소 현지 거래일.
+async function fetchSeries(yahooSym, targetDate, targetEpoch) {
   const period1 = targetEpoch - 14 * DAY;   // 넉넉히 14일 전부터 (연휴 대비)
-  const period2 = targetEpoch + DAY;        // 요청일 포함
+  // 현지 날짜가 요청일인 봉이 UTC로는 다음 날에 찍힐 수도 있어 하루 더 받아온다.
+  // 실제 걸러내는 일은 아래 현지 날짜 비교가 한다.
+  const period2 = targetEpoch + 2 * DAY;
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}` +
               `?period1=${period1}&period2=${period2}&interval=1d`;
 
@@ -70,12 +84,14 @@ async function fetchSeries(yahooSym, targetEpoch) {
                  r.indicators.quote[0].close;
   if (!ts || !closes) throw new Error("no data");
 
-  // 요청일(그 날 끝) 이하에서 종가가 있는 날만 (UTC 날짜로 비교해 심볼 간 타임존 차이 제거)
-  const cutoff = targetEpoch + DAY;
+  // 요청일 이하에서 종가가 있는 거래일만. 비교도 라벨과 같은 기준(현지 날짜)으로 한다 —
+  // 한쪽만 UTC로 재면 환율처럼 날짜가 어긋나는 심볼에서 하루씩 밀린다.
+  const off = (r.meta && r.meta.gmtoffset) || 0;
   const points = [];
   for (let i = 0; i < ts.length; i++) {
-    if (ts[i] < cutoff && closes[i] != null) {
-      points.push({ ymd: epochToYmd(ts[i]), close: closes[i] });
+    const ymd = barYmd(ts[i], off);
+    if (ymd <= targetDate && closes[i] != null) {
+      points.push({ ymd, close: closes[i] });
     }
   }
   if (!points.length) throw new Error("no close in range");
@@ -92,11 +108,13 @@ exports.handler = async (event) => {
   const keys = Object.keys(SYMBOLS);
   // 병렬 조회 — 일부 실패해도 나머지는 유지 (전체 실패 처리 금지)
   const settled = await Promise.allSettled(
-    keys.map(k => fetchSeries(SYMBOLS[k], targetEpoch))
+    keys.map(k => fetchSeries(SYMBOLS[k], date, targetEpoch))
   );
 
-  // v:2 — 모든 값이 '하나의 공통 기준일'에서 오도록 통일한 포맷 (기존 데이터엔 이 필드가 없음)
-  const market = { source: SOURCE, v: 2, requestedDate: date };
+  // v:3 — 거래일 라벨을 거래소 현지 날짜로 읽는다(환율 3종이 하루 밀리던 것을 바로잡음).
+  //        v:2는 UTC 라벨이라 기준일이 역행하거나 한 카드에 서로 다른 거래일 값이 섞일 수 있었다.
+  //        이미 저장된 문서는 그대로 두므로, v로 어느 방식에서 나온 값인지 구분한다.
+  const market = { source: SOURCE, v: 3, requestedDate: date };
   const errors = {};
 
   // 1단계: 각 심볼의 시계열 확보 + '공통 기준일' 확정.
