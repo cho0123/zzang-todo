@@ -4629,15 +4629,22 @@
     const WORKOUT_COLLECTION = "workout";
     // 부위는 몸의 구획이라 거의 바뀌지 않아 상수로 둔다.
     // 다만 데이터에 없는 부위가 들어와도 묻히지 않도록, 실제 문서에 있는 부위는 뒤에 덧붙여 보여준다.
-    const WO_PART_ORDER = ['하체', '등', '가슴', '어깨', '팔', '코어'];
+    const WO_PART_ORDER = ['상체', '하체', '프리웨이트'];
+    /* 옛 부위(등·가슴·어깨·팔·코어) → 새 부위. 저장된 문서는 건드리지 않고 읽는 시점에만 옮긴다.
+       woSaveNow가 part를 함께 쓰므로, 그 기구를 다음에 손대는 순간 새 값으로 자연히 굳는다.
+       표에 없는 부위(손으로 넣은 이름 등)는 그대로 두고 목록 맨 뒤에 붙는다. */
+    const WO_PART_MIGRATE = { '등': '상체', '가슴': '상체', '어깨': '상체', '팔': '상체', '코어': '상체' };
+    function woPart(raw) {
+        const v = (typeof raw === 'string' ? raw.trim() : '') || '기타';
+        return WO_PART_MIGRATE[v] || v;
+    }
     // 처음 진입했을 때 '기본 목록 넣기'로 한 번에 채워 넣을 기구들
+    // (프리웨이트는 사람마다 달라 비워 둔다 — 빈 칸의 '기구 추가'로 직접 넣는다)
     const WO_SEED = [
+        { part: '상체', machines: ['랫풀다운', '시티드로우', '체스트프레스', '펙덱플라이',
+                                   '숄더프레스', '사이드레터럴', '암컬', '트라이셉스',
+                                   '크런치', '백익스텐션'] },
         { part: '하체', machines: ['레그프레스', '레그익스텐션', '레그컬', '힙어브덕션'] },
-        { part: '등',   machines: ['랫풀다운', '시티드로우'] },
-        { part: '가슴', machines: ['체스트프레스', '펙덱플라이'] },
-        { part: '어깨', machines: ['숄더프레스', '사이드레터럴'] },
-        { part: '팔',   machines: ['암컬', '트라이셉스'] },
-        { part: '코어', machines: ['크런치', '백익스텐션'] },
     ];
     const WO_DEFAULT = { weight: 20, reps: 12, sets: 3 };
     const WO_STEP = { weight: 2.5, reps: 1, sets: 1 };
@@ -4697,7 +4704,7 @@
             const name = typeof v.machine === 'string' ? v.machine.trim() : '';
             if (!name) return;
             woItems.push({
-                id: d.id, machine: name, part: (v.part || '기타'),
+                id: d.id, machine: name, part: woPart(v.part),
                 weight: Number(v.weight) || 0,
                 reps: Number(v.reps) || 0,
                 sets: Number(v.sets) || 0,
@@ -4908,8 +4915,13 @@
             </div>`;
 
         root.innerHTML = seed + woPartList().map(part => {
-            const rows = woItems.filter(it => (it.part || '기타') === part)
-                .sort((a, b) => woLastTs(a) - woLastTs(b));   // 오래 안 한 것(기록 없음 포함)이 위로
+            const rows = woItems.filter(it => (it.part || '기타') === part).sort((a, b) => {
+                // 최근에 한 것이 위. 기록 없는 기구는 woLastTs가 -Infinity라 저절로 맨 아래로 간다.
+                // (뺄셈을 쓰면 둘 다 -Infinity일 때 NaN이 되어 정렬이 흐트러진다)
+                const ta = woLastTs(a), tb = woLastTs(b);
+                if (ta !== tb) return tb > ta ? 1 : -1;
+                return a.machine.localeCompare(b.machine, 'ko');   // 같은 날 한 것끼리는 가나다순
+            });
             const newest = rows.reduce((acc, r) => (r.dates.length && woLastTs(r) > woLastTs(acc) ? r : acc), { dates: [] });
             const head = `<div class="wo-part-head">${hlEsc(part)}`
                 + `<span class="wo-part-last">${newest.dates.length ? '마지막 ' + hlEsc(woAgoLabel(newest.dates[0])) : '기록 없음'}</span></div>`;
