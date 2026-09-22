@@ -719,9 +719,14 @@
         .rt-summary-num b { font-weight: 800; }
         .rt-summary-num i { font-style: normal; font-size: 16px; font-weight: 700; color: var(--zm-muted); }
         .rt-summary-label { font-size: 12px; font-weight: 700; color: var(--zm-muted); }
-        /* 남은 폭을 채우는 진행 막대 — 숫자만으로는 얼마나 남았는지 덜 와닿는다 */
-        .rt-bar { flex: 1; min-width: 60px; height: 8px; background: var(--zm-card); border: 1px solid var(--zm-border); }
-        .rt-bar-fill { height: 100%; background: var(--zm-ink); }
+        /* 남은 폭을 채우는 진행 막대 — 숫자만으로는 얼마나 남았는지 덜 와닿는다.
+           채움은 반드시 block이어야 한다 — span 그대로 두면 인라인이라 width·height를
+           무시해 폭을 제대로 넣어도 0×0으로 그려진다.
+           바깥 막대는 baseline 정렬을 쓰는 줄 안에서 글자 기준선을 따라가 어긋나므로
+           가운데로 맞춘다(안에 글자가 없어 기준선이 아래 끝이 된다). */
+        .rt-bar { flex: 1; min-width: 60px; align-self: center; height: 8px;
+            background: var(--zm-card); border: 1px solid var(--zm-border); }
+        .rt-bar-fill { display: block; width: 0; height: 100%; background: var(--zm-ink); }
 
         /* 카테고리 묶음 — 오늘·월간·연간이 같은 머리를 쓴다 */
         .rt-cat + .rt-cat { margin-top: 20px; }
