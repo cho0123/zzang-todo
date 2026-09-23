@@ -98,12 +98,107 @@ async function fetchSeries(yahooSym, targetDate, targetEpoch) {
   return points;
 }
 
+/* ── mode=daily : 심볼마다 '자기 실제 거래일'과 그 값을 그대로 돌려준다 ──
+   v:3(기본 모드)은 9종을 하나의 공통 기준일(min)로 맞추느라, 주말이면 24시간 도는
+   비트코인까지 금요일 값으로 끌려 내려갔다. 여기서는 맞추지 않는다.
+
+   ⚠ 두 가지를 더 본다.
+   1) 중간에 종가가 비어 있는 봉이 있다(야후 데이터 구멍). 최신 봉이 그러면
+      meta.regularMarketPrice로 메운다 — 이것이 기준일이 이틀씩 밀리던 원인이었다.
+   2) 그런데 장중이면 regularMarketPrice도, 마지막 일봉의 종가도 '지금 값'이라
+      확정 종가가 아니다. 이 엔드포인트에는 marketState가 없어서
+      currentTradingPeriod.regular.end로 판단한다 —
+      regularMarketTime이 그 끝보다 이르면 아직 장이 돌고 있는 것이다.
+      그 날짜(liveDate)는 확정값에서 빼고, 왜 빠졌는지 알 수 있게 따로 알려준다. */
+async function fetchDaily(yahooSym, targetDate, targetEpoch) {
+  const period1 = targetEpoch - 14 * DAY;
+  const period2 = targetEpoch + 2 * DAY;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}` +
+              `?period1=${period1}&period2=${period2}&interval=1d`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { "User-Agent": UA, "Accept": "application/json" },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+
+  const r = data && data.chart && data.chart.result && data.chart.result[0];
+  const meta = (r && r.meta) || {};
+  const ts = r && r.timestamp;
+  const closes = r && r.indicators && r.indicators.quote && r.indicators.quote[0] &&
+                 r.indicators.quote[0].close;
+  const off = meta.gmtoffset || 0;
+
+  // 아직 장이 돌고 있는 날짜 — 확정값으로 쓰지 않는다
+  const rmTime = meta.regularMarketTime;
+  const regEnd = meta.currentTradingPeriod && meta.currentTradingPeriod.regular &&
+                 meta.currentTradingPeriod.regular.end;
+  const liveDate = (rmTime != null && regEnd != null && rmTime < regEnd) ? barYmd(rmTime, off) : null;
+
+  let best = null;   // { ymd, close, filled }
+  const seen = new Set();
+  if (ts && closes) {
+    for (let i = 0; i < ts.length; i++) {
+      const ymd = barYmd(ts[i], off);
+      if (ymd > targetDate || ymd === liveDate || closes[i] == null) continue;
+      seen.add(ymd);
+      if (!best || ymd >= best.ymd) best = { ymd, close: closes[i], filled: false };
+    }
+  }
+  // 종가가 빈 최신 봉을 메운다 (같은 날 확정 종가가 이미 있으면 건드리지 않는다)
+  const metaDate = rmTime != null ? barYmd(rmTime, off) : null;
+  if (metaDate && metaDate <= targetDate && metaDate !== liveDate &&
+      !seen.has(metaDate) && meta.regularMarketPrice != null &&
+      (!best || metaDate > best.ymd)) {
+    best = { ymd: metaDate, close: meta.regularMarketPrice, filled: true };
+  }
+  if (!best) throw new Error(liveDate ? `확정 종가 없음(장중 ${liveDate})` : "no close in range");
+  return { ymd: best.ymd, close: best.close, filled: best.filled, liveDate };
+}
+
 exports.handler = async (event) => {
   const date = (event.queryStringParameters && event.queryStringParameters.date) || "";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return { statusCode: 400, body: JSON.stringify({ error: "date=YYYY-MM-DD 필요" }) };
   }
   const targetEpoch = toEpoch(date);
+  const mode = (event.queryStringParameters && event.queryStringParameters.mode) || "";
+
+  /* mode=daily — 일지 저장이 쓰는 기본 응답(v:3)은 그대로 두고, 새 수집기만 이 갈래를 쓴다.
+     같은 함수에 둔 이유: 심볼 목록·타임존 보정·반올림을 한 벌만 두려는 것이다.
+     두 벌로 나뉘면 심볼을 하나 더할 때 한쪽만 고치는 일이 생긴다. */
+  if (mode === "daily") {
+    const keys2 = Object.keys(SYMBOLS);
+    const settled2 = await Promise.allSettled(keys2.map(k => fetchDaily(SYMBOLS[k], date, targetEpoch)));
+    const symbols = {}, errors2 = {}, live = {};
+    settled2.forEach((res, i) => {
+      const k = keys2[i];
+      if (res.status === "fulfilled") {
+        const v = res.value;
+        symbols[k] = { value: roundVal(k, v.close), date: v.ymd };
+        if (v.filled) symbols[k].filled = true;
+        if (v.liveDate) live[k] = v.liveDate;
+      } else {
+        errors2[k] = String((res.reason && res.reason.message) || res.reason);
+      }
+    });
+    const out = { source: SOURCE, v: 4, mode: "daily", requestedDate: date, symbols };
+    if (Object.keys(live).length) out.live = live;          // 장중이라 확정으로 보지 않은 날짜
+    if (Object.keys(errors2).length) out.errors = errors2;
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=900" },
+      body: JSON.stringify(out),
+    };
+  }
 
   const keys = Object.keys(SYMBOLS);
   // 병렬 조회 — 일부 실패해도 나머지는 유지 (전체 실패 처리 금지)

@@ -674,6 +674,40 @@
             background: var(--zm-ink); color: var(--zm-on-ink); border: none; cursor: pointer; }
         .wo-seed-btn:disabled { opacity: 0.5; cursor: default; }
 
+        /* ===== 1단계 임시: 시장 데이터 수집 확인판 =====
+           일지에서 떼어낸 marketDaily가 제대로 쌓이는지 눈으로 보려는 화면이다.
+           2단계에서 차트를 이 컬렉션으로 옮기고 나면 이 블록(CSS·마크업·JS)을 지운다. */
+        .mk-panel { margin-top: 28px; padding: 14px; border: 1px dashed var(--zm-border); }
+        .mk-head { font-family: var(--font-title); font-size: 12px; font-weight: 700;
+            letter-spacing: 0.04em; color: var(--zm-muted); margin-bottom: 6px; }
+        .mk-note { font-size: 12px; line-height: 1.7; color: var(--zm-muted); word-break: keep-all; margin-bottom: 10px; }
+        .mk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+        .mk-btn { flex: none; width: auto; min-height: 44px; padding: 0 16px; font-weight: 700; cursor: pointer;
+            background: var(--zm-ink); color: var(--zm-on-ink); border: none; border-radius: var(--zm-radius); }
+        .mk-btn:disabled { opacity: 0.5; cursor: default; }
+        .mk-sub { flex: none; width: auto; min-height: 44px; padding: 0 14px; font-weight: 700; cursor: pointer;
+            background: transparent; color: var(--zm-muted); border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        .mk-sub:hover:not(:disabled) { color: var(--zm-ink); border-color: var(--zm-muted); }
+        .mk-sub:disabled { opacity: 0.4; cursor: default; }
+        .mk-days { flex: none; width: auto; min-height: 44px; padding: 0 8px; font-family: var(--font-body); font-size: 13px;
+            background: #fff; border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        .mk-status { font-family: var(--font-num); font-size: 13px; color: var(--zm-text-soft); line-height: 1.7; margin-bottom: 8px; }
+        /* 표가 넓어 폰에서 페이지가 통째로 밀리지 않게, 표를 감싼 칸 안에서만 가로로 민다 */
+        .mk-wrap { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--zm-border); background: var(--zm-card); }
+        .mk-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%;
+            font-family: var(--font-num); font-size: 11px; }
+        .mk-table th, .mk-table td { padding: 5px 8px; white-space: nowrap; text-align: right; }
+        .mk-table thead th { position: sticky; top: 0; background: var(--zm-card); border-bottom: 2px solid var(--zm-ink);
+            font-weight: 700; color: var(--zm-muted); }
+        .mk-table .mk-date { position: sticky; left: 0; z-index: 2; background: var(--zm-card); text-align: left;
+            border-right: 2px solid var(--zm-ink); font-weight: 800; color: var(--zm-ink); }
+        .mk-table thead .mk-date { z-index: 3; }
+        .mk-table tbody tr + tr td, .mk-table tbody tr + tr th { border-top: 1px solid var(--zm-line); }
+        .mk-table td.none { color: var(--zm-muted-2); }
+        .mk-table td.filled b { border-bottom: 2px dotted var(--zm-muted); }   /* 보완값 */
+        .mk-wk .mk-date { color: var(--zm-muted); }                            /* 주말 */
+        .mk-legend { margin-top: 8px; font-size: 11px; color: var(--zm-muted-2); line-height: 1.7; }
+
         /* ===================== 루틴 (routine) =====================
            매일 같은 것을 확인하는 화면이라, 눌러야 할 곳이 크고 분명해야 한다.
            출근길·헬스장에서 한 손으로 쓰므로 체크는 줄 전체를 누르게 한다(44px 이상).
@@ -1406,6 +1440,29 @@
         <div class="a10-chart-box"><canvas id="a10Chart"></canvas></div>
         <div class="a10-chart-stats" id="a10ChartStats"></div>
         <div id="a10ChartMsg"></div>
+
+        <!-- ===== 1단계 임시: 시장 데이터 수집 확인판 =====
+             2단계에서 차트를 marketDaily로 옮기면 이 블록과 .mk-* CSS, mk 관련 JS를 지운다. -->
+        <div class="mk-panel" id="mkPanel">
+            <div class="mk-head">1단계 임시 · 시장 데이터 수집 (marketDaily)</div>
+            <div class="mk-note">일지와 따로, 지표마다 자기 실제 거래일 칸에 저장합니다.
+                일지 저장·표시·차트는 아직 손대지 않았습니다.
+                이미 저장된 날짜는 다시 받지 않습니다.</div>
+            <div class="mk-row">
+                <select class="mk-days" id="mkDays">
+                    <option value="7" selected>최근 7일</option>
+                    <option value="14">최근 14일</option>
+                    <option value="30">최근 30일</option>
+                </select>
+                <button type="button" class="mk-btn" id="mkFillBtn" onclick="mkFill(false)">채우기</button>
+                <button type="button" class="mk-sub" id="mkGapBtn" onclick="mkFill(true)">빠진 지표만 다시</button>
+                <button type="button" class="mk-sub" id="mkStopBtn" onclick="mkStop()" style="display:none">중단</button>
+                <button type="button" class="mk-sub" id="mkReloadBtn" onclick="mkShow()">새로고침</button>
+            </div>
+            <div class="mk-status" id="mkStatus"></div>
+            <div id="mkBody"></div>
+        </div>
+        <!-- ===== /1단계 임시 ===== -->
     </div>
 
 </div>
@@ -2351,7 +2408,7 @@
         });
         if (view === 'timeline') a10RenderTimeline();
         if (view === 'past') a10RenderPast();
-        if (view === 'chart') a10RenderChart();
+        if (view === 'chart') { a10RenderChart(); mkShow(); }   // 1단계 임시 확인판도 함께
     };
 
     // Firestore에서 일지 전체 조회 (구독 아님)
@@ -5414,6 +5471,177 @@
             woMsg('기본 목록을 넣지 못했습니다 — 보안 규칙을 확인해주세요.');
             if (btn) btn.disabled = false;
         }
+    };
+
+
+    /* ===================== 1단계 임시: 시장 데이터 수집 =====================
+       경제지표를 일지 문서에서 떼어내 따로 쌓는다. 지금은 쌓기만 하고,
+       일지 저장·표시·차트는 그대로 둔다(2단계에서 옮긴다).
+
+       ── 왜 월 단위 문서인가 ─────────────────────────────────────
+       marketDaily/{YYYY-MM} : { month, days: { "22": { usdkrw, spx, ... } }, filled: { "22": [...] } }
+       거래일마다 문서 하나로 두면 읽기가 너무 많다 — 차트는 한 번에 여러 달을 읽는데,
+       1년이면 365번, '전체'면 수천 번이 된다. 월로 묶으면 1년이 12번이다.
+       한 달치는 지표 9종 × 31일이라도 6KB 남짓이라 1MB 한도와 거리가 멀다.
+       문서 id가 달이라 색인이 필요한 질의를 쓰지 않는다(루틴 탭과 같은 방식).
+
+       ── 무엇을 어느 칸에 넣나 ───────────────────────────────────
+       함수(mode=daily)가 심볼마다 '자기 실제 거래일'과 값을 돌려준다.
+       그중 요청한 날짜와 거래일이 같은 것만 그날 칸에 넣는다 —
+       주말이면 비트코인만 들어가고 주식·환율은 키 자체가 없다.
+       장중이라 아직 확정이 아닌 값은 함수가 빼고 알려주므로, 다음 날 채워진다.
+    ====================================================================== */
+    const MARKET_COLLECTION = "marketDaily";
+    const MK_KEYS = ['usdkrw', 'jpykrw', 'usdjpy', 'dxy', 'spx', 'ndq', 'kospi', 'gold', 'btc'];
+    const MK_LABEL = { usdkrw: '원/달러', jpykrw: '원/엔', usdjpy: '달러/엔', dxy: '달러지수',
+                       spx: 'S&P500', ndq: '나스닥', kospi: '코스피', gold: '금', btc: '비트코인' };
+    const MK_GAP_MS = 800;        // 야후에 몰리지 않게 요청 사이 간격
+    let mkMonths = {};            // "YYYY-MM" → { days: {dd:{k:v}}, filled: {dd:[k]} }
+    let mkBusy = false, mkAbort = false;
+
+    function mkStatus(html) { const el = document.getElementById('mkStatus'); if (el) el.innerHTML = html || ''; }
+    function mkMonthOf(d) { return String(d).substring(0, 7); }
+    function mkDayOf(d) { return String(d).substring(8, 10); }
+    function mkShiftDay(dateStr, n) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+        if (!m) return dateStr;
+        const d = new Date(+m[1], +m[2] - 1, +m[3] + n);
+        const p = x => String(x).padStart(2, '0');
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    }
+    // 한 달치 문서. 한 번 읽으면 캐시에 둔다(달을 오갈 때 다시 읽지 않게).
+    async function mkEnsureMonth(month) {
+        if (mkMonths[month]) return mkMonths[month];
+        const snap = await getDoc(doc(db, MARKET_COLLECTION, month));
+        const v = (snap.exists() && snap.data()) || {};
+        mkMonths[month] = { days: (v.days && typeof v.days === 'object') ? v.days : {},
+                            filled: (v.filled && typeof v.filled === 'object') ? v.filled : {} };
+        return mkMonths[month];
+    }
+    function mkStoredDay(dateStr) {
+        const mo = mkMonths[mkMonthOf(dateStr)];
+        return mo ? mo.days[mkDayOf(dateStr)] : undefined;
+    }
+
+    async function mkFetchDaily(dateStr) {
+        const res = await fetch(`/.netlify/functions/market?mode=daily&date=${dateStr}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const j = await res.json();
+        if (!j || j.error) throw new Error(j && j.error ? j.error : '빈 응답');
+        return j;
+    }
+
+    /* 최근 N일을 오래된 날부터 채운다.
+       gapOnly=false : 아직 저장 기록이 없는 날만 (이미 저장된 날은 건드리지 않는다)
+       gapOnly=true  : 저장은 됐지만 빠진 지표가 있는 날도 다시 받아 '없는 키만' 더한다
+                       (기존 값은 덮어쓰지 않는다 — 야후 데이터 구멍이 나중에 메워지는 경우가 있다) */
+    window.mkFill = async function (gapOnly) {
+        if (mkBusy) return;
+        mkBusy = true; mkAbort = false;
+        const fillBtn = document.getElementById('mkFillBtn');
+        const gapBtn = document.getElementById('mkGapBtn');
+        const stopBtn = document.getElementById('mkStopBtn');
+        fillBtn.disabled = true; gapBtn.disabled = true; stopBtn.style.display = '';
+
+        const n = Number(document.getElementById('mkDays').value) || 7;
+        const today = todayStr();
+        const dates = [];
+        for (let i = n - 1; i >= 0; i--) dates.push(mkShiftDay(today, -i));
+
+        let added = 0, skipped = 0, failed = 0, done = 0;
+        const log = [];
+        try {
+            // 걸치는 달을 먼저 읽어 둔다(대개 한두 개)
+            const months = [...new Set(dates.map(mkMonthOf))];
+            for (const mo of months) await mkEnsureMonth(mo);
+
+            for (const d of dates) {
+                if (mkAbort) break;
+                done++;
+                const stored = mkStoredDay(d) || null;
+                const missing = MK_KEYS.filter(k => !stored || stored[k] == null);
+                if (stored && (!gapOnly || !missing.length)) { skipped++; continue; }
+
+                mkStatus(`받는 중 ${done}/${dates.length} · ${hlEsc(d)}` +
+                         `<br>새로 넣음 ${added} · 건너뜀 ${skipped} · 실패 ${failed}`);
+                let j;
+                try { j = await mkFetchDaily(d); }
+                catch (e) { console.error('시장 데이터 조회 실패:', d, e); failed++; log.push(`${d} 실패(${e.message})`); continue; }
+
+                // 요청한 날짜와 거래일이 같은 것만 그날 칸에 넣는다
+                const dayVals = {}, filledKeys = [];
+                Object.keys(j.symbols || {}).forEach(k => {
+                    const it = j.symbols[k];
+                    if (!it || it.date !== d || it.value == null) return;
+                    if (gapOnly && stored && stored[k] != null) return;   // 있는 값은 덮지 않는다
+                    dayVals[k] = it.value;
+                    if (it.filled) filledKeys.push(k);
+                });
+
+                const mo = mkMonthOf(d), dd = mkDayOf(d);
+                const payload = { month: mo, days: { [dd]: dayVals }, updatedAt: Date.now() };
+                if (filledKeys.length) payload.filled = { [dd]: filledKeys };
+                try {
+                    await setDoc(doc(db, MARKET_COLLECTION, mo), payload, { merge: true });
+                    const cache = await mkEnsureMonth(mo);
+                    cache.days[dd] = Object.assign({}, cache.days[dd], dayVals);
+                    if (filledKeys.length) cache.filled[dd] = filledKeys;
+                    added++;
+                    log.push(`${d} ← ${Object.keys(dayVals).length ? Object.keys(dayVals).join(',') : '없음'}`);
+                } catch (e) {
+                    console.error('시장 데이터 저장 실패:', d, e);
+                    failed++; log.push(`${d} 저장실패`);
+                }
+                if (!mkAbort && done < dates.length) await new Promise(r => setTimeout(r, MK_GAP_MS));
+            }
+        } finally {
+            mkBusy = false;
+            fillBtn.disabled = false; gapBtn.disabled = false; stopBtn.style.display = 'none';
+        }
+        mkStatus(`${mkAbort ? '중단됨' : '완료'} — 새로 넣음 ${added} · 건너뜀 ${skipped} · 실패 ${failed}`
+                 + (log.length ? `<br><span style="font-size:11px;color:var(--zm-muted-2)">${hlEsc(log.join(' / '))}</span>` : ''));
+        mkShow();
+    };
+    window.mkStop = function () { mkAbort = true; };
+
+    // 저장된 것을 날짜 × 지표 표로 보여준다 — 주말에 비트코인만 있는 상태를 눈으로 확인하려는 것
+    window.mkShow = async function () {
+        const body = document.getElementById('mkBody');
+        if (!body) return;
+        const n = Number(document.getElementById('mkDays').value) || 7;
+        const today = todayStr();
+        const dates = [];
+        for (let i = 0; i < n; i++) dates.push(mkShiftDay(today, -i));   // 최근 날짜가 위
+        try {
+            for (const mo of [...new Set(dates.map(mkMonthOf))]) await mkEnsureMonth(mo);
+        } catch (e) {
+            console.error('시장 데이터 조회 실패:', e);
+            body.innerHTML = '<div class="a10-hint">저장된 시장 데이터를 불러오지 못했습니다 — 보안 규칙에 marketDaily가 들어가 있는지 확인해주세요.</div>';
+            return;
+        }
+        const WK = ['일', '월', '화', '수', '목', '금', '토'];
+        const rows = dates.map(d => {
+            const mo = mkMonths[mkMonthOf(d)] || { days: {}, filled: {} };
+            const vals = mo.days[mkDayOf(d)] || null;
+            const fl = mo.filled[mkDayOf(d)] || [];
+            const ts = hlDateTs(d);
+            const w = ts == null ? '' : WK[new Date(ts).getDay()];
+            const cells = MK_KEYS.map(k => {
+                const v = vals ? vals[k] : null;
+                if (v == null) return '<td class="none">—</td>';
+                return `<td class="${fl.indexOf(k) >= 0 ? 'filled' : ''}"><b>${hlEsc(String(v))}</b></td>`;
+            }).join('');
+            const cnt = vals ? MK_KEYS.filter(k => vals[k] != null).length : 0;
+            return `<tr class="${(w === '토' || w === '일') ? 'mk-wk' : ''}">`
+                + `<th class="mk-date">${hlEsc(d)} (${w})<br><span style="font-weight:600;color:var(--zm-muted)">${cnt}종</span></th>`
+                + cells + '</tr>';
+        }).join('');
+        body.innerHTML = `<div class="mk-wrap"><table class="mk-table">
+                <thead><tr><th class="mk-date">날짜</th>${MK_KEYS.map(k => `<th>${hlEsc(MK_LABEL[k])}</th>`).join('')}</tr></thead>
+                <tbody>${rows}</tbody>
+            </table></div>
+            <div class="mk-legend">— 는 그날 그 지표의 거래일이 아니라 값이 없는 것입니다(주말·휴장).
+                밑줄은 종가가 비어 있어 regularMarketPrice로 보완한 값입니다.</div>`;
     };
 
     /* ===================== 루틴 (routine) =====================
