@@ -19,6 +19,20 @@ const SYMBOLS = {
   btc:    "BTC-USD",   // 비트코인 (USD)
 };
 
+/* 시간봉 폴백을 허용하는 지표 — 일봉 종가가 있는 날로 대조해 정확한 것만 남겼다.
+   (최근 30일, '그날 마지막 시간봉' vs '그날 일봉 종가' 오차)
+     spx  0/21일이 0.1% 초과, 최대 0.06%      ndq  0/21, 최대 0.04%
+     btc  0/30, 최대 0.07%                    dxy  3/21, 최대 0.14%
+   아래는 뺐다 — 마지막 시간봉이 그날 종가와 다른 값이라, 채우면 틀린 수치가 들어간다.
+     kospi  16/22일이 0.1% 초과, 최대 0.82%
+       · 코스피 종가는 15:20~15:30 동시호가로 정해지는데 시간봉은 15:00에서 끊긴다.
+     gold   16/22, 최대 1.42%   — 선물 정산가와 마지막 체결가가 다르다.
+     usdkrw 21/24, 최대 1.32% / jpykrw 20/24, 1.63% / usdjpy 17/24, 1.76%
+       · 환율 일봉 종가는 런던 23:00 스냅샷이라 마지막 시간봉과 시점이 어긋난다.
+   근사값보다 빈 칸이 낫다는 판단이다 — 빈 칸은 나중에 채울 수 있지만
+   틀린 값은 그대로 차트에 남는다. */
+const HOURLY_FALLBACK = new Set(["spx", "ndq", "dxy", "btc"]);
+
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
            "(KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
@@ -43,6 +57,12 @@ function epochToYmd(sec) {             // epoch(초) → YYYY-MM-DD (UTC)
    현지 날짜로 읽으면 둘 다 같은 날짜가 되어 확정 전후로 라벨이 움직이지 않는다. */
 function barYmd(sec, gmtOffset) {
   return epochToYmd(sec + (Number(gmtOffset) || 0));
+}
+function isWeekday(dateStr) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (!m) return false;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay();
+  return d >= 1 && d <= 5;
 }
 
 // 값 반올림 (지표별)
@@ -98,6 +118,49 @@ async function fetchSeries(yahooSym, targetDate, targetEpoch) {
   return points;
 }
 
+// 차트 API 한 번 호출. 타임아웃을 부르는 쪽이 정한다 —
+// Netlify 한도(10초) 안에 일봉+시간봉 두 번이 들어가야 할 수 있어서다.
+async function fetchChart(yahooSym, params, timeoutMs) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?${params}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { "User-Agent": UA, "Accept": "application/json" },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const r = data && data.chart && data.chart.result && data.chart.result[0];
+  if (!r) throw new Error("no data");
+  return r;
+}
+
+/* 일봉이 통째로 빈 날을 1시간 봉으로 메운다.
+   야후는 이따금 특정 날짜의 '일봉'만 통째로 비워서 준다(open·high·low·close·volume 전부 null).
+   2026-09-22가 그랬는데, 미국·한국·영국 거래소 상장 종목이 한꺼번에 비었고
+   선물·환율·암호화폐는 멀쩡했다. 같은 날 1시간 봉에는 값이 온전히 남아 있다.
+   그래서 그날 마지막 시간봉의 종가를 종가 대신 쓴다.
+   ⚠ 이 방식이 맞는지는 교차로 확인했다 — 코스피 9/23의 마지막 시간봉(7080.92)이
+      같은 날 regularMarketPrice와 정확히 일치한다. */
+async function fetchHourlyClose(yahooSym, targetDate, targetEpoch, off) {
+  const r = await fetchChart(yahooSym,
+    `period1=${targetEpoch - DAY}&period2=${targetEpoch + 2 * DAY}&interval=1h`, 3500);
+  const ts = r.timestamp;
+  const closes = r.indicators && r.indicators.quote && r.indicators.quote[0] &&
+                 r.indicators.quote[0].close;
+  if (!ts || !closes) return null;
+  let last = null;
+  for (let i = 0; i < ts.length; i++) {
+    if (barYmd(ts[i], off) === targetDate && closes[i] != null) last = closes[i];
+  }
+  return last;
+}
+
 /* ── mode=daily : 심볼마다 '자기 실제 거래일'과 그 값을 그대로 돌려준다 ──
    v:3(기본 모드)은 9종을 하나의 공통 기준일(min)로 맞추느라, 주말이면 24시간 도는
    비트코인까지 금요일 값으로 끌려 내려갔다. 여기서는 맞추지 않는다.
@@ -110,56 +173,63 @@ async function fetchSeries(yahooSym, targetDate, targetEpoch) {
       currentTradingPeriod.regular.end로 판단한다 —
       regularMarketTime이 그 끝보다 이르면 아직 장이 돌고 있는 것이다.
       그 날짜(liveDate)는 확정값에서 빼고, 왜 빠졌는지 알 수 있게 따로 알려준다. */
-async function fetchDaily(yahooSym, targetDate, targetEpoch) {
-  const period1 = targetEpoch - 14 * DAY;
-  const period2 = targetEpoch + 2 * DAY;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}` +
-              `?period1=${period1}&period2=${period2}&interval=1d`;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6000);
-  let res;
-  try {
-    res = await fetch(url, {
-      headers: { "User-Agent": UA, "Accept": "application/json" },
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-
-  const r = data && data.chart && data.chart.result && data.chart.result[0];
-  const meta = (r && r.meta) || {};
-  const ts = r && r.timestamp;
-  const closes = r && r.indicators && r.indicators.quote && r.indicators.quote[0] &&
+async function fetchDaily(yahooSym, targetDate, targetEpoch, allowHourly) {
+  const r = await fetchChart(yahooSym,
+    `period1=${targetEpoch - 14 * DAY}&period2=${targetEpoch + 2 * DAY}&interval=1d`, 6000);
+  const meta = r.meta || {};
+  const ts = r.timestamp;
+  const closes = r.indicators && r.indicators.quote && r.indicators.quote[0] &&
                  r.indicators.quote[0].close;
   const off = meta.gmtoffset || 0;
 
-  // 아직 장이 돌고 있는 날짜 — 확정값으로 쓰지 않는다
+  /* 아직 장이 돌고 있는 날짜 — 확정값으로 쓰지 않는다.
+     '마지막 체결이 지금 열려 있는 장 안에서 일어났는가'로 본다.
+     regularMarketTime < end 만 보면, 장 열리기 전(예: 한국 08시)에는 currentTradingPeriod가
+     이미 오늘 장을 가리켜 어제가 장중으로 잘못 잡힌다 — 그러면 어제 값을 영영 못 받는다. */
   const rmTime = meta.regularMarketTime;
-  const regEnd = meta.currentTradingPeriod && meta.currentTradingPeriod.regular &&
-                 meta.currentTradingPeriod.regular.end;
-  const liveDate = (rmTime != null && regEnd != null && rmTime < regEnd) ? barYmd(rmTime, off) : null;
+  const reg = (meta.currentTradingPeriod && meta.currentTradingPeriod.regular) || null;
+  const liveDate = (rmTime != null && reg && reg.start != null && reg.end != null &&
+                    rmTime >= reg.start && rmTime < reg.end) ? barYmd(rmTime, off) : null;
 
-  let best = null;   // { ymd, close, filled }
-  const seen = new Set();
+  let best = null;              // { ymd, close, filled }  filled: false | 'regular' | 'hourly'
+  const seen = new Set();       // 그날 확정 종가를 얻은 날짜
+  const hasRow = new Set();     // 봉 '행'은 있는 날짜 (종가가 null이어도)
   if (ts && closes) {
     for (let i = 0; i < ts.length; i++) {
       const ymd = barYmd(ts[i], off);
-      if (ymd > targetDate || ymd === liveDate || closes[i] == null) continue;
+      if (ymd > targetDate) continue;
+      hasRow.add(ymd);
+      if (ymd === liveDate || closes[i] == null) continue;
       seen.add(ymd);
       if (!best || ymd >= best.ymd) best = { ymd, close: closes[i], filled: false };
     }
   }
-  // 종가가 빈 최신 봉을 메운다 (같은 날 확정 종가가 이미 있으면 건드리지 않는다)
+  // 종가가 빈 최신 봉을 meta 값으로 메운다 (같은 날 확정 종가가 이미 있으면 건드리지 않는다)
   const metaDate = rmTime != null ? barYmd(rmTime, off) : null;
   if (metaDate && metaDate <= targetDate && metaDate !== liveDate &&
       !seen.has(metaDate) && meta.regularMarketPrice != null &&
       (!best || metaDate > best.ymd)) {
-    best = { ymd: metaDate, close: meta.regularMarketPrice, filled: true };
+    best = { ymd: metaDate, close: meta.regularMarketPrice, filled: 'regular' };
+    seen.add(metaDate);
   }
+
+  /* 그래도 요청한 날짜가 비어 있으면 1시간 봉으로 메운다. 조건을 좁게 잡는다:
+     · 그날 봉 '행'은 있는데 종가만 없을 때 — 행 자체가 없으면 휴장이라 메울 것이 없다
+     · 장중인 날은 제외 (확정값이 아니다)
+     · 평일만 — DX-Y.NYB처럼 일요일 저녁에도 도는 종목이 있어서, 이 조건이 없으면
+       지금까지 비어 있던 주말 칸에 값이 새로 생긴다(주말 동작을 바꾸지 않으려는 것).
+     · 그리고 HOURLY_FALLBACK에 든 지표만 (위 표 참고 — 코스피·금·환율은 뺐다)
+     일봉이 멀쩡한 날에는 아예 호출하지 않으므로 요청이 늘지 않는다. */
+  if (allowHourly && !seen.has(targetDate) && targetDate !== liveDate && hasRow.has(targetDate) &&
+      isWeekday(targetDate)) {
+    try {
+      const h = await fetchHourlyClose(yahooSym, targetDate, targetEpoch, off);
+      if (h != null) best = { ymd: targetDate, close: h, filled: 'hourly' };
+    } catch (e) {
+      // 시간봉까지 실패해도 일봉으로 얻은 값은 그대로 돌려준다
+    }
+  }
+
   if (!best) throw new Error(liveDate ? `확정 종가 없음(장중 ${liveDate})` : "no close in range");
   return { ymd: best.ymd, close: best.close, filled: best.filled, liveDate };
 }
@@ -177,14 +247,15 @@ exports.handler = async (event) => {
      두 벌로 나뉘면 심볼을 하나 더할 때 한쪽만 고치는 일이 생긴다. */
   if (mode === "daily") {
     const keys2 = Object.keys(SYMBOLS);
-    const settled2 = await Promise.allSettled(keys2.map(k => fetchDaily(SYMBOLS[k], date, targetEpoch)));
+    const settled2 = await Promise.allSettled(
+      keys2.map(k => fetchDaily(SYMBOLS[k], date, targetEpoch, HOURLY_FALLBACK.has(k))));
     const symbols = {}, errors2 = {}, live = {};
     settled2.forEach((res, i) => {
       const k = keys2[i];
       if (res.status === "fulfilled") {
         const v = res.value;
         symbols[k] = { value: roundVal(k, v.close), date: v.ymd };
-        if (v.filled) symbols[k].filled = true;
+        if (v.filled) symbols[k].filled = v.filled;   // 'regular'(meta 값) | 'hourly'(시간봉)
         if (v.liveDate) live[k] = v.liveDate;
       } else {
         errors2[k] = String((res.reason && res.reason.message) || res.reason);
@@ -193,9 +264,14 @@ exports.handler = async (event) => {
     const out = { source: SOURCE, v: 4, mode: "daily", requestedDate: date, symbols };
     if (Object.keys(live).length) out.live = live;          // 장중이라 확정으로 보지 않은 날짜
     if (Object.keys(errors2).length) out.errors = errors2;
+    /* 수집기는 늘 '지금'의 답이 필요하다 — 장이 끝났는지, 야후가 빈 날을 메웠는지,
+       허용 목록이 바뀌었는지에 따라 답이 달라진다. 캐시를 두면 방금 고친 기준으로
+       다시 물어봐도 옛 답이 돌아온다(실제로 보완값 재검사가 그래서 한 번 헛돌았다).
+       호출은 클라이언트가 이미 날짜 단위로 걸러내고 800ms 간격을 두므로 부담이 없다.
+       일지가 쓰는 기본 응답(v:3)의 캐시는 그대로 둔다. */
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=900" },
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
       body: JSON.stringify(out),
     };
   }
