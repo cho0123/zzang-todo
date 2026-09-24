@@ -699,6 +699,8 @@
         .mk-sub:disabled { opacity: 0.4; cursor: default; }
         .mk-days { flex: none; width: auto; min-height: 44px; padding: 0 8px; font-family: var(--font-body); font-size: 13px;
             background: #fff; border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        .mk-plan { font-family: var(--font-num); font-size: 12px; color: var(--zm-muted); line-height: 1.7; margin-bottom: 6px; }
+        .mk-plan b { font-weight: 800; color: var(--zm-text-soft); }
         .mk-status { font-family: var(--font-num); font-size: 13px; color: var(--zm-text-soft); line-height: 1.7; margin-bottom: 8px; }
         /* 표가 넓어 폰에서 페이지가 통째로 밀리지 않게, 표를 감싼 칸 안에서만 가로로 민다 */
         .mk-wrap { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--zm-border); background: var(--zm-card); }
@@ -1461,17 +1463,21 @@
                 일지 저장·표시·차트는 아직 손대지 않았습니다.
                 이미 저장된 날짜는 다시 받지 않습니다.</div>
             <div class="mk-row">
-                <select class="mk-days" id="mkDays">
+                <select class="mk-days" id="mkDays" onchange="mkRangeChanged()">
                     <option value="7" selected>최근 7일</option>
                     <option value="14">최근 14일</option>
                     <option value="30">최근 30일</option>
+                    <option value="90">최근 90일</option>
+                    <option value="custom">시작일 지정</option>
                 </select>
+                <input type="date" class="mk-days" id="mkFrom" style="display:none" onchange="mkRangeChanged()">
                 <button type="button" class="mk-btn" id="mkFillBtn" onclick="mkFill(false)">채우기</button>
                 <button type="button" class="mk-sub" id="mkGapBtn" onclick="mkFill(true)">빠진 지표만 다시</button>
                 <button type="button" class="mk-sub" id="mkStopBtn" onclick="mkStop()" style="display:none">중단</button>
                 <button type="button" class="mk-sub" id="mkRecheckBtn" onclick="mkRecheck()">보완값 다시 검사</button>
                 <button type="button" class="mk-sub" id="mkReloadBtn" onclick="mkShow()">새로고침</button>
             </div>
+            <div class="mk-plan" id="mkPlan"></div>
             <div class="mk-status" id="mkStatus"></div>
             <div id="mkBody"></div>
         </div>
@@ -2546,51 +2552,154 @@
         a10FillWriteForm(a10CurrentDate || todayStr());
     }
 
+    /* 고른 기간의 날짜 목록 (오래된 날부터). '시작일 지정'이면 그날부터 오늘까지. */
+    function mkTargetDates() {
+        const sel = document.getElementById('mkDays');
+        const today = todayStr();
+        const dates = [];
+        if (sel && sel.value === 'custom') {
+            const from = document.getElementById('mkFrom').value;
+            if (!from || from > today) return [];
+            for (let d = from; d <= today; d = mkShiftDay(d, 1)) dates.push(d);
+            return dates;
+        }
+        const n = Number(sel ? sel.value : 7) || 7;
+        for (let i = n - 1; i >= 0; i--) dates.push(mkShiftDay(today, -i));
+        return dates;
+    }
+    window.mkRangeChanged = function () {
+        const sel = document.getElementById('mkDays');
+        const from = document.getElementById('mkFrom');
+        if (from) {
+            from.style.display = (sel.value === 'custom') ? '' : 'none';
+            if (sel.value === 'custom') { from.max = todayStr(); if (!from.value) from.value = mkShiftDay(todayStr(), -60); }
+        }
+        mkPaintPlan();
+        mkShow();
+    };
+    /* 몇 건을 받아야 하는지 미리 알려준다.
+       구간 조회라 야후 요청은 날짜 수와 무관하게 심볼 9개 + 보완이 필요한 심볼 몇 개뿐이다. */
+    function mkPaintPlan() {
+        const el = document.getElementById('mkPlan');
+        if (!el) return;
+        const dates = mkTargetDates();
+        if (!dates.length) { el.innerHTML = '시작일을 골라주세요.'; return; }
+        const todo = dates.filter(d => !mkSettled(d));
+        el.innerHTML = `${hlEsc(dates[0])} ~ ${hlEsc(dates[dates.length - 1])} · 총 <b>${dates.length}일</b>`
+            + ` · 아직 안 받은 날 <b>${todo.length}일</b>`
+            + (todo.length ? ` · 야후 요청 <b>약 ${MK_KEYS.length}~${MK_KEYS.length * 2}건</b> (구간을 한 번에 받습니다)` : ' · 받을 것이 없습니다');
+    }
+
+    /* 고른 기간을 한 번에 받아 채운다.
+       하루씩 부르면 날짜마다 심볼 9개를 새로 받아 70일이면 600건이 넘는다.
+       구간 조회(mode=range)는 심볼당 한 번이라 기간이 길어도 요청이 늘지 않는다.
+       ⚠ 이미 있는 값은 건드리지 않는다 — 없는 지표만 골라 담는다. */
+    async function mkFillRange(dates, gapOnly) {
+        const today = todayStr();
+        const from = dates[0], to = dates[dates.length - 1];
+        mkStatus(`${hlEsc(from)} ~ ${hlEsc(to)} 받는 중…`);
+        const res = await fetch(`/.netlify/functions/market?mode=range&from=${from}&to=${to}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const j = await res.json();
+        if (!j || j.error) throw new Error(j && j.error ? j.error : '빈 응답');
+
+        // 달별로 모아 한 번에 쓴다 (90일이면 문서 3~4개)
+        const byMonth = {};
+        const want = new Set(dates);
+        let added = 0, empty = 0;
+        dates.forEach(d => {
+            const mo = mkMonthOf(d), dd = mkDayOf(d);
+            const slot = byMonth[mo] || (byMonth[mo] = { days: {}, filled: {}, del: [], fetched: {} });
+            slot.fetched[dd] = today;                      // 받아는 봤다
+
+            const got = (j.days || {})[d] || null;
+            const stored = mkStoredDay(d) || null;
+            const vals = {}, fb = {};
+            if (got) {
+                Object.keys(got.values || {}).forEach(k => {
+                    if (stored && stored[k] != null) return;        // 있는 값은 덮지 않는다
+                    vals[k] = got.values[k];
+                    const f = (got.filled || {})[k];
+                    if (f) fb[k] = f;
+                });
+            }
+            if (Object.keys(vals).length) { slot.days[dd] = vals; added++; } else empty++;
+
+            // filled 는 그날 것을 다시 계산 (진짜 종가로 받은 지표는 꼬리표를 뗀다)
+            const prev = mkFilledMap((mkMonths[mo] || {}).filled ? mkMonths[mo].filled[dd] : null);
+            const next = Object.assign({}, prev, fb);
+            Object.keys(vals).forEach(k => { if (!fb[k]) delete next[k]; });
+            if (Object.keys(next).length) slot.filled[dd] = next;
+            else if (Object.keys(prev).length) slot.del.push(dd);
+        });
+
+        const months = Object.keys(byMonth).sort();
+        let wrote = 0;
+        for (const mo of months) {
+            if (mkAbort) break;
+            const slot = byMonth[mo];
+            mkStatus(`저장 중 ${wrote + 1}/${months.length} · ${hlEsc(mo)}`);
+            /* ⚠ 빈 맵은 보내지 않는다 — merge라도 그 자리를 빈 맵으로 덮어쓴다.
+               fetched는 날짜마다 값이 있어 비지 않는다. days·filled는 있을 때만 싣는다. */
+            const payload = { month: mo, fetched: slot.fetched, updatedAt: Date.now() };
+            if (Object.keys(slot.days).length) payload.days = slot.days;
+            const fl = {};
+            Object.keys(slot.filled).forEach(dd => { fl[dd] = slot.filled[dd]; });
+            slot.del.forEach(dd => { fl[dd] = deleteField(); });
+            if (Object.keys(fl).length) payload.filled = fl;
+
+            await setDoc(doc(db, MARKET_COLLECTION, mo), payload, { merge: true });
+            const cache = await mkEnsureMonth(mo);
+            Object.keys(slot.days).forEach(dd => { cache.days[dd] = Object.assign({}, cache.days[dd], slot.days[dd]); });
+            Object.keys(slot.filled).forEach(dd => { cache.filled[dd] = slot.filled[dd]; });
+            slot.del.forEach(dd => { delete cache.filled[dd]; });
+            Object.assign(cache.fetched, slot.fetched);
+            wrote++;
+        }
+        return { added, empty, months: wrote, errors: j.errors || null };
+    }
+
     /* 최근 N일을 오래된 날부터 채운다.
        gapOnly=false : 아직 저장 기록이 없는 날만 (이미 저장된 날은 건드리지 않는다)
        gapOnly=true  : 저장은 됐지만 빠진 지표가 있는 날도 다시 받아 '없는 키만' 더한다
                        (기존 값은 덮어쓰지 않는다 — 야후 데이터 구멍이 나중에 메워지는 경우가 있다) */
     window.mkFill = async function (gapOnly) {
         if (mkBusy) return;
+        const dates = mkTargetDates();
+        if (!dates.length) { mkStatus('시작일을 골라주세요.'); return; }
+        /* 저장된 것을 먼저 확실히 읽어 둔다. '이미 있는 값'과 '이미 받은 날' 판단이 모두
+           캐시에 기대는데, 캐시가 비어 있으면 다 없는 것으로 보고 덮어써 버린다. */
+        try { await mkLoadAll(); }
+        catch (e) { console.error('시장 데이터 조회 실패:', e); mkStatus('저장된 데이터를 읽지 못했습니다.'); return; }
+        // 보통은 '확정된 날'만 건너뛴다. 빠진 지표 채우기는 확정이어도 빈 곳이 있으면 다시 본다.
+        const todo = dates.filter(d => {
+            if (!mkSettled(d)) return true;
+            if (!gapOnly) return false;
+            const stored = mkStoredDay(d) || null;
+            return MK_KEYS.some(k => !stored || stored[k] == null);
+        });
+        if (!todo.length) { mkStatus('받을 것이 없습니다 — 고른 기간은 이미 다 받았습니다.'); return; }
+
         mkBusy = true; mkAbort = false;
         const fillBtn = document.getElementById('mkFillBtn');
         const gapBtn = document.getElementById('mkGapBtn');
         const stopBtn = document.getElementById('mkStopBtn');
         fillBtn.disabled = true; gapBtn.disabled = true; stopBtn.style.display = '';
-
-        const n = Number(document.getElementById('mkDays').value) || 7;
-        const dates = [];
-        for (let i = n - 1; i >= 0; i--) dates.push(mkShiftDay(todayStr(), -i));
-
-        let added = 0, skipped = 0, failed = 0, done = 0;
-        const log = [];
         try {
-            // 걸치는 달을 먼저 읽어 둔다(대개 한두 개)
-            const months = [...new Set(dates.map(mkMonthOf))];
-            for (const mo of months) await mkEnsureMonth(mo);
-
-            for (const d of dates) {
-                if (mkAbort) break;
-                done++;
-                const stored = mkStoredDay(d) || null;
-                const missing = MK_KEYS.filter(k => !stored || stored[k] == null);
-                // 보통은 '확정된 날'만 건너뛴다. 빠진 지표 채우기는 확정이어도 빈 곳이 있으면 다시 본다.
-                if (mkSettled(d) && (!gapOnly || !missing.length)) { skipped++; continue; }
-
-                mkStatus(`받는 중 ${done}/${dates.length} · ${hlEsc(d)}` +
-                         `<br>새로 넣음 ${added} · 건너뜀 ${skipped} · 실패 ${failed}`);
-                const r = await mkFillOne(d, gapOnly);
-                if (r.ok) { added++; } else { failed++; }
-                log.push(r.log);
-                if (!mkAbort && done < dates.length) await new Promise(r2 => setTimeout(r2, MK_GAP_MS));
-            }
+            const r = await mkFillRange(todo, gapOnly);
+            mkStatus(`${mkAbort ? '중단됨' : '완료'} — 값이 들어간 날 <b>${r.added}</b> · 값 없던 날 ${r.empty}`
+                + ` · 문서 ${r.months}개 저장`
+                + (r.errors ? `<br><span style="font-size:11px;color:var(--zm-muted-2)">일부 지표 실패: ${hlEsc(Object.keys(r.errors).join(','))}</span>` : ''));
+        } catch (e) {
+            console.error('시장 데이터 수집 실패:', e);
+            mkStatus('받지 못했습니다 — ' + hlEsc(e.message));
         } finally {
             mkBusy = false;
             fillBtn.disabled = false; gapBtn.disabled = false; stopBtn.style.display = 'none';
         }
-        mkStatus(`${mkAbort ? '중단됨' : '완료'} — 새로 넣음 ${added} · 건너뜀 ${skipped} · 실패 ${failed}`
-                 + (log.length ? `<br><span style="font-size:11px;color:var(--zm-muted-2)">${hlEsc(log.join(' / '))}</span>` : ''));
+        mkPaintPlan();
         mkShow();
+        a10RenderChart();
     };
     window.mkStop = function () { mkAbort = true; };
 
@@ -2660,10 +2769,9 @@
     window.mkShow = async function () {
         const body = document.getElementById('mkBody');
         if (!body) return;
-        const n = Number(document.getElementById('mkDays').value) || 7;
-        const today = todayStr();
-        const dates = [];
-        for (let i = 0; i < n; i++) dates.push(mkShiftDay(today, -i));   // 최근 날짜가 위
+        // 고른 기간이 길어도 표는 최근 30일까지만 (90일을 다 그리면 화면이 끝없이 늘어난다)
+        const all = mkTargetDates();
+        const dates = all.slice(-30).reverse();   // 최근 날짜가 위
         try {
             for (const mo of [...new Set(dates.map(mkMonthOf))]) await mkEnsureMonth(mo);
         } catch (e) {
@@ -2698,7 +2806,7 @@
                 <thead><tr><th class="mk-date">날짜</th>${MK_KEYS.map(k => `<th>${hlEsc(MK_LABEL[k])}</th>`).join('')}</tr></thead>
                 <tbody>${rows}</tbody>
             </table></div>
-            <div class="mk-legend">— 는 그날 그 지표의 거래일이 아니라 값이 없는 것입니다(주말·휴장).
+            <div class="mk-legend">${all.length > dates.length ? `고른 기간 ${all.length}일 중 최근 ${dates.length}일만 보여줍니다.<br>` : ''}— 는 그날 그 지표의 거래일이 아니라 값이 없는 것입니다(주말·휴장).
                 점선 밑줄은 regularMarketPrice로, 물결 밑줄은 그날 마지막 1시간 봉으로 보완한 값입니다
                 (야후가 그날 일봉을 통째로 비워서 준 경우). 시간봉 보완은 정확도를 확인한
                 S&amp;P500·나스닥·달러지수·비트코인에만 씁니다 — 코스피·금·환율은 마지막 시간봉이
@@ -2791,7 +2899,7 @@
         });
         if (view === 'timeline') a10RenderTimeline();
         if (view === 'past') a10RenderPast();
-        if (view === 'chart') { a10RenderChart(); mkShow(); }   // 1단계 임시 확인판도 함께
+        if (view === 'chart') { a10RenderChart(); mkPaintPlan(); mkShow(); }   // 1단계 임시 확인판도 함께
     };
 
     // Firestore에서 일지 전체 조회 (구독 아님)

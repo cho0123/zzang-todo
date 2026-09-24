@@ -161,6 +161,73 @@ async function fetchHourlyClose(yahooSym, targetDate, targetEpoch, off) {
   return last;
 }
 
+/* 며칠치를 한 번에 — 소급 수집용.
+   하루씩 부르면 날짜마다 심볼 9개를 새로 받는다(90일이면 810번). 그런데 일봉 조회는
+   원래 구간으로 받는 것이라, 심볼당 한 번만 불러 구간 전체를 훑으면 9번으로 끝난다.
+   시간봉 보완이 필요한 날이 있으면 그 심볼만 시간봉을 한 번 더 받는다(구간 전체를 한 번에).
+   그래서 구간이 아무리 길어도 야후 요청은 최대 18번이다. */
+async function fetchDailyRange(yahooSym, fromDate, toDate, fromEpoch, toEpoch, allowHourly) {
+  const r = await fetchChart(yahooSym,
+    `period1=${fromEpoch - 5 * DAY}&period2=${toEpoch + 2 * DAY}&interval=1d`, 7000);
+  const meta = r.meta || {};
+  const ts = r.timestamp;
+  const closes = r.indicators && r.indicators.quote && r.indicators.quote[0] &&
+                 r.indicators.quote[0].close;
+  const off = meta.gmtoffset || 0;
+
+  const rmTime = meta.regularMarketTime;
+  const reg = (meta.currentTradingPeriod && meta.currentTradingPeriod.regular) || null;
+  const liveDate = (rmTime != null && reg && reg.start != null && reg.end != null &&
+                    rmTime >= reg.start && rmTime < reg.end) ? barYmd(rmTime, off) : null;
+
+  const values = {};      // ymd → close
+  const filled = {};      // ymd → 'regular' | 'hourly'
+  const hasRow = new Set();
+  if (ts && closes) {
+    for (let i = 0; i < ts.length; i++) {
+      const ymd = barYmd(ts[i], off);
+      if (ymd < fromDate || ymd > toDate) continue;
+      hasRow.add(ymd);
+      if (ymd === liveDate || closes[i] == null) continue;
+      values[ymd] = closes[i];
+    }
+  }
+  // 종가가 빈 최신 봉을 meta 값으로 (구간 안에 들어올 때만)
+  const metaDate = rmTime != null ? barYmd(rmTime, off) : null;
+  if (metaDate && metaDate >= fromDate && metaDate <= toDate && metaDate !== liveDate &&
+      values[metaDate] == null && meta.regularMarketPrice != null) {
+    values[metaDate] = meta.regularMarketPrice;
+    filled[metaDate] = 'regular';
+  }
+
+  // 일봉이 통째로 빈 거래일 — 시간봉으로 메운다(조건은 하루짜리 조회와 같다)
+  if (allowHourly) {
+    const need = [...hasRow].filter(d => values[d] == null && d !== liveDate && isWeekday(d));
+    if (need.length) {
+      try {
+        const h = await fetchChart(yahooSym,
+          `period1=${fromEpoch - DAY}&period2=${toEpoch + 2 * DAY}&interval=1h`, 5000);
+        const hts = h.timestamp;
+        const hcl = h.indicators && h.indicators.quote && h.indicators.quote[0] &&
+                    h.indicators.quote[0].close;
+        if (hts && hcl) {
+          const last = {};
+          for (let i = 0; i < hts.length; i++) {
+            if (hcl[i] == null) continue;
+            last[barYmd(hts[i], off)] = hcl[i];
+          }
+          need.forEach(d => {
+            if (last[d] != null) { values[d] = last[d]; filled[d] = 'hourly'; }
+          });
+        }
+      } catch (e) {
+        // 시간봉까지 실패해도 일봉으로 얻은 값은 그대로 쓴다
+      }
+    }
+  }
+  return { values, filled, liveDate };
+}
+
 /* ── mode=daily : 심볼마다 '자기 실제 거래일'과 그 값을 그대로 돌려준다 ──
    v:3(기본 모드)은 9종을 하나의 공통 기준일(min)로 맞추느라, 주말이면 24시간 도는
    비트코인까지 금요일 값으로 끌려 내려갔다. 여기서는 맞추지 않는다.
@@ -236,11 +303,55 @@ async function fetchDaily(yahooSym, targetDate, targetEpoch, allowHourly) {
 
 exports.handler = async (event) => {
   const date = (event.queryStringParameters && event.queryStringParameters.date) || "";
+  const mode = (event.queryStringParameters && event.queryStringParameters.mode) || "";
+
+  /* mode=range — from~to를 한 번에. 소급 수집이 하루씩 부르지 않도록. */
+  if (mode === "range") {
+    const q = event.queryStringParameters || {};
+    const from = q.from || "", to = q.to || date || q.from || "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+      return { statusCode: 400, body: JSON.stringify({ error: "from=YYYY-MM-DD 필요" }) };
+    }
+    if (from > to) {
+      return { statusCode: 400, body: JSON.stringify({ error: "from이 to보다 늦습니다" }) };
+    }
+    const keysR = Object.keys(SYMBOLS);
+    const settledR = await Promise.allSettled(keysR.map(k =>
+      fetchDailyRange(SYMBOLS[k], from, to, toEpoch(from), toEpoch(to), HOURLY_FALLBACK.has(k))));
+
+    // 날짜별로 모아 준다 — 클라이언트가 월 문서에 그대로 옮겨 담을 수 있게
+    const days = {}, errorsR = {}, liveR = {};
+    settledR.forEach((res, i) => {
+      const k = keysR[i];
+      if (res.status !== "fulfilled") {
+        errorsR[k] = String((res.reason && res.reason.message) || res.reason);
+        return;
+      }
+      const { values, filled, liveDate } = res.value;
+      if (liveDate) liveR[k] = liveDate;
+      Object.keys(values).forEach(d => {
+        const slot = days[d] || (days[d] = { values: {} });
+        slot.values[k] = roundVal(k, values[d]);
+        if (filled[d]) (slot.filled || (slot.filled = {}))[k] = filled[d];
+      });
+    });
+
+    const outR = { source: SOURCE, v: 4, mode: "range", from, to, days };
+    if (Object.keys(liveR).length) outR.live = liveR;
+    if (Object.keys(errorsR).length) outR.errors = errorsR;
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      body: JSON.stringify(outR),
+    };
+  }
+
+
+  // 나머지 갈래는 모두 하루를 가리킨다
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return { statusCode: 400, body: JSON.stringify({ error: "date=YYYY-MM-DD 필요" }) };
   }
   const targetEpoch = toEpoch(date);
-  const mode = (event.queryStringParameters && event.queryStringParameters.mode) || "";
 
   /* mode=daily — 일지 저장이 쓰는 기본 응답(v:3)은 그대로 두고, 새 수집기만 이 갈래를 쓴다.
      같은 함수에 둔 이유: 심볼 목록·타임존 보정·반올림을 한 벌만 두려는 것이다.
