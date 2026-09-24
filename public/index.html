@@ -340,6 +340,14 @@
         #a10ViewWrite .today-btn { background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
         #a10ViewWrite .today-btn:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
 
+        /* 고른 날짜의 지표 상황 안내 — 날짜를 고를 때 판단 근거가 된다 */
+        .a10-mkt-hint { text-align: center; font-family: var(--font-num); font-size: 12px;
+            color: var(--zm-muted); margin: -8px 0 14px; line-height: 1.6; }
+        .a10-mkt-hint b { font-weight: 800; color: var(--zm-text-soft); }
+        /* 보완값 — 확인판과 같은 규칙(점선=regularMarketPrice, 물결=시간봉) */
+        .a10-mkt-filled.regular { border-bottom: 1px dotted var(--zm-muted-2); }
+        .a10-mkt-filled.hourly { border-bottom: 1px dashed var(--zm-muted-2); }
+
         /* 최근 기록 (쓰기 뷰 하단) */
         .a10-recent { margin-top: 32px; padding-top: 22px; border-top: 2px solid var(--zm-ink); }
         .a10-recent-title {
@@ -1388,6 +1396,8 @@
 
         <div class="a10-date" id="a10WriteDate"></div>
         <div class="a10-editing-note" id="a10EditingNote" style="display:none"></div>
+        <!-- 고른 날짜에 시장 데이터가 얼마나 들어와 있는지 -->
+        <div class="a10-mkt-hint" id="a10MarketHint"></div>
 
         <textarea id="a10Content" placeholder="오늘 하루를 기록해보세요."></textarea>
         <div class="a10-btnrow">
@@ -1885,6 +1895,7 @@
         __todoStarted = false;
         window.allTasks = undefined;
         a10Entries = [];   // After10 diary 캐시도 정리
+        mkMonths = {}; mkAllLoaded = false; mkAutoDone = false;   // 시장 데이터 캐시도
         rtReset();         // 루틴 정의·체크 캐시도 정리 (다른 계정으로 다시 로그인할 수 있다)
     }
 
@@ -2326,6 +2337,375 @@
     
     window.openEditMode = openEditMode;
 
+    /* ===================== 1단계 임시: 시장 데이터 수집 =====================
+       경제지표를 일지 문서에서 떼어내 따로 쌓는다. 지금은 쌓기만 하고,
+       일지 저장·표시·차트는 그대로 둔다(2단계에서 옮긴다).
+
+       ── 왜 월 단위 문서인가 ─────────────────────────────────────
+       marketDaily/{YYYY-MM} : { month,
+         days:    { "22": { usdkrw, spx, ... } },   // 그날 값이 있는 지표만
+         filled:  { "22": { kospi: "hourly" } },     // 보완한 지표 → 보완 방식
+                                                    //   regular: meta.regularMarketPrice
+                                                    //   hourly : 그날 마지막 1시간 봉 종가
+         fetched: { "22": "2026-09-24" } }          // 그 날짜를 '언제' 받아봤나
+       거래일마다 문서 하나로 두면 읽기가 너무 많다 — 차트는 한 번에 여러 달을 읽는데,
+       1년이면 365번, '전체'면 수천 번이 된다. 월로 묶으면 1년이 12번이다.
+       한 달치는 지표 9종 × 31일이라도 6KB 남짓이라 1MB 한도와 거리가 멀다.
+       문서 id가 달이라 색인이 필요한 질의를 쓰지 않는다(루틴 탭과 같은 방식).
+
+       ── 무엇을 어느 칸에 넣나 ───────────────────────────────────
+       함수(mode=daily)가 심볼마다 '자기 실제 거래일'과 값을 돌려준다.
+       그중 요청한 날짜와 거래일이 같은 것만 그날 칸에 넣는다 —
+       주말이면 비트코인만 들어가고 주식·환율은 키 자체가 없다.
+
+       ── 받아봤다는 표시를 days가 아니라 fetched에 두는 이유 ─────
+       처음에는 days[dd]가 있으면 '받아본 날'로 봤는데, 그러면 두 가지가 어긋난다.
+       1) 장중이라 확정값이 하나도 없는 날(대개 오늘)은 days[dd]가 빈 채로 남아
+          '받아봤음'이 되어, 다음 날에도 영영 다시 받지 않는다.
+       2) 값이 없는 날을 표시하려고 빈 맵을 쓰게 되는데 — 아래 ⚠ 참고.
+       그래서 '언제 받았나'를 fetched에 날짜로 적는다.
+       그 날짜보다 나중에 받았으면 그 거래일은 이미 끝난 뒤라 값이 확정이다.
+       같은 날(또는 그 전)에 받았다면 장중이었을 수 있으니 다음에 다시 받는다.
+
+       ⚠ setDoc(merge)에 빈 맵을 보내면 '아무것도 안 함'이 아니라 그 자리를
+          빈 맵으로 덮어쓴다. Firestore SDK가 빈 맵을 만나면 그 경로를 그대로
+          fieldMask에 넣기 때문이다(parseObject: "we explicitly add it to the
+          update mask to ensure that the server creates a map entry").
+          실제로 이 때문에 저장해 둔 날짜들이 통째로 지워진 적이 있다.
+          아래 저장부는 넣을 것이 없으면 days·filled 키 자체를 payload에서 뺀다.
+    ====================================================================== */
+    const MARKET_COLLECTION = "marketDaily";
+    const MK_KEYS = ['usdkrw', 'jpykrw', 'usdjpy', 'dxy', 'spx', 'ndq', 'kospi', 'gold', 'btc'];
+    const MK_LABEL = { usdkrw: '원/달러', jpykrw: '원/엔', usdjpy: '달러/엔', dxy: '달러지수',
+                       spx: 'S&P500', ndq: '나스닥', kospi: '코스피', gold: '금', btc: '비트코인' };
+    const MK_GAP_MS = 800;        // 야후에 몰리지 않게 요청 사이 간격
+    let mkMonths = {};            // "YYYY-MM" → { days: {dd:{k:v}}, filled: {dd:[k]} }
+    let mkBusy = false, mkAbort = false;
+
+    function mkStatus(html) { const el = document.getElementById('mkStatus'); if (el) el.innerHTML = html || ''; }
+    function mkMonthOf(d) { return String(d).substring(0, 7); }
+    function mkDayOf(d) { return String(d).substring(8, 10); }
+    function mkShiftDay(dateStr, n) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+        if (!m) return dateStr;
+        const d = new Date(+m[1], +m[2] - 1, +m[3] + n);
+        const p = x => String(x).padStart(2, '0');
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    }
+    // 한 달치 문서. 한 번 읽으면 캐시에 둔다(달을 오갈 때 다시 읽지 않게).
+    async function mkEnsureMonth(month) {
+        if (mkMonths[month]) return mkMonths[month];
+        const snap = await getDoc(doc(db, MARKET_COLLECTION, month));
+        const v = (snap.exists() && snap.data()) || {};
+        mkMonths[month] = { days: (v.days && typeof v.days === 'object') ? v.days : {},
+                            filled: (v.filled && typeof v.filled === 'object') ? v.filled : {},
+                            fetched: (v.fetched && typeof v.fetched === 'object') ? v.fetched : {} };
+        return mkMonths[month];
+    }
+    /* filled 는 처음에 ["kospi"] 배열이었고 지금은 { kospi: "hourly" } 맵이다.
+       저장된 것을 고치지 않고 읽는 쪽에서 맞춘다 — 예전 것은 전부 regular 방식이었다. */
+    function mkFilledMap(v) {
+        if (Array.isArray(v)) { const o = {}; v.forEach(k => { o[k] = 'regular'; }); return o; }
+        return (v && typeof v === 'object') ? v : {};
+    }
+    function mkStoredDay(dateStr) {
+        const mo = mkMonths[mkMonthOf(dateStr)];
+        return mo ? mo.days[mkDayOf(dateStr)] : undefined;
+    }
+    /* 그 거래일이 끝난 뒤에 받았으면 값이 확정이다 — 다시 받을 이유가 없다.
+       같은 날(또는 그 전)에 받았다면 그때는 장중이었을 수 있어 다시 받아야 한다.
+       fetched가 아예 없는 문서(이 필드를 두기 전에 저장된 것)도 한 번은 다시 받는다. */
+    function mkSettled(dateStr) {
+        const mo = mkMonths[mkMonthOf(dateStr)];
+        const on = mo && mo.fetched ? mo.fetched[mkDayOf(dateStr)] : null;
+        return !!on && on > dateStr;
+    }
+
+    /* 수집기는 늘 '지금'의 답이 필요하다(장 마감 여부·야후가 메운 값·허용 목록이 달라진다).
+       함수도 no-store로 주지만, 그 전에 캐시된 응답이 남아 있으면 브라우저가 그걸 계속 쓴다 —
+       실제로 이것 때문에 보완값 재검사가 옛 답을 보고 헛돌았다. 요청 쪽에서도 캐시를 건너뛴다. */
+    /* ── 다른 화면이 쓰는 창구 ────────────────────────────────────
+       일지·차트가 여기를 통해 시장 데이터를 읽는다. 월 문서를 한 번에 다 읽어 캐시에 둔다 —
+       차트가 '전체' 기간을 그릴 때 어느 달까지 있는지 미리 알 수 없어서, 달마다 따로 읽으면
+       몇 번을 읽어야 할지 계산이 필요하다. 월 문서는 10년을 쌓아도 120개뿐이고 한 달치가
+       6KB 남짓이라, 한 번에 받아 두는 편이 단순하고 읽기도 적다. */
+    let mkAllLoaded = false;
+    async function mkLoadAll(force) {
+        if (mkAllLoaded && !force) return;
+        const snap = await getDocs(collection(db, MARKET_COLLECTION));
+        mkMonths = {};
+        snap.forEach(d => {
+            const v = d.data() || {};
+            mkMonths[d.id] = {
+                days: (v.days && typeof v.days === 'object') ? v.days : {},
+                filled: (v.filled && typeof v.filled === 'object') ? v.filled : {},
+                fetched: (v.fetched && typeof v.fetched === 'object') ? v.fetched : {},
+            };
+        });
+        mkAllLoaded = true;
+    }
+    function mkValuesOn(dateStr) {
+        const mo = mkMonths[mkMonthOf(dateStr)];
+        return (mo && mo.days[mkDayOf(dateStr)]) || null;
+    }
+    function mkFilledOn(dateStr) {
+        const mo = mkMonths[mkMonthOf(dateStr)];
+        return mo ? mkFilledMap(mo.filled[mkDayOf(dateStr)]) : {};
+    }
+    function mkCountOn(dateStr) {
+        const v = mkValuesOn(dateStr);
+        return v ? MK_KEYS.filter(k => v[k] != null).length : 0;
+    }
+    // 저장된 날짜 중 가장 최근 (안내 문구용)
+    function mkLatestDate() {
+        let best = '';
+        Object.keys(mkMonths).forEach(mo => {
+            Object.keys(mkMonths[mo].days || {}).forEach(dd => {
+                if (mkCountOn(mo + '-' + dd) > 0) { const d = mo + '-' + dd; if (d > best) best = d; }
+            });
+        });
+        return best;
+    }
+
+    async function mkFetchDaily(dateStr) {
+        const res = await fetch(`/.netlify/functions/market?mode=daily&date=${dateStr}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const j = await res.json();
+        if (!j || j.error) throw new Error(j && j.error ? j.error : '빈 응답');
+        return j;
+    }
+
+    /* 하루치를 받아 저장한다. 채우기 버튼·일지 저장·자동 채우기가 모두 이걸 쓴다.
+       요청한 날짜와 거래일이 같은 것만 그날 칸에 넣는다 —
+       주말이면 비트코인만 들어가고 주식·환율은 키 자체가 없다. */
+    async function mkFillOne(d, gapOnly) {
+        const today = todayStr();
+        const stored = mkStoredDay(d) || null;
+        let j;
+        try { j = await mkFetchDaily(d); }
+        catch (e) { console.error('시장 데이터 조회 실패:', d, e); return { ok: false, log: `${d} 실패(${e.message})` }; }
+
+        const dayVals = {}, filledBy = {};
+        Object.keys(j.symbols || {}).forEach(k => {
+            const it = j.symbols[k];
+            if (!it || it.date !== d || it.value == null) return;
+            if (gapOnly && stored && stored[k] != null) return;   // 있는 값은 덮지 않는다
+            // filled 는 'regular' | 'hourly' (예전 함수는 true를 주었다)
+            if (it.filled) filledBy[k] = (it.filled === true) ? 'regular' : it.filled;
+            dayVals[k] = it.value;
+        });
+
+        const mo = mkMonthOf(d), dd = mkDayOf(d);
+        /* filled 는 '이 값이 보완된 것인가'라는 꼬리표라, 그날 것을 통째로 다시 계산한다.
+           보완값이던 지표를 이번에 진짜 종가로 받았으면 꼬리표를 떼야 한다 —
+           맵을 merge만 하면 옛 꼬리표가 남아 멀쩡한 값이 보완값으로 보인다.
+           그날 꼬리표가 하나도 없게 되면 필드를 지운다(빈 맵을 쓰면 안 되므로). */
+        const prevFilled = mkFilledMap((mkMonths[mo] || {}).filled ? mkMonths[mo].filled[dd] : null);
+        const nextFilled = Object.assign({}, prevFilled, filledBy);
+        Object.keys(dayVals).forEach(k => { if (!filledBy[k]) delete nextFilled[k]; });   // 진짜 종가로 받음
+
+        const payload = { month: mo, fetched: { [dd]: today }, updatedAt: Date.now() };
+        if (Object.keys(dayVals).length) payload.days = { [dd]: dayVals };
+        if (Object.keys(nextFilled).length) payload.filled = { [dd]: nextFilled };
+        else if (Object.keys(prevFilled).length) payload.filled = { [dd]: deleteField() };
+        try {
+            await setDoc(doc(db, MARKET_COLLECTION, mo), payload, { merge: true });
+            const cache = await mkEnsureMonth(mo);
+            if (Object.keys(dayVals).length) cache.days[dd] = Object.assign({}, cache.days[dd], dayVals);
+            if (Object.keys(nextFilled).length) cache.filled[dd] = nextFilled; else delete cache.filled[dd];
+            cache.fetched[dd] = today;
+            return { ok: true, log: `${d} ← ${Object.keys(dayVals).length ? Object.keys(dayVals).join(',') : '없음(받아만 봄)'}` };
+        } catch (e) {
+            console.error('시장 데이터 저장 실패:', d, e);
+            return { ok: false, log: `${d} 저장실패` };
+        }
+    }
+
+    /* 탭에 들어올 때 조용히 빠진 날을 채운다. 한 세션에 한 번만 돈다.
+       확정된 날은 건너뛰므로, 처음 한 번을 빼면 대개 오늘·어제 한두 건이다.
+       화면을 막지 않고, 실패해도 조용히 넘어간다(수동 버튼이 남아 있다). */
+    const MK_AUTO_DAYS = 7;
+    let mkAutoDone = false;
+    async function mkAutoFill() {
+        if (mkAutoDone || mkBusy) return;
+        mkAutoDone = true;
+        const today = todayStr();
+        const dates = [];
+        for (let i = MK_AUTO_DAYS - 1; i >= 0; i--) dates.push(mkShiftDay(today, -i));
+        const todo = dates.filter(d => !mkSettled(d));
+        if (!todo.length) return;
+        mkBusy = true;
+        try {
+            for (const d of todo) {
+                await mkFillOne(d, false);
+                await new Promise(r => setTimeout(r, MK_GAP_MS));
+            }
+        } finally { mkBusy = false; }
+        if (document.getElementById('mkBody')) mkShow();
+        a10RenderChart();   // 새로 들어온 날이 차트에 바로 보이게
+        a10FillWriteForm(a10CurrentDate || todayStr());
+    }
+
+    /* 최근 N일을 오래된 날부터 채운다.
+       gapOnly=false : 아직 저장 기록이 없는 날만 (이미 저장된 날은 건드리지 않는다)
+       gapOnly=true  : 저장은 됐지만 빠진 지표가 있는 날도 다시 받아 '없는 키만' 더한다
+                       (기존 값은 덮어쓰지 않는다 — 야후 데이터 구멍이 나중에 메워지는 경우가 있다) */
+    window.mkFill = async function (gapOnly) {
+        if (mkBusy) return;
+        mkBusy = true; mkAbort = false;
+        const fillBtn = document.getElementById('mkFillBtn');
+        const gapBtn = document.getElementById('mkGapBtn');
+        const stopBtn = document.getElementById('mkStopBtn');
+        fillBtn.disabled = true; gapBtn.disabled = true; stopBtn.style.display = '';
+
+        const n = Number(document.getElementById('mkDays').value) || 7;
+        const dates = [];
+        for (let i = n - 1; i >= 0; i--) dates.push(mkShiftDay(todayStr(), -i));
+
+        let added = 0, skipped = 0, failed = 0, done = 0;
+        const log = [];
+        try {
+            // 걸치는 달을 먼저 읽어 둔다(대개 한두 개)
+            const months = [...new Set(dates.map(mkMonthOf))];
+            for (const mo of months) await mkEnsureMonth(mo);
+
+            for (const d of dates) {
+                if (mkAbort) break;
+                done++;
+                const stored = mkStoredDay(d) || null;
+                const missing = MK_KEYS.filter(k => !stored || stored[k] == null);
+                // 보통은 '확정된 날'만 건너뛴다. 빠진 지표 채우기는 확정이어도 빈 곳이 있으면 다시 본다.
+                if (mkSettled(d) && (!gapOnly || !missing.length)) { skipped++; continue; }
+
+                mkStatus(`받는 중 ${done}/${dates.length} · ${hlEsc(d)}` +
+                         `<br>새로 넣음 ${added} · 건너뜀 ${skipped} · 실패 ${failed}`);
+                const r = await mkFillOne(d, gapOnly);
+                if (r.ok) { added++; } else { failed++; }
+                log.push(r.log);
+                if (!mkAbort && done < dates.length) await new Promise(r2 => setTimeout(r2, MK_GAP_MS));
+            }
+        } finally {
+            mkBusy = false;
+            fillBtn.disabled = false; gapBtn.disabled = false; stopBtn.style.display = 'none';
+        }
+        mkStatus(`${mkAbort ? '중단됨' : '완료'} — 새로 넣음 ${added} · 건너뜀 ${skipped} · 실패 ${failed}`
+                 + (log.length ? `<br><span style="font-size:11px;color:var(--zm-muted-2)">${hlEsc(log.join(' / '))}</span>` : ''));
+        mkShow();
+    };
+    window.mkStop = function () { mkAbort = true; };
+
+    /* 저장된 '보완값'이 지금 기준으로도 유효한지 다시 확인한다.
+       시간봉 폴백을 허용하는 지표 목록은 함수(HOURLY_FALLBACK)가 들고 있다.
+       목록이 바뀌면 예전에 채워 둔 값이 남는데 — 실제로 코스피가 그랬다(9/22 7037.46) —
+       여기서 지운다. 허용 목록을 앱에 한 벌 더 두지 않으려고, 판단은 함수에 맡기고
+       '함수가 더 이상 그 값을 주지 않으면 지운다'로 처리한다.
+       hourly 표시가 있는 날만 다시 물어보므로 요청이 몇 건 되지 않는다. */
+    window.mkRecheck = async function () {
+        if (mkBusy) return;
+        const n = Number(document.getElementById('mkDays').value) || 7;
+        const today = todayStr();
+        const dates = [];
+        for (let i = n - 1; i >= 0; i--) dates.push(mkShiftDay(today, -i));
+        try { for (const mo of [...new Set(dates.map(mkMonthOf))]) await mkEnsureMonth(mo); }
+        catch (e) { console.error('시장 데이터 조회 실패:', e); mkStatus('불러오지 못했습니다.'); return; }
+
+        // 보완값이 들어 있는 날만 대상
+        const targets = dates.filter(d => Object.keys(mkFilledMap((mkMonths[mkMonthOf(d)] || {}).filled
+            ? mkMonths[mkMonthOf(d)].filled[mkDayOf(d)] : null)).length);
+        if (!targets.length) { mkStatus('보완값이 없습니다 — 검사할 것이 없습니다.'); return; }
+        if (!confirm(`보완값이 있는 ${targets.length}일을 다시 확인합니다.\n지금 기준으로 쓰지 않는 보완값은 지웁니다. (정상 값은 그대로)`)) return;
+
+        mkBusy = true;
+        const btn = document.getElementById('mkRecheckBtn');
+        if (btn) btn.disabled = true;
+        let removed = 0, kept = 0;
+        const log = [];
+        try {
+            for (const d of targets) {
+                const mo = mkMonthOf(d), dd = mkDayOf(d);
+                const cache = mkMonths[mo];
+                const fl = mkFilledMap(cache.filled[dd]);
+                let j;
+                try { j = await mkFetchDaily(d); }
+                catch (e) { console.error('시장 데이터 조회 실패:', d, e); log.push(`${d} 조회실패(건너뜀)`); continue; }
+
+                const gone = Object.keys(fl).filter(k => {
+                    const it = (j.symbols || {})[k];
+                    return !(it && it.date === d && it.value != null);   // 함수가 더는 주지 않는다
+                });
+                if (!gone.length) { kept += Object.keys(fl).length; continue; }
+
+                const dayDel = {}, flDel = {};
+                gone.forEach(k => { dayDel[k] = deleteField(); flDel[k] = deleteField(); });
+                try {
+                    await setDoc(doc(db, MARKET_COLLECTION, mo),
+                        { days: { [dd]: dayDel }, filled: { [dd]: flDel }, updatedAt: Date.now() }, { merge: true });
+                    gone.forEach(k => { delete cache.days[dd][k]; delete fl[k]; });
+                    cache.filled[dd] = fl;
+                    removed += gone.length;
+                    log.push(`${d} 지움: ${gone.join(',')}`);
+                } catch (e) { console.error('보완값 삭제 실패:', d, e); log.push(`${d} 삭제실패`); }
+                await new Promise(r => setTimeout(r, MK_GAP_MS));
+            }
+        } finally {
+            mkBusy = false;
+            if (btn) btn.disabled = false;
+        }
+        mkStatus(`검사 완료 — 지움 ${removed} · 유지 ${kept}`
+            + (log.length ? `<br><span style="font-size:11px;color:var(--zm-muted-2)">${hlEsc(log.join(' / '))}</span>` : ''));
+        mkShow();
+    };
+
+    // 저장된 것을 날짜 × 지표 표로 보여준다 — 주말에 비트코인만 있는 상태를 눈으로 확인하려는 것
+    window.mkShow = async function () {
+        const body = document.getElementById('mkBody');
+        if (!body) return;
+        const n = Number(document.getElementById('mkDays').value) || 7;
+        const today = todayStr();
+        const dates = [];
+        for (let i = 0; i < n; i++) dates.push(mkShiftDay(today, -i));   // 최근 날짜가 위
+        try {
+            for (const mo of [...new Set(dates.map(mkMonthOf))]) await mkEnsureMonth(mo);
+        } catch (e) {
+            console.error('시장 데이터 조회 실패:', e);
+            body.innerHTML = '<div class="a10-hint">저장된 시장 데이터를 불러오지 못했습니다 — 보안 규칙에 marketDaily가 들어가 있는지 확인해주세요.</div>';
+            return;
+        }
+        const WK = ['일', '월', '화', '수', '목', '금', '토'];
+        const rows = dates.map(d => {
+            const mo = mkMonths[mkMonthOf(d)] || { days: {}, filled: {}, fetched: {} };
+            const vals = mo.days[mkDayOf(d)] || null;
+            const fl = mkFilledMap(mo.filled[mkDayOf(d)]);
+            const on = (mo.fetched || {})[mkDayOf(d)] || null;
+            const ts = hlDateTs(d);
+            const w = ts == null ? '' : WK[new Date(ts).getDay()];
+            const cells = MK_KEYS.map(k => {
+                const v = vals ? vals[k] : null;
+                if (v == null) return '<td class="none">—</td>';
+                const by = fl[k];   // 'regular' | 'hourly' | undefined
+                const tip = by === 'hourly' ? '1시간 봉 마지막 종가로 보완'
+                          : by === 'regular' ? 'regularMarketPrice로 보완' : '';
+                return `<td class="${by ? 'filled ' + by : ''}"${tip ? ` title="${hlAttr(tip)}"` : ''}><b>${hlEsc(String(v))}</b></td>`;
+            }).join('');
+            const cnt = vals ? MK_KEYS.filter(k => vals[k] != null).length : 0;
+            // 아직 안 받아본 날과, 받았는데 값이 없던 날(장중·휴장)은 뜻이 다르다
+            const state = !on ? '미조회' : (mkSettled(d) ? `${cnt}종` : `${cnt}종 · 다시 받음`);
+            return `<tr class="${(w === '토' || w === '일') ? 'mk-wk' : ''}">`
+                + `<th class="mk-date">${hlEsc(d)} (${w})<br><span style="font-weight:600;color:var(--zm-muted)">${hlEsc(state)}</span></th>`
+                + cells + '</tr>';
+        }).join('');
+        body.innerHTML = `<div class="mk-wrap"><table class="mk-table">
+                <thead><tr><th class="mk-date">날짜</th>${MK_KEYS.map(k => `<th>${hlEsc(MK_LABEL[k])}</th>`).join('')}</tr></thead>
+                <tbody>${rows}</tbody>
+            </table></div>
+            <div class="mk-legend">— 는 그날 그 지표의 거래일이 아니라 값이 없는 것입니다(주말·휴장).
+                점선 밑줄은 regularMarketPrice로, 물결 밑줄은 그날 마지막 1시간 봉으로 보완한 값입니다
+                (야후가 그날 일봉을 통째로 비워서 준 경우). 시간봉 보완은 정확도를 확인한
+                S&amp;P500·나스닥·달러지수·비트코인에만 씁니다 — 코스피·금·환율은 마지막 시간봉이
+                그날 종가와 달라서 빈 칸으로 둡니다.<br>
+                ‘미조회’는 아직 안 받아본 날, ‘다시 받음’은 받을 때 장중이어서 다음에 한 번 더 받을 날입니다.</div>`;
+    };
+
     /* ===================== After10 (일지) =====================
        기존 tasks 로직과 완전히 독립.
        - 별도 컬렉션 "diary", 문서 ID = YYYY-MM-DD
@@ -2425,10 +2805,14 @@
     async function a10LoadEntries() {
         try {
             await a10FetchEntries();
+            // 지표는 이제 일지가 아니라 marketDaily에 있다 — 한 번에 읽어 둔다
+            try { await mkLoadAll(); }
+            catch (e) { console.error('시장 데이터 조회 실패:', e); }
             a10FillWriteForm(a10CurrentDate || todayStr());
             if (document.getElementById('a10ViewTimeline').style.display !== 'none') a10RenderTimeline();
             if (document.getElementById('a10ViewPast').style.display !== 'none') a10RenderPast();
             if (document.getElementById('a10ViewChart').style.display !== 'none') a10RenderChart();
+            mkAutoFill();   // 빠진 날은 뒤에서 조용히 채운다(기다리지 않는다)
         } catch (e) {
             console.error('일지 불러오기 실패:', e);
         }
@@ -2449,6 +2833,8 @@
         note.style.display = isToday ? 'none' : 'block';
         note.textContent = isToday ? '' : `${a10KoreanFull(dateStr)}의 기록입니다.`;
 
+        a10PaintMarketHint(dateStr);
+
         const btn = document.getElementById('a10SaveBtn');
         btn.classList.remove('saved');
         btn.disabled = false;
@@ -2457,38 +2843,77 @@
         a10RenderRecent();
     }
 
+    /* 고른 날짜에 시장 데이터가 얼마나 있는지 알려준다.
+       지표는 거래일에만 생기므로 주말·오늘은 비어 있거나 적다 — 날짜를 고를 때
+       그걸 알고 고를 수 있어야 한다(장중이면 오늘 값은 내일 들어온다). */
+    function a10PaintMarketHint(dateStr) {
+        const el = document.getElementById('a10MarketHint');
+        if (!el) return;
+        const entry = a10FindEntry(dateStr);
+        if (entry && entry.market) {   // 예전 일지는 자기 값을 갖고 있다
+            el.innerHTML = `<b>${hlEsc(dateStr)}</b> · 일지에 저장된 지표가 있습니다 (예전 방식)`;
+            return;
+        }
+        const n = mkCountOn(dateStr);
+        const latest = mkLatestDate();
+        const tail = latest ? ` · 지금까지 <b>${hlEsc(latest)}</b>까지 들어와 있습니다` : '';
+        if (n >= MK_KEYS.length) el.innerHTML = `<b>${hlEsc(dateStr)}</b> · 지표 <b>9종 전부</b>${tail}`;
+        else if (n > 0) el.innerHTML = `<b>${hlEsc(dateStr)}</b> · 지표 <b>${n}종</b> (거래일이 아닌 지표는 값이 없습니다)${tail}`;
+        else el.innerHTML = `<b>${hlEsc(dateStr)}</b> · 지표 <b>아직 없음</b>${tail}`;
+    }
+
     // 숫자 포맷 (천단위 콤마 + 소수 자릿수)
     function a10FmtNum(v, digits) {
         if (v == null || isNaN(v)) return '-';
         return Number(v).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
     }
 
-    // 지표 한 줄 HTML (market 없으면 빈 문자열 → 아무것도 안 보임)
-    function a10MarketLine(m) {
-        if (!m) return '';
-        const parts = [];
-        if (m.usdkrw != null) parts.push(`원/달러 <b>${a10FmtNum(m.usdkrw, 2)}</b>`);
-        if (m.jpykrw != null) parts.push(`원/엔 <b>${a10FmtNum(m.jpykrw, 2)}</b>`);
-        // 아래 둘은 나중에 추가된 항목이라 예전 일지에는 없다 — 없으면 그냥 빠진다
-        if (m.usdjpy != null) parts.push(`달러/엔 <b>${a10FmtNum(m.usdjpy, 2)}</b>`);
-        if (m.dxy    != null) parts.push(`달러지수 <b>${a10FmtNum(m.dxy, 2)}</b>`);
-        if (m.kospi  != null) parts.push(`코스피 <b>${a10FmtNum(m.kospi, 2)}</b>`);
-        if (m.spx    != null) parts.push(`S&amp;P500 <b>${a10FmtNum(m.spx, 2)}</b>`);
-        if (m.ndq    != null) parts.push(`나스닥 <b>${a10FmtNum(m.ndq, 2)}</b>`);
-        if (m.gold   != null) parts.push(`금 <b>$${a10FmtNum(m.gold, 2)}</b>/oz`);
-        if (m.btc    != null) parts.push(`BTC <b>$${a10FmtNum(m.btc, 0)}</b>`);
-        if (!parts.length) return '';
+    /* 지표 한 줄.
+       새 일지는 지표를 문서에 담지 않는다 — 그날의 marketDaily를 찾아 보여준다.
+       예전 일지(market 필드가 있는 것)는 저장된 값을 그대로 보여준다. 그때는 9종을 하나의
+       공통 기준일로 맞춰 담았고 지금은 지표마다 자기 거래일이라, 같은 줄로 보이면
+       어느 날 값인지 헷갈린다. 그래서 예전 것은 '예전 방식'이라고 밝힌다. */
+    const A10_MKT_FMT = {
+        usdkrw: v => `원/달러 <b>${a10FmtNum(v, 2)}</b>`,
+        jpykrw: v => `원/엔 <b>${a10FmtNum(v, 2)}</b>`,
+        usdjpy: v => `달러/엔 <b>${a10FmtNum(v, 2)}</b>`,
+        dxy:    v => `달러지수 <b>${a10FmtNum(v, 2)}</b>`,
+        kospi:  v => `코스피 <b>${a10FmtNum(v, 2)}</b>`,
+        spx:    v => `S&amp;P500 <b>${a10FmtNum(v, 2)}</b>`,
+        ndq:    v => `나스닥 <b>${a10FmtNum(v, 2)}</b>`,
+        gold:   v => `금 <b>$${a10FmtNum(v, 2)}</b>/oz`,
+        btc:    v => `BTC <b>$${a10FmtNum(v, 0)}</b>`,
+    };
+    const A10_MKT_ORDER = ['usdkrw', 'jpykrw', 'usdjpy', 'dxy', 'kospi', 'spx', 'ndq', 'gold', 'btc'];
 
-        // 기준일 항상 표시. 요청일과 다르면(주말/공휴일 등 직전 거래일) 그 사실도 표기.
-        let basis = '';
-        if (m.basisDate) {
-            const diff = m.stale && m.requestedDate && m.requestedDate !== m.basisDate;
-            basis = diff
-                ? ` <span class="a10-basis">(요청 ${m.requestedDate} → ${m.basisDate} 기준)</span>`
-                : ` <span class="a10-basis">(${m.basisDate} 기준)</span>`;
+    function a10MarketLine(entry) {
+        if (!entry) return '';
+        const m = entry.market;
+        if (m) {
+            // 예전 일지 — 저장된 값을 그대로
+            const parts = A10_MKT_ORDER.filter(k => m[k] != null).map(k => A10_MKT_FMT[k](m[k]));
+            if (!parts.length) return '';
+            const basis = m.basisDate
+                ? ` <span class="a10-basis">(${hlEsc(m.basisDate)} 기준 · 예전 방식)</span>`
+                : ` <span class="a10-basis">(예전 방식)</span>`;
+            const src = `일지에 저장된 값 · 출처 ${m.source || '-'}${m.v ? ' v' + m.v : ''}`
+                + (m.basisDate ? ` · 9종 공통 기준일 ${m.basisDate}` : '');
+            return `<div class="a10-market" title="${hlAttr(src)}">${parts.join(' · ')}${basis}</div>`;
         }
-        const src = m.source ? `출처 ${m.source}${m.v ? ' v' + m.v : ''}${m.basisDate ? ' · 기준일 ' + m.basisDate : ''}` : '';
-        return `<div class="a10-market" title="${src}">${parts.join(' · ')}${basis}</div>`;
+        // 새 일지 — 그날 marketDaily
+        const vals = mkValuesOn(entry.id);
+        if (!vals) return '';
+        const fl = mkFilledOn(entry.id);
+        const parts = A10_MKT_ORDER.filter(k => vals[k] != null).map(k => {
+            const html = A10_MKT_FMT[k](vals[k]);
+            if (!fl[k]) return html;
+            // 보완값은 밑줄로 구분 (확인판과 같은 규칙)
+            const tip = fl[k] === 'hourly' ? '종가가 비어 있어 그날 마지막 1시간 봉으로 보완' : '종가가 비어 있어 regularMarketPrice로 보완';
+            return `<span class="a10-mkt-filled ${hlAttr(fl[k])}" title="${hlAttr(tip)}">${html}</span>`;
+        });
+        if (!parts.length) return '';
+        return `<div class="a10-market" title="${hlAttr(entry.id + ' 거래일 값 (marketDaily)')}">${parts.join(' · ')}`
+            + ` <span class="a10-basis">(${hlEsc(entry.id)} 거래일)</span></div>`;
     }
 
     // 쓰기 뷰 하단: 최근 기록 10개 (최신순)
@@ -2511,36 +2936,10 @@
                 <div class="a10-card-date">${a10KoreanShort(e.id)}</div>
                 <div class="a10-card-sub">${a10FutureSub(e.id)}</div>
                 <div class="a10-card-body clamp">${a10Escape(e.content || '')}</div>
-                ${a10MarketLine(e.market)}
+                ${a10MarketLine(e)}
             </div>`).join('');
     }
 
-    // 경제지표 함수 호출 — 성공/실패를 콘솔에 남기고, 일시 실패는 1회 재시도.
-    // 실패하면 null 반환 (지표 없이 저장 진행).
-    async function a10FetchMarket(dateStr) {
-        const url = `/.netlify/functions/market?date=${dateStr}`;
-        for (let attempt = 1; attempt <= 2; attempt++) {
-            try {
-                const res = await fetch(url);
-                console.log(`[After10 지표] 호출 ${attempt}/2 → HTTP ${res.status} (ok=${res.ok})`);
-                if (res.ok) {
-                    const m = await res.json();
-                    if (m && !m.error) {
-                        console.log('[After10 지표] 조회 성공 → 저장에 포함:', m);
-                        return m;
-                    }
-                    console.warn('[After10 지표] 응답이 error/빈값 → 지표 없이 저장:', m);
-                    return null; // 형식 문제는 재시도해도 동일 → 중단
-                }
-                console.warn(`[After10 지표] 함수 응답 실패(HTTP ${res.status})` +
-                             (attempt < 2 ? ' → 재시도' : ' → 지표 없이 저장'));
-            } catch (e) {
-                console.warn('[After10 지표] 조회 예외' +
-                             (attempt < 2 ? ' → 재시도' : ' → 지표 없이 저장') + ':', e);
-            }
-        }
-        return null;
-    }
 
     // 저장 (setDoc merge — 기존 문서면 createdAt 보존, updatedAt만 갱신)
     async function a10Save() {
@@ -2560,18 +2959,18 @@
 
         btn.disabled = true;
 
-        // 경제지표: market이 아직 없는 문서에만 조회해 함께 저장 (보존 로직은 market이 이미 있을 때만).
-        // 실패해도 일지 저장은 계속 진행 (지표는 부가 정보).
-        const needMarket = !existing || !existing.market;
-        console.log(`[After10] 저장 시작 ${dateStr} · 지표조회 ${needMarket ? 'O' : 'X (기존 market 유지)'}`);
-        if (needMarket) {
-            const m = await a10FetchMarket(dateStr);
-            if (m) payload.market = m;
-        }
-
+        /* 지표는 일지에 담지 않는다 — marketDaily가 날짜별로 들고 있고, 일지는 본문만 갖는다.
+           이미 저장된 일지의 market 필드는 건드리지 않는다(merge라 그대로 남는다).
+           대신 그날 시장 데이터가 아직 없으면 지금 받아 marketDaily에 채운다. */
+        console.log(`[After10] 저장 시작 ${dateStr}`);
         try {
             await setDoc(doc(db, DIARY_COLLECTION, dateStr), payload, { merge: true });
-            console.log(`[After10] 저장 완료 ${dateStr} · market 포함 ${!!payload.market}`);
+            console.log(`[After10] 저장 완료 ${dateStr}`);
+            if (!mkSettled(dateStr)) {
+                mkFillOne(dateStr, false)
+                    .then(() => { a10RenderRecent(); a10FillWriteForm(a10CurrentDate || dateStr); })
+                    .catch(e => console.error('시장 데이터 수집 실패:', e));
+            }
             await a10FetchEntries(); // 저장 후 다시 불러오기
             a10RenderRecent();       // 하단 최근 목록 즉시 반영
 
@@ -2656,7 +3055,7 @@
                                     <div class="a10-card-date">${a10KoreanShort(e.id)}</div>
                                     <div class="a10-card-sub">${a10FutureSub(e.id)}</div>
                                     <div class="a10-card-body">${a10Escape(e.content || '')}</div>
-                                    ${a10MarketLine(e.market)}
+                                    ${a10MarketLine(e)}
                                 </div>`;
                         });
                         html += `</div>`;
@@ -2694,7 +3093,7 @@
                 <div class="a10-past-card">
                     <div class="a10-past-year">${label}</div>
                     <div class="a10-card-body">${a10Escape(e.content || '')}</div>
-                    ${a10MarketLine(e.market)}
+                    ${a10MarketLine(e)}
                 </div>`;
         });
         if (list.length === 1) {
@@ -2814,9 +3213,19 @@
     // metric 생략 시 단일 보기의 선택 지표. forceRange면 '매년 같은 날'을 무시한다(비교 모드용).
     function a10ChartData(metric, forceRange) {
         const key = metric || a10ChartMetric;
-        let items = a10Entries
-            .filter(e => e.market && e.market[key] != null)
-            .map(e => ({ ymd: e.id, value: e.market[key] }));
+        /* 일지가 아니라 marketDaily에서 뽑는다 — 일지를 안 쓴 날의 값도 그려지고,
+           x축이 '일지를 쓴 날'이 아니라 '실제 거래일'이 된다.
+           지표마다 거래일이 다르므로 값이 있는 날만 점이 찍힌다(주말엔 비트코인만). */
+        let items = [];
+        Object.keys(mkMonths).forEach(mo => {
+            const days = mkMonths[mo].days || {};
+            Object.keys(days).forEach(dd => {
+                const v = days[dd] ? days[dd][key] : null;
+                if (v == null) return;
+                const ymd = mo + '-' + dd;
+                items.push({ ymd, value: v, filled: mkFilledOn(ymd)[key] || null });
+            });
+        });
 
         if (!forceRange && a10ChartMode === 'anniv') {
             const md = todayStr().substring(5);                 // 오늘의 MM-DD
@@ -2878,7 +3287,7 @@
         const items = a10ChartData();
         if (!items.length) {
             canvas.style.display = 'none'; statsEl.innerHTML = '';
-            msgEl.innerHTML = `<div class="a10-empty">표시할 <b>${cfg.label}</b> 데이터가 없습니다.<br>일지를 저장하면 지표가 쌓입니다.</div>`;
+            msgEl.innerHTML = `<div class="a10-empty">표시할 <b>${cfg.label}</b> 데이터가 없습니다.<br>거래일 데이터가 쌓이면 그려집니다.</div>`;
             return;
         }
         canvas.style.display = '';
@@ -2945,7 +3354,10 @@
                     tooltip: {
                         callbacks: {
                             title: ctx => fullDates[ctx[0].dataIndex],
-                            label: ctx => `${cfg.label}: ${cfg.fmt(ctx.parsed.y)}${chartExtremeNote(ext, ctx.dataIndex)}`,
+                            // 보완값은 툴팁에서만 밝힌다 — 점 모양까지 바꾸면 최고/최저 표시와 헷갈린다
+                            label: ctx => `${cfg.label}: ${cfg.fmt(ctx.parsed.y)}${chartExtremeNote(ext, ctx.dataIndex)}`
+                                + (items[ctx.dataIndex] && items[ctx.dataIndex].filled
+                                    ? (items[ctx.dataIndex].filled === 'hourly' ? ' · 시간봉 보완' : ' · 보완값') : ''),
                         }
                     }
                 },
@@ -5476,301 +5888,6 @@
         }
     };
 
-
-    /* ===================== 1단계 임시: 시장 데이터 수집 =====================
-       경제지표를 일지 문서에서 떼어내 따로 쌓는다. 지금은 쌓기만 하고,
-       일지 저장·표시·차트는 그대로 둔다(2단계에서 옮긴다).
-
-       ── 왜 월 단위 문서인가 ─────────────────────────────────────
-       marketDaily/{YYYY-MM} : { month,
-         days:    { "22": { usdkrw, spx, ... } },   // 그날 값이 있는 지표만
-         filled:  { "22": { kospi: "hourly" } },     // 보완한 지표 → 보완 방식
-                                                    //   regular: meta.regularMarketPrice
-                                                    //   hourly : 그날 마지막 1시간 봉 종가
-         fetched: { "22": "2026-09-24" } }          // 그 날짜를 '언제' 받아봤나
-       거래일마다 문서 하나로 두면 읽기가 너무 많다 — 차트는 한 번에 여러 달을 읽는데,
-       1년이면 365번, '전체'면 수천 번이 된다. 월로 묶으면 1년이 12번이다.
-       한 달치는 지표 9종 × 31일이라도 6KB 남짓이라 1MB 한도와 거리가 멀다.
-       문서 id가 달이라 색인이 필요한 질의를 쓰지 않는다(루틴 탭과 같은 방식).
-
-       ── 무엇을 어느 칸에 넣나 ───────────────────────────────────
-       함수(mode=daily)가 심볼마다 '자기 실제 거래일'과 값을 돌려준다.
-       그중 요청한 날짜와 거래일이 같은 것만 그날 칸에 넣는다 —
-       주말이면 비트코인만 들어가고 주식·환율은 키 자체가 없다.
-
-       ── 받아봤다는 표시를 days가 아니라 fetched에 두는 이유 ─────
-       처음에는 days[dd]가 있으면 '받아본 날'로 봤는데, 그러면 두 가지가 어긋난다.
-       1) 장중이라 확정값이 하나도 없는 날(대개 오늘)은 days[dd]가 빈 채로 남아
-          '받아봤음'이 되어, 다음 날에도 영영 다시 받지 않는다.
-       2) 값이 없는 날을 표시하려고 빈 맵을 쓰게 되는데 — 아래 ⚠ 참고.
-       그래서 '언제 받았나'를 fetched에 날짜로 적는다.
-       그 날짜보다 나중에 받았으면 그 거래일은 이미 끝난 뒤라 값이 확정이다.
-       같은 날(또는 그 전)에 받았다면 장중이었을 수 있으니 다음에 다시 받는다.
-
-       ⚠ setDoc(merge)에 빈 맵을 보내면 '아무것도 안 함'이 아니라 그 자리를
-          빈 맵으로 덮어쓴다. Firestore SDK가 빈 맵을 만나면 그 경로를 그대로
-          fieldMask에 넣기 때문이다(parseObject: "we explicitly add it to the
-          update mask to ensure that the server creates a map entry").
-          실제로 이 때문에 저장해 둔 날짜들이 통째로 지워진 적이 있다.
-          아래 저장부는 넣을 것이 없으면 days·filled 키 자체를 payload에서 뺀다.
-    ====================================================================== */
-    const MARKET_COLLECTION = "marketDaily";
-    const MK_KEYS = ['usdkrw', 'jpykrw', 'usdjpy', 'dxy', 'spx', 'ndq', 'kospi', 'gold', 'btc'];
-    const MK_LABEL = { usdkrw: '원/달러', jpykrw: '원/엔', usdjpy: '달러/엔', dxy: '달러지수',
-                       spx: 'S&P500', ndq: '나스닥', kospi: '코스피', gold: '금', btc: '비트코인' };
-    const MK_GAP_MS = 800;        // 야후에 몰리지 않게 요청 사이 간격
-    let mkMonths = {};            // "YYYY-MM" → { days: {dd:{k:v}}, filled: {dd:[k]} }
-    let mkBusy = false, mkAbort = false;
-
-    function mkStatus(html) { const el = document.getElementById('mkStatus'); if (el) el.innerHTML = html || ''; }
-    function mkMonthOf(d) { return String(d).substring(0, 7); }
-    function mkDayOf(d) { return String(d).substring(8, 10); }
-    function mkShiftDay(dateStr, n) {
-        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
-        if (!m) return dateStr;
-        const d = new Date(+m[1], +m[2] - 1, +m[3] + n);
-        const p = x => String(x).padStart(2, '0');
-        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-    }
-    // 한 달치 문서. 한 번 읽으면 캐시에 둔다(달을 오갈 때 다시 읽지 않게).
-    async function mkEnsureMonth(month) {
-        if (mkMonths[month]) return mkMonths[month];
-        const snap = await getDoc(doc(db, MARKET_COLLECTION, month));
-        const v = (snap.exists() && snap.data()) || {};
-        mkMonths[month] = { days: (v.days && typeof v.days === 'object') ? v.days : {},
-                            filled: (v.filled && typeof v.filled === 'object') ? v.filled : {},
-                            fetched: (v.fetched && typeof v.fetched === 'object') ? v.fetched : {} };
-        return mkMonths[month];
-    }
-    /* filled 는 처음에 ["kospi"] 배열이었고 지금은 { kospi: "hourly" } 맵이다.
-       저장된 것을 고치지 않고 읽는 쪽에서 맞춘다 — 예전 것은 전부 regular 방식이었다. */
-    function mkFilledMap(v) {
-        if (Array.isArray(v)) { const o = {}; v.forEach(k => { o[k] = 'regular'; }); return o; }
-        return (v && typeof v === 'object') ? v : {};
-    }
-    function mkStoredDay(dateStr) {
-        const mo = mkMonths[mkMonthOf(dateStr)];
-        return mo ? mo.days[mkDayOf(dateStr)] : undefined;
-    }
-    /* 그 거래일이 끝난 뒤에 받았으면 값이 확정이다 — 다시 받을 이유가 없다.
-       같은 날(또는 그 전)에 받았다면 그때는 장중이었을 수 있어 다시 받아야 한다.
-       fetched가 아예 없는 문서(이 필드를 두기 전에 저장된 것)도 한 번은 다시 받는다. */
-    function mkSettled(dateStr) {
-        const mo = mkMonths[mkMonthOf(dateStr)];
-        const on = mo && mo.fetched ? mo.fetched[mkDayOf(dateStr)] : null;
-        return !!on && on > dateStr;
-    }
-
-    /* 수집기는 늘 '지금'의 답이 필요하다(장 마감 여부·야후가 메운 값·허용 목록이 달라진다).
-       함수도 no-store로 주지만, 그 전에 캐시된 응답이 남아 있으면 브라우저가 그걸 계속 쓴다 —
-       실제로 이것 때문에 보완값 재검사가 옛 답을 보고 헛돌았다. 요청 쪽에서도 캐시를 건너뛴다. */
-    async function mkFetchDaily(dateStr) {
-        const res = await fetch(`/.netlify/functions/market?mode=daily&date=${dateStr}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const j = await res.json();
-        if (!j || j.error) throw new Error(j && j.error ? j.error : '빈 응답');
-        return j;
-    }
-
-    /* 최근 N일을 오래된 날부터 채운다.
-       gapOnly=false : 아직 저장 기록이 없는 날만 (이미 저장된 날은 건드리지 않는다)
-       gapOnly=true  : 저장은 됐지만 빠진 지표가 있는 날도 다시 받아 '없는 키만' 더한다
-                       (기존 값은 덮어쓰지 않는다 — 야후 데이터 구멍이 나중에 메워지는 경우가 있다) */
-    window.mkFill = async function (gapOnly) {
-        if (mkBusy) return;
-        mkBusy = true; mkAbort = false;
-        const fillBtn = document.getElementById('mkFillBtn');
-        const gapBtn = document.getElementById('mkGapBtn');
-        const stopBtn = document.getElementById('mkStopBtn');
-        fillBtn.disabled = true; gapBtn.disabled = true; stopBtn.style.display = '';
-
-        const n = Number(document.getElementById('mkDays').value) || 7;
-        const today = todayStr();
-        const dates = [];
-        for (let i = n - 1; i >= 0; i--) dates.push(mkShiftDay(today, -i));
-
-        let added = 0, skipped = 0, failed = 0, done = 0;
-        const log = [];
-        try {
-            // 걸치는 달을 먼저 읽어 둔다(대개 한두 개)
-            const months = [...new Set(dates.map(mkMonthOf))];
-            for (const mo of months) await mkEnsureMonth(mo);
-
-            for (const d of dates) {
-                if (mkAbort) break;
-                done++;
-                const stored = mkStoredDay(d) || null;
-                const missing = MK_KEYS.filter(k => !stored || stored[k] == null);
-                // 보통은 '확정된 날'만 건너뛴다. 빠진 지표 채우기는 확정이어도 빈 곳이 있으면 다시 본다.
-                if (mkSettled(d) && (!gapOnly || !missing.length)) { skipped++; continue; }
-
-                mkStatus(`받는 중 ${done}/${dates.length} · ${hlEsc(d)}` +
-                         `<br>새로 넣음 ${added} · 건너뜀 ${skipped} · 실패 ${failed}`);
-                let j;
-                try { j = await mkFetchDaily(d); }
-                catch (e) { console.error('시장 데이터 조회 실패:', d, e); failed++; log.push(`${d} 실패(${e.message})`); continue; }
-
-                // 요청한 날짜와 거래일이 같은 것만 그날 칸에 넣는다
-                const dayVals = {}, filledBy = {};
-                Object.keys(j.symbols || {}).forEach(k => {
-                    const it = j.symbols[k];
-                    if (!it || it.date !== d || it.value == null) return;
-                    if (gapOnly && stored && stored[k] != null) return;   // 있는 값은 덮지 않는다
-                    dayVals[k] = it.value;
-                    // filled 는 'regular' | 'hourly' (예전 함수는 true를 주었다)
-                    if (it.filled) filledBy[k] = (it.filled === true) ? 'regular' : it.filled;
-                });
-
-                const mo = mkMonthOf(d), dd = mkDayOf(d);
-                /* ⚠ 빈 맵은 절대 보내지 않는다 — merge라도 그 자리를 빈 맵으로 덮어쓴다.
-                   넣을 값이 없는 날은 fetched만 적어 '받아는 봤다'를 남긴다. */
-                /* filled 는 '이 값이 보완된 것인가'라는 꼬리표라, 그날 것을 통째로 다시 계산한다.
-                   보완값이던 지표를 이번에 진짜 종가로 받았으면 꼬리표를 떼야 한다 —
-                   맵을 merge만 하면 옛 꼬리표가 남아 멀쩡한 값이 보완값으로 보인다.
-                   그날 꼬리표가 하나도 없게 되면 필드를 지운다(빈 맵을 쓰면 안 되므로). */
-                const prevFilled = mkFilledMap((mkMonths[mo] || {}).filled ? mkMonths[mo].filled[dd] : null);
-                const nextFilled = Object.assign({}, prevFilled, filledBy);
-                Object.keys(dayVals).forEach(k => { if (!filledBy[k]) delete nextFilled[k]; });   // 진짜 종가로 받음
-
-                const payload = { month: mo, fetched: { [dd]: today }, updatedAt: Date.now() };
-                if (Object.keys(dayVals).length) payload.days = { [dd]: dayVals };
-                if (Object.keys(nextFilled).length) payload.filled = { [dd]: nextFilled };
-                else if (Object.keys(prevFilled).length) payload.filled = { [dd]: deleteField() };
-                try {
-                    await setDoc(doc(db, MARKET_COLLECTION, mo), payload, { merge: true });
-                    const cache = await mkEnsureMonth(mo);
-                    if (Object.keys(dayVals).length) cache.days[dd] = Object.assign({}, cache.days[dd], dayVals);
-                    if (Object.keys(nextFilled).length) cache.filled[dd] = nextFilled; else delete cache.filled[dd];
-                    cache.fetched[dd] = today;
-                    added++;
-                    log.push(`${d} ← ${Object.keys(dayVals).length ? Object.keys(dayVals).join(',') : '없음(받아만 봄)'}`);
-                } catch (e) {
-                    console.error('시장 데이터 저장 실패:', d, e);
-                    failed++; log.push(`${d} 저장실패`);
-                }
-                if (!mkAbort && done < dates.length) await new Promise(r => setTimeout(r, MK_GAP_MS));
-            }
-        } finally {
-            mkBusy = false;
-            fillBtn.disabled = false; gapBtn.disabled = false; stopBtn.style.display = 'none';
-        }
-        mkStatus(`${mkAbort ? '중단됨' : '완료'} — 새로 넣음 ${added} · 건너뜀 ${skipped} · 실패 ${failed}`
-                 + (log.length ? `<br><span style="font-size:11px;color:var(--zm-muted-2)">${hlEsc(log.join(' / '))}</span>` : ''));
-        mkShow();
-    };
-    window.mkStop = function () { mkAbort = true; };
-
-    /* 저장된 '보완값'이 지금 기준으로도 유효한지 다시 확인한다.
-       시간봉 폴백을 허용하는 지표 목록은 함수(HOURLY_FALLBACK)가 들고 있다.
-       목록이 바뀌면 예전에 채워 둔 값이 남는데 — 실제로 코스피가 그랬다(9/22 7037.46) —
-       여기서 지운다. 허용 목록을 앱에 한 벌 더 두지 않으려고, 판단은 함수에 맡기고
-       '함수가 더 이상 그 값을 주지 않으면 지운다'로 처리한다.
-       hourly 표시가 있는 날만 다시 물어보므로 요청이 몇 건 되지 않는다. */
-    window.mkRecheck = async function () {
-        if (mkBusy) return;
-        const n = Number(document.getElementById('mkDays').value) || 7;
-        const today = todayStr();
-        const dates = [];
-        for (let i = n - 1; i >= 0; i--) dates.push(mkShiftDay(today, -i));
-        try { for (const mo of [...new Set(dates.map(mkMonthOf))]) await mkEnsureMonth(mo); }
-        catch (e) { console.error('시장 데이터 조회 실패:', e); mkStatus('불러오지 못했습니다.'); return; }
-
-        // 보완값이 들어 있는 날만 대상
-        const targets = dates.filter(d => Object.keys(mkFilledMap((mkMonths[mkMonthOf(d)] || {}).filled
-            ? mkMonths[mkMonthOf(d)].filled[mkDayOf(d)] : null)).length);
-        if (!targets.length) { mkStatus('보완값이 없습니다 — 검사할 것이 없습니다.'); return; }
-        if (!confirm(`보완값이 있는 ${targets.length}일을 다시 확인합니다.\n지금 기준으로 쓰지 않는 보완값은 지웁니다. (정상 값은 그대로)`)) return;
-
-        mkBusy = true;
-        const btn = document.getElementById('mkRecheckBtn');
-        if (btn) btn.disabled = true;
-        let removed = 0, kept = 0;
-        const log = [];
-        try {
-            for (const d of targets) {
-                const mo = mkMonthOf(d), dd = mkDayOf(d);
-                const cache = mkMonths[mo];
-                const fl = mkFilledMap(cache.filled[dd]);
-                let j;
-                try { j = await mkFetchDaily(d); }
-                catch (e) { console.error('시장 데이터 조회 실패:', d, e); log.push(`${d} 조회실패(건너뜀)`); continue; }
-
-                const gone = Object.keys(fl).filter(k => {
-                    const it = (j.symbols || {})[k];
-                    return !(it && it.date === d && it.value != null);   // 함수가 더는 주지 않는다
-                });
-                if (!gone.length) { kept += Object.keys(fl).length; continue; }
-
-                const dayDel = {}, flDel = {};
-                gone.forEach(k => { dayDel[k] = deleteField(); flDel[k] = deleteField(); });
-                try {
-                    await setDoc(doc(db, MARKET_COLLECTION, mo),
-                        { days: { [dd]: dayDel }, filled: { [dd]: flDel }, updatedAt: Date.now() }, { merge: true });
-                    gone.forEach(k => { delete cache.days[dd][k]; delete fl[k]; });
-                    cache.filled[dd] = fl;
-                    removed += gone.length;
-                    log.push(`${d} 지움: ${gone.join(',')}`);
-                } catch (e) { console.error('보완값 삭제 실패:', d, e); log.push(`${d} 삭제실패`); }
-                await new Promise(r => setTimeout(r, MK_GAP_MS));
-            }
-        } finally {
-            mkBusy = false;
-            if (btn) btn.disabled = false;
-        }
-        mkStatus(`검사 완료 — 지움 ${removed} · 유지 ${kept}`
-            + (log.length ? `<br><span style="font-size:11px;color:var(--zm-muted-2)">${hlEsc(log.join(' / '))}</span>` : ''));
-        mkShow();
-    };
-
-    // 저장된 것을 날짜 × 지표 표로 보여준다 — 주말에 비트코인만 있는 상태를 눈으로 확인하려는 것
-    window.mkShow = async function () {
-        const body = document.getElementById('mkBody');
-        if (!body) return;
-        const n = Number(document.getElementById('mkDays').value) || 7;
-        const today = todayStr();
-        const dates = [];
-        for (let i = 0; i < n; i++) dates.push(mkShiftDay(today, -i));   // 최근 날짜가 위
-        try {
-            for (const mo of [...new Set(dates.map(mkMonthOf))]) await mkEnsureMonth(mo);
-        } catch (e) {
-            console.error('시장 데이터 조회 실패:', e);
-            body.innerHTML = '<div class="a10-hint">저장된 시장 데이터를 불러오지 못했습니다 — 보안 규칙에 marketDaily가 들어가 있는지 확인해주세요.</div>';
-            return;
-        }
-        const WK = ['일', '월', '화', '수', '목', '금', '토'];
-        const rows = dates.map(d => {
-            const mo = mkMonths[mkMonthOf(d)] || { days: {}, filled: {}, fetched: {} };
-            const vals = mo.days[mkDayOf(d)] || null;
-            const fl = mkFilledMap(mo.filled[mkDayOf(d)]);
-            const on = (mo.fetched || {})[mkDayOf(d)] || null;
-            const ts = hlDateTs(d);
-            const w = ts == null ? '' : WK[new Date(ts).getDay()];
-            const cells = MK_KEYS.map(k => {
-                const v = vals ? vals[k] : null;
-                if (v == null) return '<td class="none">—</td>';
-                const by = fl[k];   // 'regular' | 'hourly' | undefined
-                const tip = by === 'hourly' ? '1시간 봉 마지막 종가로 보완'
-                          : by === 'regular' ? 'regularMarketPrice로 보완' : '';
-                return `<td class="${by ? 'filled ' + by : ''}"${tip ? ` title="${hlAttr(tip)}"` : ''}><b>${hlEsc(String(v))}</b></td>`;
-            }).join('');
-            const cnt = vals ? MK_KEYS.filter(k => vals[k] != null).length : 0;
-            // 아직 안 받아본 날과, 받았는데 값이 없던 날(장중·휴장)은 뜻이 다르다
-            const state = !on ? '미조회' : (mkSettled(d) ? `${cnt}종` : `${cnt}종 · 다시 받음`);
-            return `<tr class="${(w === '토' || w === '일') ? 'mk-wk' : ''}">`
-                + `<th class="mk-date">${hlEsc(d)} (${w})<br><span style="font-weight:600;color:var(--zm-muted)">${hlEsc(state)}</span></th>`
-                + cells + '</tr>';
-        }).join('');
-        body.innerHTML = `<div class="mk-wrap"><table class="mk-table">
-                <thead><tr><th class="mk-date">날짜</th>${MK_KEYS.map(k => `<th>${hlEsc(MK_LABEL[k])}</th>`).join('')}</tr></thead>
-                <tbody>${rows}</tbody>
-            </table></div>
-            <div class="mk-legend">— 는 그날 그 지표의 거래일이 아니라 값이 없는 것입니다(주말·휴장).
-                점선 밑줄은 regularMarketPrice로, 물결 밑줄은 그날 마지막 1시간 봉으로 보완한 값입니다
-                (야후가 그날 일봉을 통째로 비워서 준 경우). 시간봉 보완은 정확도를 확인한
-                S&amp;P500·나스닥·달러지수·비트코인에만 씁니다 — 코스피·금·환율은 마지막 시간봉이
-                그날 종가와 달라서 빈 칸으로 둡니다.<br>
-                ‘미조회’는 아직 안 받아본 날, ‘다시 받음’은 받을 때 장중이어서 다음에 한 번 더 받을 날입니다.</div>`;
-    };
 
     /* ===================== 루틴 (routine) =====================
        미리 등록한 루틴을 매일 체크하고, 얼마나 꾸준한지 본다.
