@@ -46,6 +46,44 @@
             --zm-series-4: #8fc866;    /* 연두 */
             --zm-series-5: #6fa8dc;    /* 하늘 */
             --zm-series-6: #d78fd0;    /* 연자주 */
+            /* VIX 수준 구간 (After10 지표 흐름 차트 전용)
+               ── 왜 여기서는 적색을 쓰나 ────────────────────────────────
+               적색을 건강 탭 이상치에만 두던 규칙을 이 화면에서는 풀었다. After10은 건강 탭과
+               다른 화면이라 같은 색을 다른 뜻으로 읽을 일이 없고, '공포'는 적색 말고 대체가
+               마땅치 않다. 건강 탭의 --zm-accent 용법은 그대로다.
+
+               ── 왜 공포 구간이 제일 진한데도 선을 안 가리나 ──────────────
+               데이터 선(#e8e4e4) 대비 6.65:1을 바닥으로 두고 색마다 알파 상한을 계산했다.
+                 앰버 0.25 · 슬레이트 0.30 · 적색 0.51
+               적색은 명도가 낮아 진하게 깔아도 흰 선을 덜 가린다 — 오히려 앰버가 병목이다.
+               아래 값은 모두 그 상한 안쪽이다(공포 0.38 → 선 대비 약 8:1).
+
+               ── 3단 온도 램프 ──────────────────────────────────────────
+               차가운 슬레이트(평온) → 주황(긴장) → 적색(공포). 농도와 색상을 함께 올려
+               구간이 분명히 갈리게 했다. 값은 통상 눈금이지 절대 기준이 아니다.
+               긴장대에 앰버(#e8b04b) 대신 주황을 쓴 것은 --zm-series-1 과 같은 색이어서다 —
+               비교 모드 1번 계열선이 앰버라, 띠의 긴장대와 색이 겹쳐 구분이 흐려졌다.
+               주황으로 떼니 계열선 대비 4.62→5.12, 데이터 선 대비도 7.16→7.9로 함께 올랐다. */
+            --zm-vix-calm:       rgba(150,160,180,0.12);  /* 20 미만 */
+            --zm-vix-tense:      rgba(233,138,52,0.22);   /* 20~30 */
+            --zm-vix-fear:       rgba(236,48,19,0.38);    /* 30 이상 */
+            /* 띠 윗선 — 면보다 진해야 모양이 읽힌다 (선이라 면적이 작아 대비에 영향이 없다) */
+            --zm-vix-calm-line:  rgba(150,160,180,0.50);
+            --zm-vix-tense-line: rgba(233,138,52,0.60);
+            --zm-vix-fear-line:  rgba(236,48,19,0.80);
+            /* VIX를 선으로 볼 때 패널 전폭에 까는 구간 — 면적이 띠보다 훨씬 넓어 더 옅게 잡았다 */
+            --zm-vix-calm-slab:  rgba(150,160,180,0.05);
+            --zm-vix-tense-slab: rgba(233,138,52,0.10);
+            --zm-vix-fear-slab:  rgba(236,48,19,0.16);
+            /* 축 눈금 글자 — 어두운 패널 위에서 읽혀야 해서 면보다 밝게 (모두 대비 5.5:1 이상).
+               공포는 #ec3013 그대로면 패널 대비 3.4:1로 모자라 밝은 변형을 쓴다. */
+            --zm-vix-calm-ink:   #9b9797;
+            --zm-vix-tense-ink:  #e98a34;
+            --zm-vix-fear-ink:   #ee8672;
+            /* 범례 칩 — 밝은 지면 위라 알파 없이 또렷한 색으로 */
+            --zm-vix-calm-chip:  #96a0b4;
+            --zm-vix-tense-chip: #e98a34;
+            --zm-vix-fear-chip:  #ec3013;
             /* 형태 */
             --zm-radius: 0px;          /* 시안은 직각 */
             --zm-shadow: none;
@@ -444,6 +482,14 @@
         .a10-legend-line.d4 { border-top-width: 5px; border-top-style: double; }
         .a10-swatch { display: inline-block; width: 9px; height: 9px; margin-right: 6px;
             background: currentColor; vertical-align: middle; flex: none; }
+        /* 배경 띠 범례 — 옅은 면을 밝은 지면 위에서 알아보게, 채운 색 + 잉크 테두리 */
+        .a10-swatch.band { width: 14px; height: 12px; border: 1px solid var(--zm-ink); background: none; }
+        /* 구간 눈금은 참고용이라 한 단 낮춰 적는다 (범례 이름과 같은 무게로 읽히면 안 된다) */
+        .a10-legend-note { margin-left: 7px; font-weight: 600; font-size: 11px; color: var(--zm-muted); }
+        /* 배경 띠 토글 — 보기 전환(단일/비교)과 성격이 달라 같은 줄 오른쪽 끝으로 뗀다 */
+        .a10-chip.vixtoggle { margin-left: auto; }
+        .a10-chip.vixtoggle:disabled { opacity: 0.45; cursor: default; }
+        .a10-chip.vixtoggle:disabled:hover { background: var(--zm-card); color: var(--zm-muted); }
         .a10-chip2.cmp { display: inline-flex; align-items: center; }
         .a10-chart-stats { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; font-size: 13px; color: var(--zm-muted); }
         .a10-chart-stats b { color: var(--zm-ink); }
@@ -1431,9 +1477,11 @@
         <div class="a10-chart-modes">
             <button class="a10-chip active" data-cview="single" onclick="a10SetChartView('single')">단일</button>
             <button class="a10-chip" data-cview="compare" onclick="a10SetChartView('compare')">비교</button>
+            <!-- 배경에 VIX(공포지수)를 옅게 깔아 그때 시장 불안 수준을 함께 본다 -->
+            <button class="a10-chip vixtoggle active" id="a10VixBtn" onclick="a10ToggleVix()">VIX 배경</button>
         </div>
 
-        <!-- 지표 선택 (9종) -->
+        <!-- 지표 선택 (10종) -->
         <div class="a10-chart-metrics" id="a10ChartMetrics"></div>
 
         <!-- 기간 모드 (단일에서만) -->
@@ -2356,13 +2404,15 @@
          fetched: { "22": "2026-09-24" } }          // 그 날짜를 '언제' 받아봤나
        거래일마다 문서 하나로 두면 읽기가 너무 많다 — 차트는 한 번에 여러 달을 읽는데,
        1년이면 365번, '전체'면 수천 번이 된다. 월로 묶으면 1년이 12번이다.
-       한 달치는 지표 9종 × 31일이라도 6KB 남짓이라 1MB 한도와 거리가 멀다.
+       한 달치는 지표 10종 × 31일이라도 7KB 남짓이라 1MB 한도와 거리가 멀다.
        문서 id가 달이라 색인이 필요한 질의를 쓰지 않는다(루틴 탭과 같은 방식).
 
        ── 무엇을 어느 칸에 넣나 ───────────────────────────────────
        함수(mode=daily)가 심볼마다 '자기 실제 거래일'과 값을 돌려준다.
        그중 요청한 날짜와 거래일이 같은 것만 그날 칸에 넣는다 —
        주말이면 비트코인만 들어가고 주식·환율은 키 자체가 없다.
+       vix(공포지수)도 미국 지수와 같이 평일만 값이 있고, 미국 휴장일(준틴스·독립기념일
+       전후처럼 평일에 걸린 날)에는 함수가 그날 값을 주지 않으므로 빈 칸으로 남는다.
 
        ── 받아봤다는 표시를 days가 아니라 fetched에 두는 이유 ─────
        처음에는 days[dd]가 있으면 '받아본 날'로 봤는데, 그러면 두 가지가 어긋난다.
@@ -2381,9 +2431,10 @@
           아래 저장부는 넣을 것이 없으면 days·filled 키 자체를 payload에서 뺀다.
     ====================================================================== */
     const MARKET_COLLECTION = "marketDaily";
-    const MK_KEYS = ['usdkrw', 'jpykrw', 'usdjpy', 'dxy', 'spx', 'ndq', 'kospi', 'gold', 'btc'];
+    const MK_KEYS = ['usdkrw', 'jpykrw', 'usdjpy', 'dxy', 'spx', 'ndq', 'kospi', 'gold', 'btc', 'vix'];
     const MK_LABEL = { usdkrw: '원/달러', jpykrw: '원/엔', usdjpy: '달러/엔', dxy: '달러지수',
-                       spx: 'S&P500', ndq: '나스닥', kospi: '코스피', gold: '금', btc: '비트코인' };
+                       spx: 'S&P500', ndq: '나스닥', kospi: '코스피', gold: '금', btc: '비트코인',
+                       vix: 'VIX' };
     const MK_GAP_MS = 800;        // 야후에 몰리지 않게 요청 사이 간격
     let mkMonths = {};            // "YYYY-MM" → { days: {dd:{k:v}}, filled: {dd:[k]} }
     let mkBusy = false, mkAbort = false;
@@ -2578,7 +2629,7 @@
         mkShow();
     };
     /* 몇 건을 받아야 하는지 미리 알려준다.
-       구간 조회라 야후 요청은 날짜 수와 무관하게 심볼 9개 + 보완이 필요한 심볼 몇 개뿐이다. */
+       구간 조회라 야후 요청은 날짜 수와 무관하게 심볼 10개 + 보완이 필요한 심볼 몇 개뿐이다. */
     function mkPaintPlan() {
         const el = document.getElementById('mkPlan');
         if (!el) return;
@@ -2591,7 +2642,7 @@
     }
 
     /* 고른 기간을 한 번에 받아 채운다.
-       하루씩 부르면 날짜마다 심볼 9개를 새로 받아 70일이면 600건이 넘는다.
+       하루씩 부르면 날짜마다 심볼 10개를 새로 받아 70일이면 700건이 넘는다.
        구간 조회(mode=range)는 심볼당 한 번이라 기간이 길어도 요청이 늘지 않는다.
        ⚠ 이미 있는 값은 건드리지 않는다 — 없는 지표만 골라 담는다. */
     async function mkFillRange(dates, gapOnly) {
@@ -2809,8 +2860,9 @@
             <div class="mk-legend">${all.length > dates.length ? `고른 기간 ${all.length}일 중 최근 ${dates.length}일만 보여줍니다.<br>` : ''}— 는 그날 그 지표의 거래일이 아니라 값이 없는 것입니다(주말·휴장).
                 점선 밑줄은 regularMarketPrice로, 물결 밑줄은 그날 마지막 1시간 봉으로 보완한 값입니다
                 (야후가 그날 일봉을 통째로 비워서 준 경우). 시간봉 보완은 정확도를 확인한
-                S&amp;P500·나스닥·달러지수·비트코인에만 씁니다 — 코스피·금·환율은 마지막 시간봉이
-                그날 종가와 달라서 빈 칸으로 둡니다.<br>
+                S&amp;P500·나스닥·달러지수·비트코인·VIX에만 씁니다 — 코스피·금·환율은 마지막 시간봉이
+                그날 종가와 달라서 빈 칸으로 둡니다. VIX는 단축장(미국 평일 휴장일)에는
+                마지막 봉이 종가가 아니라서, 봉이 정상일만큼 있는 날만 보완합니다.<br>
                 ‘미조회’는 아직 안 받아본 날, ‘다시 받음’은 받을 때 장중이어서 다음에 한 번 더 받을 날입니다.</div>`;
     };
 
@@ -2965,7 +3017,7 @@
         const n = mkCountOn(dateStr);
         const latest = mkLatestDate();
         const tail = latest ? ` · 지금까지 <b>${hlEsc(latest)}</b>까지 들어와 있습니다` : '';
-        if (n >= MK_KEYS.length) el.innerHTML = `<b>${hlEsc(dateStr)}</b> · 지표 <b>9종 전부</b>${tail}`;
+        if (n >= MK_KEYS.length) el.innerHTML = `<b>${hlEsc(dateStr)}</b> · 지표 <b>${MK_KEYS.length}종 전부</b>${tail}`;
         else if (n > 0) el.innerHTML = `<b>${hlEsc(dateStr)}</b> · 지표 <b>${n}종</b> (거래일이 아닌 지표는 값이 없습니다)${tail}`;
         else el.innerHTML = `<b>${hlEsc(dateStr)}</b> · 지표 <b>아직 없음</b>${tail}`;
     }
@@ -2980,7 +3032,8 @@
        새 일지는 지표를 문서에 담지 않는다 — 그날의 marketDaily를 찾아 보여준다.
        예전 일지(market 필드가 있는 것)는 저장된 값을 그대로 보여준다. 그때는 9종을 하나의
        공통 기준일로 맞춰 담았고 지금은 지표마다 자기 거래일이라, 같은 줄로 보이면
-       어느 날 값인지 헷갈린다. 그래서 예전 것은 '예전 방식'이라고 밝힌다. */
+       어느 날 값인지 헷갈린다. 그래서 예전 것은 '예전 방식'이라고 밝힌다.
+       (예전 일지에는 vix가 없다 — 나중에 추가한 지표라 그 시절 문서에는 담기지 않았다.) */
     const A10_MKT_FMT = {
         usdkrw: v => `원/달러 <b>${a10FmtNum(v, 2)}</b>`,
         jpykrw: v => `원/엔 <b>${a10FmtNum(v, 2)}</b>`,
@@ -3005,7 +3058,7 @@
                 ? ` <span class="a10-basis">(${hlEsc(m.basisDate)} 기준 · 예전 방식)</span>`
                 : ` <span class="a10-basis">(예전 방식)</span>`;
             const src = `일지에 저장된 값 · 출처 ${m.source || '-'}${m.v ? ' v' + m.v : ''}`
-                + (m.basisDate ? ` · 9종 공통 기준일 ${m.basisDate}` : '');
+                + (m.basisDate ? ` · 당시 9종 공통 기준일 ${m.basisDate}` : '');
             return `<div class="a10-market" title="${hlAttr(src)}">${parts.join(' · ')}${basis}</div>`;
         }
         // 새 일지 — 그날 marketDaily
@@ -3278,6 +3331,7 @@
         ndq:    { label: '나스닥',         dec: 2, fmt: v => a10FmtNum(v, 2) },
         gold:   { label: '금(USD/oz)',     dec: 2, fmt: v => '$' + a10FmtNum(v, 2) },
         btc:    { label: '비트코인(USD)',  dec: 0, fmt: v => '$' + a10FmtNum(v, 0) },
+        vix:    { label: 'VIX(공포지수)',  dec: 2, fmt: v => a10FmtNum(v, 2) },
     };
     let a10ChartMetric = 'usdkrw';   // 기본: 원/달러
     let a10ChartMode = 'range';      // 'range' | 'anniv'
@@ -3286,6 +3340,9 @@
     let a10ChartView = 'single';     // 'single' | 'compare'
     let a10CompareKeys = ['usdkrw', 'spx'];   // 비교 모드에서 겹쳐 볼 지표 (최대 3개)
     const A10_CMP_MAX = 3;
+    /* 배경에 VIX를 깔지 — 기본은 켜 둔다. 이 화면의 목적이 '지표가 움직일 때 시장 불안은
+       어땠나'를 함께 보는 것이고, 띠가 옅어서 선을 가리지 않는다. 끄면 예전 화면 그대로다. */
+    let a10ChartVix = true;
     // 계열 색은 :root의 --zm-series-* 한 곳에서 관리한다(건강 묶음 겹쳐보기와 공용)
     function chartSeriesColors(n) {
         const cs = getComputedStyle(document.documentElement);
@@ -3301,6 +3358,7 @@
     window.a10SetChartMode   = function(m) { a10ChartMode = m; a10RenderChart(); };
     window.a10SetChartRange  = function(r) { a10ChartRange = r; a10RenderChart(); };
     window.a10SetChartView   = function(v) { a10ChartView = v; a10RenderChart(); };
+    window.a10ToggleVix      = function() { a10ChartVix = !a10ChartVix; a10RenderChart(); };
     window.a10ToggleCompare  = function(k) {
         const i = a10CompareKeys.indexOf(k);
         if (i >= 0) a10CompareKeys.splice(i, 1);
@@ -3311,6 +3369,240 @@
         } else a10CompareKeys.push(k);
         a10RenderChart();
     };
+
+    /* VIX 수준 구간 — 시장에서 통상 쓰는 눈금이지 절대 기준이 아니다.
+       (VIX 자체가 'S&P500 옵션이 앞으로 30일을 얼마로 보는가'라, 국면에 따라 평균이 움직인다.)
+       그래서 숫자를 단정적으로 칠하지 않고 농도로만 구분하고, 축에 이름을 붙여 참고용임을
+       드러낸다. from 은 그 구간이 시작되는 값(이상)이다. */
+    const A10_VIX_ZONES = [
+        { from: 0,  name: '평온', key: 'calm',  fb: { fill: 'rgba(150,160,180,0.12)', line: 'rgba(150,160,180,0.50)',
+                                                     slab: 'rgba(150,160,180,0.05)', ink: '#9b9797',  chip: '#96a0b4' } },
+        { from: 20, name: '긴장', key: 'tense', fb: { fill: 'rgba(233,138,52,0.22)',  line: 'rgba(233,138,52,0.60)',
+                                                     slab: 'rgba(233,138,52,0.10)',  ink: '#e98a34', chip: '#e98a34' } },
+        { from: 30, name: '공포', key: 'fear',  fb: { fill: 'rgba(236,48,19,0.38)',   line: 'rgba(236,48,19,0.80)',
+                                                     slab: 'rgba(236,48,19,0.16)',   ink: '#ee8672', chip: '#ec3013' } },
+    ];
+    function a10VixZone(v) {
+        let z = A10_VIX_ZONES[0];
+        A10_VIX_ZONES.forEach(x => { if (v >= x.from) z = x; });
+        return z;
+    }
+    /* 구간 색 하나 꺼내기. role: fill(띠 면) · line(띠 윗선) · slab(전폭 구간) · ink(축 글자) · chip(범례).
+       CSS 변수 이름이 --zm-vix-<key>[-<role>] 규칙이라 한 줄로 조립된다(fill만 접미사 없음).
+       변수를 못 읽으면 fb로 떨어진다 — 색을 :root 한 곳에서 관리하면서도 안전하게. */
+    function a10VixColor(zone, role) {
+        const name = '--zm-vix-' + zone.key + (role === 'fill' ? '' : '-' + role);
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || zone.fb[role];
+    }
+
+    /* VIX를 지표 선 자체로 그리고 있으면 배경 띠는 깔지 않는다 — 같은 값이 두 번 나와
+       선과 면이 겹치기만 한다. 이때는 토글도 눌리지 않게 해서 왜 안 보이는지 알게 한다. */
+    function a10VixApplies() {
+        if (!a10ChartVix) return false;
+        return a10ChartView === 'compare'
+            ? a10CompareKeys.indexOf('vix') < 0
+            : a10ChartMetric !== 'vix';
+    }
+
+    /* 배경 VIX 띠 한 벌 — 데이터셋 + 오른쪽 축 설정을 만들어 준다.
+       dates      : 등간격 폴백에서 쓸 x축 날짜 배열 (시간축이면 쓰지 않는다)
+       useTime    : x축이 시간 축인지
+       forceRange : VIX를 뽑을 때 '매년 같은 날' 걸러내기를 무시할지 —
+                    지표 선과 같은 기준으로 뽑아야 x축이 맞는다. 비교 모드는 늘 연속 구간이라
+                    true, 단일 모드는 화면 모드를 그대로 따라가게 false를 넘긴다.
+                    (이걸 늘 true로 두면 '매년 같은 날'에서 띠가 통째로 빈다 — x축은 연도별
+                     기념일인데 VIX만 최근 연속 구간에서 뽑혀 겹치는 날짜가 없기 때문이다.)
+       반환  : { dataset, scale, byDate } · 깔 것이 없으면 null
+
+       ⚠ 지표 선보다 '뒤에' 그려야 한다. Chart.js는 order가 큰 데이터셋을 먼저 그리므로
+         order를 크게 주면 배경이 된다(데이터셋 순서와 무관하게 확실히 뒤로 간다).
+       ⚠ 세로축을 따로 쓴다 — VIX는 14~40이고 코스피는 8000대라 한 축에 얹으면
+         둘 중 하나가 납작해진다. 오른쪽 축에 0을 바닥으로 두어, 띠 높이가 그대로
+         불안 수준이 되게 했다(면의 높이를 눈으로 읽을 수 있어야 의미가 있다). */
+    function a10VixBand(dates, useTime, forceRange) {
+        if (!a10VixApplies()) return null;
+        const items = a10ChartData('vix', forceRange);   // VIX 자기 거래일 · 지표 선과 같은 기준
+        if (!items.length) return null;
+
+        const byDate = {};
+        items.forEach(e => { byDate[e.ymd] = e.value; });
+        // 등간격 축에서는 x축 날짜와 겹치는 값이 하나도 없으면 빈 띠가 된다 —
+        // 축과 범례만 남아 '있는데 안 보이는' 꼴이 되므로 아예 깔지 않는다.
+        if (!useTime && !dates.some(d => byDate[d] != null)) return null;
+        /* 축 위쪽을 넉넉히 둬서 띠가 패널을 덮지 않게 한다. 최소 40으로 잡으면
+           평온한 장(VIX 14~20)에서는 기간을 바꿔도 축이 그대로여서 눈이 기준을 잃지 않고,
+           공포 국면(30·40대)에서만 축이 올라간다. */
+        const peak = Math.max.apply(null, items.map(e => e.value));
+        const top = Math.max(40, Math.ceil(peak * 1.5 / 10) * 10);
+
+        /* 띠를 수준 구간마다 다른 색·농도로 채운다 (차가운 슬레이트 → 앰버 → 적색).
+           세로 그라디언트를 쓰되 경계(20·30)에서 같은 위치에 색을 두 번 찍어 '딱 끊기게' 한다 —
+           부드럽게 번지면 경계가 어디인지 못 읽어 구간 표시의 뜻이 없어진다.
+           이렇게 하면 경계선이 '띠 안에서만' 보인다. 패널을 가로지르는 기준선을 긋지 않고도
+           문턱이 드러나므로, 배경에 새 선을 더하지 않는다는 이 패널의 규칙을 지킬 수 있다.
+           면과 윗선에 같은 규칙을 쓰므로 만드는 쪽을 한 벌로 묶었다(role만 다르다).
+           ⚠ 첫 렌더에는 chartArea가 아직 없다 — 그때는 평온 색으로 평평하게 깔고,
+             Chart.js가 영역을 잡은 뒤 다시 부르면서 그라디언트가 들어온다. */
+        const zoneRamp = role => (c) => {
+            const chart = c.chart, area = chart.chartArea, sc = chart.scales && chart.scales.vix;
+            const col = i => a10VixColor(A10_VIX_ZONES[i], role);
+            if (!area || !sc) return col(0);
+            const g = chart.ctx.createLinearGradient(0, area.bottom, 0, area.top);
+            const h = area.bottom - area.top;
+            // 값 → 그라디언트 위치(0=바닥, 1=천장). 축 밖으로 나가면 잘라낸다.
+            const at = v => Math.min(1, Math.max(0, (area.bottom - sc.getPixelForValue(v)) / h));
+            g.addColorStop(0, col(0));
+            for (let i = 1; i < A10_VIX_ZONES.length; i++) {
+                const p = at(A10_VIX_ZONES[i].from);
+                if (p >= 1) break;                       // 축 상한 위의 구간은 그릴 자리가 없다
+                g.addColorStop(p, col(i - 1));           // 여기까지 이전 구간 색
+                g.addColorStop(p, col(i));               // 같은 자리에서 바로 다음 색 (경계가 선명해진다)
+            }
+            g.addColorStop(1, col(A10_VIX_ZONES.length - 1));
+            return g;
+        };
+
+        return {
+            byDate, top,
+            dataset: {
+                label: 'VIX', yAxisID: 'vix', order: 99,
+                data: useTime ? items.map(e => ({ x: hlDateTs(e.ymd), y: e.value }))
+                              : dates.map(d => (byDate[d] != null ? byDate[d] : null)),
+                borderColor: zoneRamp('line'), borderWidth: 1, backgroundColor: zoneRamp('fill'),
+                pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 0,
+                tension: 0.25, fill: 'origin', spanGaps: true,
+            },
+            scale: {
+                type: 'linear', position: 'right', min: 0, max: top,
+                grid: { display: false },          // 왼쪽 축 격자와 겹치면 지면이 지저분해진다
+                border: { display: false },
+                /* 눈금을 문턱(20·30)과 천장에만 둔다. 자동 눈금은 0·10·20·30·40처럼
+                   뜻 없는 숫자를 섞어 놓아, 어디가 경계인지 오히려 흐려진다.
+                   천장을 남기는 것은 띠 높이를 어느 범위에서 읽는지 알려 주기 위함이다. */
+                afterBuildTicks: ax => {
+                    const vs = A10_VIX_ZONES.slice(1).map(z => z.from).filter(v => v < top);
+                    ax.ticks = vs.concat([top]).map(value => ({ value }));
+                },
+                ticks: {
+                    font: { family: 'Archivo', size: 10 }, autoSkip: false,
+                    // 문턱 눈금은 그 구간 색으로 적는다 — 띠의 어느 층을 가리키는지 바로 붙는다
+                    color: c => {
+                        const z = A10_VIX_ZONES.find(x => x.from === (c.tick && c.tick.value));
+                        return a10VixColor(z || A10_VIX_ZONES[0], 'ink');
+                    },
+                    callback: v => {
+                        const z = A10_VIX_ZONES.find(x => x.from === v);
+                        return z ? `${a10FmtNum(v, 0)} ${z.name}` : a10FmtNum(v, 0);
+                    },
+                },
+            },
+        };
+    }
+
+    /* VIX를 '선'으로 보고 있을 때 구간을 보여줄지.
+       띠(면)는 같은 값이 두 번 나와 겹치므로 깔지 않지만, 구간은 그 화면에서 가장 쓸모가 있다 —
+       선이 지금 어느 층에 있는지가 곧 답이기 때문이다. 토글 하나가 둘 다 관장한다. */
+    function a10VixZonesOnLine() {
+        return a10ChartVix && a10ChartView !== 'compare' && a10ChartMetric === 'vix';
+    }
+
+    /* 패널 전폭에 수준 구간을 깔아 주는 플러그인 (VIX를 선으로 볼 때만 쓴다).
+       띠는 곡선 아래만 칠하지만 이것은 판 전체를 덮으므로, 같은 색을 훨씬 옅은 알파(-slab)로 쓴다.
+       데이터셋보다 먼저 그려 선이 항상 위에 오게 한다. */
+    function a10VixZoneSlabs() {
+        return {
+            id: 'a10VixZoneSlabs',
+            beforeDatasetsDraw(chart) {
+                const ys = chart.scales.y, ca = chart.chartArea;
+                if (!ys || !ca) return;
+                const ctx = chart.ctx;
+                ctx.save();
+                // 눈금 영역 밖으로 새지 않게 잘라낸다
+                ctx.beginPath();
+                ctx.rect(ca.left, ca.top, ca.right - ca.left, ca.bottom - ca.top);
+                ctx.clip();
+                A10_VIX_ZONES.forEach((z, i) => {
+                    const next = A10_VIX_ZONES[i + 1];
+                    // 마지막(공포) 구간은 천장까지. 축이 구간을 안 품으면 아래 clamp가 지워 준다.
+                    const yTop = next ? ys.getPixelForValue(next.from) : ca.top;
+                    const yBot = ys.getPixelForValue(z.from);
+                    const top = Math.max(ca.top, Math.min(yTop, yBot));
+                    const bot = Math.min(ca.bottom, Math.max(yTop, yBot));
+                    if (bot - top < 0.5) return;            // 화면에 안 걸리는 구간은 건너뛴다
+                    ctx.fillStyle = a10VixColor(z, 'slab');
+                    ctx.fillRect(ca.left, top, ca.right - ca.left, bot - top);
+                });
+                ctx.restore();
+            },
+        };
+    }
+
+    /* VIX를 선으로 볼 때 왼쪽 축에 문턱(20·30)을 끼워 넣고 구간 이름을 붙인다.
+       자동 눈금이 20·30에 딱 떨어진다는 보장이 없어 직접 넣는다. 보이는 범위 밖은 넣지 않는다.
+       (구간 면만으로는 '몇부터가 긴장인지' 숫자를 알 수 없어서 축이 그 몫을 한다.) */
+    function a10VixLineAxis(base) {
+        return Object.assign({}, base, {
+            /* 평온한 장(VIX 13~18)에서는 축이 데이터에 딱 맞춰져 20·30이 화면 밖으로 나간다 —
+               그러면 판 전체가 '평온' 한 색으로만 차서 구간 표시가 아무것도 말해 주지 않는다.
+               첫 문턱 조금 위(22)까지는 늘 보이게 해서 '지금 20선 아래에 있다'가 읽히게 한다.
+               suggestedMax 라서 값이 더 크면 그대로 따라간다(공포 국면을 자르지 않는다). */
+            suggestedMax: 22,
+            afterBuildTicks: ax => {
+                const lo = ax.min, hi = ax.max;
+                const have = ax.ticks.map(t => t.value);
+                A10_VIX_ZONES.slice(1).forEach(z => {
+                    if (z.from > lo && z.from < hi && have.indexOf(z.from) < 0) ax.ticks.push({ value: z.from });
+                });
+                ax.ticks.sort((a, b) => a.value - b.value);
+            },
+            ticks: Object.assign({}, base.ticks, {
+                autoSkip: false,
+                color: c => {
+                    const z = A10_VIX_ZONES.find(x => x.from === (c.tick && c.tick.value));
+                    return z ? a10VixColor(z, 'ink') : '#9b9797';
+                },
+                callback: v => {
+                    const z = A10_VIX_ZONES.find(x => x.from === v);
+                    return z ? `${a10FmtNum(v, 0)} ${z.name}` : a10FmtNum(v, 2);
+                },
+            }),
+        });
+    }
+
+    /* 배경 띠 범례 한 조각. 면을 선 범례와 구분해 네모 칩(.band)으로 보여주고,
+       값을 어느 축에서 읽는지까지 밝힌다 — 왼쪽 축과 눈금이 다르기 때문이다. */
+    function a10VixLegendItem(zonesOnLine) {
+        const tip = 'VIX 20 미만 평온 · 20~30 긴장 · 30 이상 공포. '
+                  + '시장에서 통상 쓰는 눈금이지 절대 기준은 아닙니다.';
+        // 구간 색을 아래→위로 쌓은 칩 하나로 보여준다 (차트의 세로 순서와 같게)
+        const chips = A10_VIX_ZONES.map(z => a10VixColor(z, 'chip'));
+        const ramp = `linear-gradient(to top, ${chips[0]} 0 33%, ${chips[1]} 33% 66%, ${chips[2]} 66% 100%)`;
+        const name = zonesOnLine ? 'VIX 수준 구간' : 'VIX(공포지수) · 오른쪽 축';
+        return '<span class="a10-legend-item" title="' + hlAttr(tip) + '">'
+            + `<i class="a10-swatch band" style="background:${ramp}"></i>${name}`
+            + '<span class="a10-legend-note">20 긴장 · 30 공포</span></span>';
+    }
+
+    /* 툴팁에 그날 VIX를 한 줄 덧붙인다.
+       띠 자체는 툴팁에서 걸러낸다 — 선이 아니라 지면이라 '가장 가까운 점'으로 잡히면
+       엉뚱한 항목이 뜬다. 값은 본문 아래에 따로 적는다.
+       dateAt : 툴팁 항목 하나에서 그날 날짜(YYYY-MM-DD)를 꺼내는 함수 —
+                단일 모드와 비교 모드가 날짜를 담는 자리가 달라 부르는 쪽이 넘긴다. */
+    function a10VixTooltip(band, dateAt, callbacks) {
+        /* ⚠ filter 는 tooltip 바로 아래, afterBody 는 callbacks 안이다 —
+              자리를 바꿔 달면 Chart.js가 조용히 무시한다(값이 안 뜬다). */
+        const tip = { callbacks: Object.assign({}, callbacks) };
+        if (!band) return tip;
+        tip.filter = it => !(it.dataset && it.dataset.yAxisID === 'vix');
+        tip.callbacks.afterBody = ctx => {
+            if (!ctx.length) return '';
+            const ymd = dateAt(ctx[0]);
+            const v = ymd ? band.byDate[ymd] : null;
+            // 숫자만으로는 높은지 낮은지 모른다 — 구간 이름을 함께 적는다
+            return v == null ? '' : `VIX ${a10FmtNum(v, 2)} · ${a10VixZone(v).name}`;
+        };
+        return tip;
+    }
 
     // Date → YYYY-MM-DD (로컬)
     function a10DateToYmd(d) {
@@ -3376,7 +3668,25 @@
         // '매년 같은 날'은 단일 보기 전용. 비교 모드는 늘 연속 구간이라 기간 칩만 남긴다.
         document.getElementById('a10ChartModes').style.display = compare ? 'none' : 'flex';
         document.getElementById('a10ChartRanges').style.display = (compare || a10ChartMode === 'range') ? 'flex' : 'none';
-        document.getElementById('a10ChartLegend').style.display = compare ? 'flex' : 'none';
+        /* 범례는 원래 비교 모드 전용이었다. 배경 띠가 깔리면 단일 모드에서도 띠가 무엇인지
+           밝혀야 하므로 켠다(오른쪽 축에 숫자만 있으면 무슨 축인지 알 수 없다).
+           다만 '깔렸는지'는 VIX 데이터가 있어야 정해지므로, 켜는 일은 띠를 만든 뒤에 한다. */
+        const legendEl0 = document.getElementById('a10ChartLegend');
+        legendEl0.style.display = compare ? 'flex' : 'none';
+        if (!compare) legendEl0.innerHTML = '';
+        /* 토글 하나가 'VIX 배경'을 통째로 관장한다 —
+           다른 지표를 볼 때는 띠(+구간), VIX를 선으로 볼 때는 구간만.
+           비교 모드에 VIX를 끼워 넣었을 때만 할 일이 없어 잠근다(면과 선이 같은 값이라 겹친다). */
+        const vixBtn = document.getElementById('a10VixBtn');
+        if (vixBtn) {
+            const dup = compare && a10CompareKeys.indexOf('vix') >= 0;
+            vixBtn.disabled = dup;
+            vixBtn.classList.toggle('active', a10ChartVix && !dup);
+            vixBtn.title = dup ? 'VIX를 선으로 겹쳐 보고 있어 배경은 겹치므로 쓰지 않습니다'
+                : a10ChartMetric === 'vix' && !compare
+                    ? (a10ChartVix ? '수준 구간(평온·긴장·공포) 배경을 끕니다' : '수준 구간을 배경에 옅게 깝니다')
+                    : (a10ChartVix ? '배경의 VIX 띠를 끕니다' : '배경에 VIX(공포지수)를 옅게 깝니다');
+        }
 
         const msgEl = document.getElementById('a10ChartMsg');
         const statsEl = document.getElementById('a10ChartStats');
@@ -3441,6 +3751,22 @@
             xScale = { grid: { display: false }, border: { color: '#444141' }, ticks: { color: '#9b9797', font: { family: A10_FONT, size: 11 } } };
         }
 
+        /* 왼쪽 축. VIX를 선으로 볼 때만 문턱(20·30)을 끼워 넣고 구간 이름을 붙인다 —
+           나머지 9종은 예전 그대로다(구간은 VIX에만 있는 개념이라 다른 지표에 붙일 것이 없다). */
+        const yBase = { ticks: { callback: v => cfg.fmt(v), color: '#9b9797', font: { family: A10_FONT, size: 10 } },
+                        grid: { color: '#444141', tickBorderDash: [2, 2] }, border: { display: false } };
+        // VIX 자신을 선으로 볼 때는 띠 대신 구간만 전폭으로 깐다 (겹치지 않으면서 층이 보이게)
+        const zonesOnLine = a10VixZonesOnLine();
+        const yScale = zonesOnLine ? a10VixLineAxis(yBase) : yBase;
+
+        /* 배경 VIX 띠. 등간격 폴백에서는 x축이 이 지표의 거래일이므로 그 날짜에 맞춰 얹는다
+           (시간축이면 VIX 자기 거래일에 그대로 찍힌다). */
+        const band = a10VixBand(fullDates, useTime, false);   // 단일 — 화면 모드(연속/기념일)를 따른다
+        if (band || zonesOnLine) {
+            legendEl0.innerHTML = a10VixLegendItem(zonesOnLine);
+            legendEl0.style.display = 'flex';
+        }
+
         a10ChartInstance = new Chart(canvas, {
             type: 'line',
             data: {
@@ -3452,28 +3778,32 @@
                     pointBorderColor: extremeBorder, pointBorderWidth: ext.pointBorderWidth,
                     pointStyle: ext.pointStyle, pointRotation: ext.pointRotation,
                     pointRadius: ext.pointRadius, pointHoverRadius: ext.pointHoverRadius,
-                    tension: 0.25, fill: true,
-                }]
+                    /* 구간을 깔 때는 선 아래 면 채우기를 끈다 —
+                       흰 8% 면이 구간 색 위에 겹쳐 평온/긴장/공포가 뿌옇게 섞인다.
+                       띠(다른 지표)를 볼 때는 예전처럼 면을 채운다. */
+                    tension: 0.25, fill: !zonesOnLine,
+                }].concat(band ? [band.dataset] : [])
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            title: ctx => fullDates[ctx[0].dataIndex],
-                            // 보완값은 툴팁에서만 밝힌다 — 점 모양까지 바꾸면 최고/최저 표시와 헷갈린다
-                            label: ctx => `${cfg.label}: ${cfg.fmt(ctx.parsed.y)}${chartExtremeNote(ext, ctx.dataIndex)}`
-                                + (items[ctx.dataIndex] && items[ctx.dataIndex].filled
-                                    ? (items[ctx.dataIndex].filled === 'hourly' ? ' · 시간봉 보완' : ' · 보완값') : ''),
-                        }
-                    }
+                    tooltip: a10VixTooltip(band, it => fullDates[it.dataIndex], {
+                        title: ctx => fullDates[ctx[0].dataIndex],
+                        // 보완값은 툴팁에서만 밝힌다 — 점 모양까지 바꾸면 최고/최저 표시와 헷갈린다
+                        label: ctx => `${cfg.label}: ${cfg.fmt(ctx.parsed.y)}${chartExtremeNote(ext, ctx.dataIndex)}`
+                            // VIX를 선으로 볼 때는 숫자 옆에 구간 이름을 바로 붙인다
+                            + (a10ChartMetric === 'vix' ? ` · ${a10VixZone(ctx.parsed.y).name}` : '')
+                            + (items[ctx.dataIndex] && items[ctx.dataIndex].filled
+                                ? (items[ctx.dataIndex].filled === 'hourly' ? ' · 시간봉 보완' : ' · 보완값') : ''),
+                    })
                 },
-                scales: {
-                    y: { ticks: { callback: v => cfg.fmt(v), color: '#9b9797', font: { family: A10_FONT, size: 10 } }, grid: { color: '#444141', tickBorderDash: [2, 2] }, border: { display: false } },
+                scales: Object.assign({
+                    y: yScale,
                     x: xScale
-                }
-            }
+                }, band ? { vix: band.scale } : {})
+            },
+            plugins: zonesOnLine ? [a10VixZoneSlabs()] : [],
         });
 
         // 최소/최대/변화율
@@ -3577,44 +3907,49 @@
             }
         };
 
+        // 등간격 폴백에서는 x축이 allDates이므로 띠도 그 날짜에 맞춰 얹는다
+        const band = a10VixBand(allDates, useTime, true);     // 비교 — 늘 연속 구간
+        // 툴팁 항목에서 날짜를 꺼내는 방법 — 시간축이면 점에 담긴 d, 폴백이면 allDates 색인
+        const cmpDateAt = it => {
+            const r = it.raw;
+            return (r && typeof r === 'object' && r.d) ? r.d : (allDates[it.dataIndex] || null);
+        };
+
         a10ChartInstance = new Chart(canvas, {
             type: 'line',
-            data: { labels: useTime ? undefined : allDates.map(d => d.substring(5).replace('-', '/')), datasets },
+            data: { labels: useTime ? undefined : allDates.map(d => d.substring(5).replace('-', '/')),
+                    datasets: datasets.concat(band ? [band.dataset] : []) },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { mode: 'nearest', intersect: false },
                 plugins: {
                     legend: { display: false },   // 범례는 차트 위 HTML로 그린다(선 모양까지 보여주려고)
-                    tooltip: {
-                        callbacks: {
-                            title: ctx => {
-                                const r = ctx[0].raw;
-                                return (r && typeof r === 'object' && r.d) ? r.d : (allDates[ctx[0].dataIndex] || '');
-                            },
-                            label: ctx => {
-                                const s = series[ctx.datasetIndex];
-                                const r = ctx.raw;
-                                const orig = (r && typeof r === 'object') ? r.v : s.byDate[allDates[ctx.dataIndex]];
-                                if (orig == null) return null;
-                                return `${s.cfg.label}: ${s.cfg.fmt(orig)} (${ctx.parsed.y.toFixed(1)})`;
-                            },
-                        }
-                    }
+                    tooltip: a10VixTooltip(band, cmpDateAt, {
+                        title: ctx => cmpDateAt(ctx[0]),
+                        label: ctx => {
+                            const s = series[ctx.datasetIndex];
+                            if (!s) return null;              // 배경 띠는 filter가 걸러내지만 방어
+                            const r = ctx.raw;
+                            const orig = (r && typeof r === 'object') ? r.v : s.byDate[allDates[ctx.dataIndex]];
+                            if (orig == null) return null;
+                            return `${s.cfg.label}: ${s.cfg.fmt(orig)} (${ctx.parsed.y.toFixed(1)})`;
+                        },
+                    })
                 },
-                scales: {
+                scales: Object.assign({
                     y: {
                         ticks: { callback: v => a10FmtNum(v, 0), color: '#9b9797', font: { family: A10_FONT, size: 10 } },
                         grid: { color: '#444141', tickBorderDash: [2, 2] }, border: { display: false },
                     },
                     x: xScale
-                }
+                }, band ? { vix: band.scale } : {})
             },
             plugins: [basePlugin],
         });
 
         legendEl.innerHTML = series.map((s, i) =>
             `<span class="a10-legend-item"><i class="a10-legend-line d${i + 1}" style="color:${colors[i]}"></i>${s.cfg.label}</span>`
-        ).join('');
+        ).join('') + (band ? a10VixLegendItem() : '');
 
         // 하단 요약: 지표별 변화율만
         statsEl.innerHTML = series.map((s, i) => {

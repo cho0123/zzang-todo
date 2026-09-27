@@ -1,6 +1,6 @@
 // 경제지표 프록시 (After10 일지용)
 // 소스: Yahoo Finance chart API (서버측 호출 → CORS 무관)
-// 쿼리: ?date=YYYY-MM-DD → 그 날짜의(없으면 직전 거래일) 지표 9종 반환
+// 쿼리: ?date=YYYY-MM-DD → 그 날짜의(없으면 직전 거래일) 지표 10종 반환
 //
 // ⚠️ 소스가 막히면 아래 SOURCE / SYMBOLS / fetchOne 만 교체하면 된다.
 
@@ -17,6 +17,7 @@ const SYMBOLS = {
   kospi:  "^KS11",     // 코스피
   gold:   "GC=F",      // 금 (USD/oz)
   btc:    "BTC-USD",   // 비트코인 (USD)
+  vix:    "^VIX",      // 공포지수 (CBOE Volatility Index)
 };
 
 /* 시간봉 폴백을 허용하는 지표 — 일봉 종가가 있는 날로 대조해 정확한 것만 남겼다.
@@ -30,8 +31,28 @@ const SYMBOLS = {
      usdkrw 21/24, 최대 1.32% / jpykrw 20/24, 1.63% / usdjpy 17/24, 1.76%
        · 환율 일봉 종가는 런던 23:00 스냅샷이라 마지막 시간봉과 시점이 어긋난다.
    근사값보다 빈 칸이 낫다는 판단이다 — 빈 칸은 나중에 채울 수 있지만
-   틀린 값은 그대로 차트에 남는다. */
-const HOURLY_FALLBACK = new Set(["spx", "ndq", "dxy", "btc"]);
+   틀린 값은 그대로 차트에 남는다.
+
+   vix 는 같은 방식으로 120일(대조 83일)을 재보고 넣었다 — 0.1% 초과가 11/83일이라
+   퍼센트만 보면 dxy보다 나쁜데, 실제 어긋난 폭은 최대 0.06포인트다(16.64 vs 16.70).
+   VIX는 값 자체가 14~22라서 호가 한 칸(0.01)이 이미 0.06%다 — 위 지표들과 같은
+   0.1% 잣대를 그대로 대면 눈금 단위를 오차로 세게 된다. 그래서 절대 폭으로 판단했다.
+   (코스피를 뺀 이유는 0.82%가 58포인트였기 때문이다 — 성격이 다르다.) */
+const HOURLY_FALLBACK = new Set(["spx", "ndq", "dxy", "btc", "vix"]);
+
+/* 시간봉으로 메울 때 '그날 장이 끝까지 돌았는가'를 봉 개수로 확인하는 지표.
+   ^VIX 때문에 생겼다 — 이 심볼만 기존 9종과 다르게 움직인다.
+     · ^GSPC·^IXIC : 미국 휴장일에는 일봉 '행' 자체가 없다        → hasRow 조건이 막는다
+     · DX-Y.NYB    : 일요일에 종가 null 행을 준다                → isWeekday 조건이 막는다
+     · ^VIX        : 평일 휴장일(2026-06-19 준틴스, 07-03)에도 행을 주면서
+                     종가만 null 이다 → 위 두 조건을 다 통과한다.
+   그 날들은 시간봉이 9개만 오는 단축장이라 마지막 봉이 종가가 아니라 장중 값이다.
+   정상일 82일로 재보니 그 지점(10시 CT 봉)을 종가로 쓰면 평균 0.49포인트,
+   최대 4.30포인트 어긋난다(2026-06-05: 종가 21.51 vs 17.21). 시장 분위기가 아예 달라진다.
+   그래서 '정상일만큼 봉이 있는 날'에만 메운다. 기준이 어긋나면 채우지 않는 쪽으로
+   실패하므로, 야후가 장 시간을 바꾸면 값이 틀리는 대신 빈 칸이 된다.
+   ⚠ 여기 없는 지표는 개수를 보지 않는다 — 기존 4종의 동작은 그대로다. */
+const HOURLY_MIN_BARS = { vix: 14 };   // ^VIX 정상일 = 02:00~15:00 CT 14봉
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
            "(KHTML, like Gecko) Chrome/120.0 Safari/537.36";
@@ -147,26 +168,28 @@ async function fetchChart(yahooSym, params, timeoutMs) {
    그래서 그날 마지막 시간봉의 종가를 종가 대신 쓴다.
    ⚠ 이 방식이 맞는지는 교차로 확인했다 — 코스피 9/23의 마지막 시간봉(7080.92)이
       같은 날 regularMarketPrice와 정확히 일치한다. */
-async function fetchHourlyClose(yahooSym, targetDate, targetEpoch, off) {
+async function fetchHourlyClose(yahooSym, targetDate, targetEpoch, off, minBars) {
   const r = await fetchChart(yahooSym,
     `period1=${targetEpoch - DAY}&period2=${targetEpoch + 2 * DAY}&interval=1h`, 3500);
   const ts = r.timestamp;
   const closes = r.indicators && r.indicators.quote && r.indicators.quote[0] &&
                  r.indicators.quote[0].close;
   if (!ts || !closes) return null;
-  let last = null;
+  let last = null, bars = 0;
   for (let i = 0; i < ts.length; i++) {
-    if (barYmd(ts[i], off) === targetDate && closes[i] != null) last = closes[i];
+    if (barYmd(ts[i], off) === targetDate && closes[i] != null) { last = closes[i]; bars++; }
   }
+  // 단축장이면 마지막 봉이 종가가 아니다 (HOURLY_MIN_BARS 주석 참고)
+  if (minBars && bars < minBars) return null;
   return last;
 }
 
 /* 며칠치를 한 번에 — 소급 수집용.
-   하루씩 부르면 날짜마다 심볼 9개를 새로 받는다(90일이면 810번). 그런데 일봉 조회는
-   원래 구간으로 받는 것이라, 심볼당 한 번만 불러 구간 전체를 훑으면 9번으로 끝난다.
+   하루씩 부르면 날짜마다 심볼 10개를 새로 받는다(90일이면 900번). 그런데 일봉 조회는
+   원래 구간으로 받는 것이라, 심볼당 한 번만 불러 구간 전체를 훑으면 10번으로 끝난다.
    시간봉 보완이 필요한 날이 있으면 그 심볼만 시간봉을 한 번 더 받는다(구간 전체를 한 번에).
-   그래서 구간이 아무리 길어도 야후 요청은 최대 18번이다. */
-async function fetchDailyRange(yahooSym, fromDate, toDate, fromEpoch, toEpoch, allowHourly) {
+   그래서 구간이 아무리 길어도 야후 요청은 최대 20번이다. */
+async function fetchDailyRange(yahooSym, fromDate, toDate, fromEpoch, toEpoch, allowHourly, minBars) {
   const r = await fetchChart(yahooSym,
     `period1=${fromEpoch - 5 * DAY}&period2=${toEpoch + 2 * DAY}&interval=1d`, 7000);
   const meta = r.meta || {};
@@ -211,12 +234,16 @@ async function fetchDailyRange(yahooSym, fromDate, toDate, fromEpoch, toEpoch, a
         const hcl = h.indicators && h.indicators.quote && h.indicators.quote[0] &&
                     h.indicators.quote[0].close;
         if (hts && hcl) {
-          const last = {};
+          const last = {}, bars = {};
           for (let i = 0; i < hts.length; i++) {
             if (hcl[i] == null) continue;
-            last[barYmd(hts[i], off)] = hcl[i];
+            const hd = barYmd(hts[i], off);
+            last[hd] = hcl[i];
+            bars[hd] = (bars[hd] || 0) + 1;
           }
           need.forEach(d => {
+            // 단축장이면 마지막 봉이 종가가 아니다 (HOURLY_MIN_BARS 주석 참고)
+            if (minBars && (bars[d] || 0) < minBars) return;
             if (last[d] != null) { values[d] = last[d]; filled[d] = 'hourly'; }
           });
         }
@@ -229,7 +256,7 @@ async function fetchDailyRange(yahooSym, fromDate, toDate, fromEpoch, toEpoch, a
 }
 
 /* ── mode=daily : 심볼마다 '자기 실제 거래일'과 그 값을 그대로 돌려준다 ──
-   v:3(기본 모드)은 9종을 하나의 공통 기준일(min)로 맞추느라, 주말이면 24시간 도는
+   v:3(기본 모드)은 전 지표를 하나의 공통 기준일(min)로 맞추느라, 주말이면 24시간 도는
    비트코인까지 금요일 값으로 끌려 내려갔다. 여기서는 맞추지 않는다.
 
    ⚠ 두 가지를 더 본다.
@@ -240,7 +267,7 @@ async function fetchDailyRange(yahooSym, fromDate, toDate, fromEpoch, toEpoch, a
       currentTradingPeriod.regular.end로 판단한다 —
       regularMarketTime이 그 끝보다 이르면 아직 장이 돌고 있는 것이다.
       그 날짜(liveDate)는 확정값에서 빼고, 왜 빠졌는지 알 수 있게 따로 알려준다. */
-async function fetchDaily(yahooSym, targetDate, targetEpoch, allowHourly) {
+async function fetchDaily(yahooSym, targetDate, targetEpoch, allowHourly, minBars) {
   const r = await fetchChart(yahooSym,
     `period1=${targetEpoch - 14 * DAY}&period2=${targetEpoch + 2 * DAY}&interval=1d`, 6000);
   const meta = r.meta || {};
@@ -290,7 +317,7 @@ async function fetchDaily(yahooSym, targetDate, targetEpoch, allowHourly) {
   if (allowHourly && !seen.has(targetDate) && targetDate !== liveDate && hasRow.has(targetDate) &&
       isWeekday(targetDate)) {
     try {
-      const h = await fetchHourlyClose(yahooSym, targetDate, targetEpoch, off);
+      const h = await fetchHourlyClose(yahooSym, targetDate, targetEpoch, off, minBars);
       if (h != null) best = { ymd: targetDate, close: h, filled: 'hourly' };
     } catch (e) {
       // 시간봉까지 실패해도 일봉으로 얻은 값은 그대로 돌려준다
@@ -317,7 +344,8 @@ exports.handler = async (event) => {
     }
     const keysR = Object.keys(SYMBOLS);
     const settledR = await Promise.allSettled(keysR.map(k =>
-      fetchDailyRange(SYMBOLS[k], from, to, toEpoch(from), toEpoch(to), HOURLY_FALLBACK.has(k))));
+      fetchDailyRange(SYMBOLS[k], from, to, toEpoch(from), toEpoch(to),
+                      HOURLY_FALLBACK.has(k), HOURLY_MIN_BARS[k] || 0)));
 
     // 날짜별로 모아 준다 — 클라이언트가 월 문서에 그대로 옮겨 담을 수 있게
     const days = {}, errorsR = {}, liveR = {};
@@ -359,7 +387,8 @@ exports.handler = async (event) => {
   if (mode === "daily") {
     const keys2 = Object.keys(SYMBOLS);
     const settled2 = await Promise.allSettled(
-      keys2.map(k => fetchDaily(SYMBOLS[k], date, targetEpoch, HOURLY_FALLBACK.has(k))));
+      keys2.map(k => fetchDaily(SYMBOLS[k], date, targetEpoch,
+                                HOURLY_FALLBACK.has(k), HOURLY_MIN_BARS[k] || 0)));
     const symbols = {}, errors2 = {}, live = {};
     settled2.forEach((res, i) => {
       const k = keys2[i];
