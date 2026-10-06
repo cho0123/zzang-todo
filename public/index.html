@@ -1465,7 +1465,9 @@
         <!-- 기록할 날짜 선택 (기본: 오늘) -->
         <div class="a10-datepick">
             <input type="date" id="a10DateInput">
-            <button type="button" class="today-btn" id="a10TodayPickBtn">오늘</button>
+            <!-- 전날 일을 다음날 정리해 쓰는 흐름이라 한 번 눌러 어제로 간다.
+                 기본 선택은 그대로 오늘이다(a10FillWriteForm(todayStr()) 초기 호출). -->
+            <button type="button" class="today-btn" id="a10YesterdayPickBtn">어제</button>
         </div>
 
         <div class="a10-date" id="a10WriteDate"></div>
@@ -4111,7 +4113,8 @@
     document.getElementById('a10DateInput').addEventListener('change', (e) => {
         if (e.target.value) a10FillWriteForm(e.target.value);
     });
-    document.getElementById('a10TodayPickBtn').addEventListener('click', () => a10FillWriteForm(todayStr()));
+    // 날짜만 어제로 옮긴다 — 나머지(기존 글 불러오기·중요 표시·지표 안내)는 a10FillWriteForm이 그대로 한다
+    document.getElementById('a10YesterdayPickBtn').addEventListener('click', () => a10FillWriteForm(mkShiftDay(todayStr(), -1)));
 
     // 초기 상태: ToDo 탭 / 오늘 날짜 표시 (데이터는 탭 진입 시 조회)
     a10FillWriteForm(todayStr());
