@@ -444,6 +444,28 @@
         }
         .a10-card:hover { border-color: var(--zm-ink); background: var(--zm-bg); }
         .a10-card-date { font-family: var(--font-num); font-size: 12px; font-weight: 800; color: var(--zm-muted); margin-bottom: 6px; }
+        /* 중요 표시 — 날짜 줄 오른쪽에 토글을 두고, 켜지면 카드 왼쪽에 잉크 바를 세운다.
+           왼쪽 바는 '과거의 오늘' 카드(.a10-past-card)가 이미 쓰는 어휘라 새 모양을 만들지 않았다.
+           이모지는 쓰지 않고 글자 '중요'로 적는다 — 켜짐/꺼짐이 색만이 아니라 면으로도 갈린다. */
+        .a10-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+        .a10-card-headl { min-width: 0; }
+        .a10-star {
+            flex: none; width: auto; white-space: nowrap; margin-top: -2px;
+            padding: 4px 9px; border-radius: var(--zm-radius); font-size: 11px; font-weight: 700;
+            font-family: var(--font-body);
+            background: var(--zm-card); color: var(--zm-muted-2); border: 1px solid var(--zm-border); cursor: pointer;
+        }
+        .a10-star:hover { background: var(--zm-bg); color: var(--zm-text-soft); border-color: var(--zm-muted); }
+        .a10-star.on { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        .a10-star.on:hover { background: var(--zm-ink); color: var(--zm-on-ink); }
+        /* 카드가 중요로 표시됐을 때 — 왼쪽 잉크 바. 안쪽 여백을 바 두께만큼 줄여 글이 밀리지 않게 한다 */
+        .a10-card.starred { border-left: 3px solid var(--zm-ink); padding-left: 16px; }
+        .a10-card-compact.starred { padding-left: 12px; }
+        /* 쓰기 화면의 중요 토글 — 저장 버튼과 같은 줄, 높이를 맞춘다 */
+        .a10-star.write { margin-top: 0; padding: 12px 16px; font-size: 13px; }
+        /* 타임라인 위 필터 줄 */
+        .a10-tl-filter { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+        .a10-tl-note { font-family: var(--font-num); font-size: 12px; font-weight: 600; color: var(--zm-muted); }
         .a10-card-body { font-size: 15px; color: var(--zm-text); line-height: 1.85; white-space: pre-wrap; word-break: break-word; }
 
         /* 뷰3: 과거의 오늘 */
@@ -452,6 +474,10 @@
             border-radius: var(--zm-radius); padding: 20px; margin-bottom: 12px;
         }
         .a10-past-year { font-family: var(--font-title); font-size: 18px; font-weight: 700; color: var(--zm-ink); letter-spacing: -0.5px; margin-bottom: 10px; }
+        /* 연도 줄 오른쪽에 중요 토글. 이 카드는 원래 모두 왼쪽 잉크 바를 달고 있어서,
+           중요 표시는 바를 굵히는 것으로 구분한다(다른 목록의 '바가 생긴다'와 결이 같다). */
+        .a10-past-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .a10-past-card.starred { border-left-width: 6px; padding-left: 17px; }
         .a10-hint {
             text-align: center; color: var(--zm-muted); font-size: 13px; line-height: 1.7;
             padding: 18px 12px; border: 1px dashed var(--zm-border); border-radius: var(--zm-radius); margin-top: 4px;
@@ -1449,6 +1475,8 @@
 
         <textarea id="a10Content" placeholder="오늘 하루를 기록해보세요."></textarea>
         <div class="a10-btnrow">
+            <!-- 켜 두고 저장하면 그 일지가 중요로 표시된다 (저장 전까지는 화면 상태일 뿐) -->
+            <button type="button" class="a10-star write" id="a10StarBtn" onclick="a10ToggleWriteStar()">중요</button>
             <button id="a10SaveBtn" class="a10-save-btn">저장하기</button>
         </div>
 
@@ -1461,6 +1489,11 @@
 
     <!-- 뷰 2: 전체 타임라인 -->
     <div id="a10ViewTimeline" style="display:none">
+        <!-- 중요만 모아 보기. 뷰를 하나 더 만들지 않고 타임라인 안의 필터로 둔다 -->
+        <div class="a10-tl-filter">
+            <button type="button" class="a10-chip" id="a10StarFilterBtn" onclick="a10ToggleStarFilter()">중요만 보기</button>
+            <span class="a10-tl-note" id="a10StarCount"></span>
+        </div>
         <div id="a10Timeline"></div>
     </div>
 
@@ -2924,6 +2957,87 @@
         return a10Entries.find(e => e.id === dateStr) || null;
     }
 
+    /* ── 중요 표시 ────────────────────────────────────────────────
+       diary 문서에 starred(불리언) 하나만 더한다. 이 필드를 두기 전에 쓴 일지에는
+       아예 없으므로, 읽는 쪽에서 '없으면 false'로 본다 — 기존 문서를 고치지 않는다.
+
+       ⚠ 저장은 늘 { starred: ... } 한 칸만 merge로 보낸다. 본문·createdAt 등은 손대지 않고,
+         값이 스칼라라 '빈 맵을 merge로 보내면 그 자리가 지워지는' 함정과도 무관하다.
+         updatedAt 도 건드리지 않는다 — 중요 표시를 켜고 끈 것은 본문 수정이 아니다. */
+    function a10IsStarred(e) { return !!(e && e.starred); }
+    function a10StarredList() {
+        return a10Entries.filter(a10IsStarred).sort((a, b) => a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+    }
+    // 카드 안의 토글 버튼 한 조각 (카드 클릭이 같이 먹지 않게 onclick에서 전파를 끊는다)
+    function a10StarBtn(id, on) {
+        return `<button type="button" class="a10-star${on ? ' on' : ''}"`
+            + ` title="${on ? '중요 표시를 끕니다' : '중요로 표시합니다'}"`
+            + ` onclick="a10ToggleStar(event,'${id}')">중요</button>`;
+    }
+    // 카드 머리(날짜 + 10년 뒤 + 중요 토글) — 최근 기록·타임라인이 같이 쓴다
+    function a10CardHead(e) {
+        return `<div class="a10-card-head"><div class="a10-card-headl">`
+            + `<div class="a10-card-date">${a10KoreanShort(e.id)}</div>`
+            + `<div class="a10-card-sub">${a10FutureSub(e.id)}</div>`
+            + `</div>${a10StarBtn(e.id, a10IsStarred(e))}</div>`;
+    }
+    // 지금 떠 있는 목록들만 다시 그린다 (토글 직후 반영용)
+    function a10RepaintLists() {
+        if (document.getElementById('a10ViewWrite').style.display !== 'none') a10RenderRecent();
+        if (document.getElementById('a10ViewTimeline').style.display !== 'none') a10RenderTimeline();
+        if (document.getElementById('a10ViewPast').style.display !== 'none') a10RenderPast();
+        a10PaintWriteStar();
+    }
+
+    /* 목록에서 바로 켜고 끈다. 화면을 먼저 바꾸고 저장하되,
+       실패하면 되돌려서 화면과 서버가 어긋난 채로 남지 않게 한다. */
+    window.a10ToggleStar = async function (ev, id) {
+        if (ev) ev.stopPropagation();
+        const entry = a10FindEntry(id);
+        if (!entry) return;
+        const next = !a10IsStarred(entry);
+        entry.starred = next;
+        if (a10CurrentDate === id) a10WriteStarred = next;   // 쓰기 폼과 어긋나지 않게
+        a10RepaintLists();
+        try {
+            await setDoc(doc(db, DIARY_COLLECTION, id), { starred: next }, { merge: true });
+        } catch (e) {
+            console.error('중요 표시 저장 실패:', id, e);
+            entry.starred = !next;
+            if (a10CurrentDate === id) a10WriteStarred = !next;
+            a10RepaintLists();
+            alert('중요 표시를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.');
+        }
+    };
+
+    /* 쓰기 화면의 토글은 '저장 시 지정'이라, 누르는 순간에는 화면 상태만 바꾼다.
+       저장 버튼을 눌러야 본문과 함께 들어간다. */
+    let a10WriteStarred = false;
+    function a10PaintWriteStar() {
+        const b = document.getElementById('a10StarBtn');
+        if (!b) return;
+        b.classList.toggle('on', a10WriteStarred);
+        b.title = a10WriteStarred ? '저장하면 중요 표시가 켜집니다' : '저장하면 중요로 표시합니다';
+    }
+    window.a10ToggleWriteStar = function () { a10WriteStarred = !a10WriteStarred; a10PaintWriteStar(); };
+
+    // 타임라인 '중요만 보기' 필터
+    let a10OnlyStarred = false;
+    window.a10ToggleStarFilter = function () { a10OnlyStarred = !a10OnlyStarred; a10RenderTimeline(); };
+    function a10PaintStarFilter() {
+        const btn = document.getElementById('a10StarFilterBtn');
+        const note = document.getElementById('a10StarCount');
+        if (!btn) return;
+        const n = a10StarredList().length;
+        btn.classList.toggle('active', a10OnlyStarred);
+        btn.title = a10OnlyStarred ? '전체 타임라인으로 돌아갑니다' : '중요로 표시한 일지만 모아 봅니다';
+        if (note) {
+            note.textContent = a10OnlyStarred
+                ? (n ? `${n}개 · 날짜 내림차순` : '')
+                : (n ? `중요 ${n}개` : '');
+        }
+    }
+
     // 상단 탭 전환 (기본: todo)
     window.switchTab = function(tab) {
         document.getElementById('todoTab').style.display = (tab === 'todo') ? 'block' : 'none';
@@ -2994,6 +3108,10 @@
         note.textContent = isToday ? '' : `${a10KoreanFull(dateStr)}의 기록입니다.`;
 
         a10PaintMarketHint(dateStr);
+
+        // 이미 쓴 일지면 저장된 값을, 새 날짜면 꺼진 상태로 시작한다
+        a10WriteStarred = a10IsStarred(entry);
+        a10PaintWriteStar();
 
         const btn = document.getElementById('a10SaveBtn');
         btn.classList.remove('saved');
@@ -3093,9 +3211,8 @@
 
         countEl.textContent = `(${recent.length}개)`;
         wrap.innerHTML = recent.map(e => `
-            <div class="a10-card a10-card-compact${e.id === a10CurrentDate ? ' current' : ''}" onclick="a10EditDate('${e.id}')">
-                <div class="a10-card-date">${a10KoreanShort(e.id)}</div>
-                <div class="a10-card-sub">${a10FutureSub(e.id)}</div>
+            <div class="a10-card a10-card-compact${e.id === a10CurrentDate ? ' current' : ''}${a10IsStarred(e) ? ' starred' : ''}" onclick="a10EditDate('${e.id}')">
+                ${a10CardHead(e)}
                 <div class="a10-card-body clamp">${a10Escape(e.content || '')}</div>
                 ${a10MarketLine(e)}
             </div>`).join('');
@@ -3114,6 +3231,7 @@
             date: dateStr,
             monthDay: dateStr.substring(5),
             content,
+            starred: a10WriteStarred,
             updatedAt: now
         };
         if (!existing) payload.createdAt = now;
@@ -3168,10 +3286,30 @@
 
     function a10RenderTimeline() {
         const wrap = document.getElementById('a10Timeline');
+        a10PaintStarFilter();
         if (!a10Entries.length) {
             wrap.innerHTML = '<div class="a10-empty">아직 기록이 없습니다.<br>"오늘 쓰기"에서 첫 기록을 남겨보세요.</div>';
             return;
         }
+
+        /* '중요만 보기'는 연·월 접기를 쓰지 않고 날짜 내림차순 한 줄로 늘어놓는다.
+           중요 표시한 것은 보통 몇 개라 접어 둘 이유가 없고, 접힌 달 안에 숨어
+           '분명히 표시했는데 안 보이는' 일이 생기지 않는다.
+           평소 타임라인(연·월 트리)은 아래 코드 그대로 — 필터를 꺼면 원래대로 돌아온다. */
+        if (a10OnlyStarred) {
+            const list = a10StarredList();
+            wrap.innerHTML = list.length
+                ? list.map(e => `
+                    <div class="a10-card starred" onclick="a10EditDate('${e.id}')">
+                        ${a10CardHead(e)}
+                        <div class="a10-card-body">${a10Escape(e.content || '')}</div>
+                        ${a10MarketLine(e)}
+                    </div>`).join('')
+                : '<div class="a10-empty">중요로 표시한 일지가 없습니다.<br>'
+                  + '카드의 ‘중요’를 누르거나, 쓸 때 켜 두고 저장하면 여기에 모입니다.</div>';
+            return;
+        }
+
         a10InitTimelineState();
 
         // 최신순 정렬 후 연 → 월로 그룹핑 (Map이 삽입순서 유지 → 연/월도 최신순)
@@ -3212,9 +3350,8 @@
                         html += `<div class="a10-month-body">`;
                         list.forEach(e => {
                             html += `
-                                <div class="a10-card" onclick="a10EditDate('${e.id}')">
-                                    <div class="a10-card-date">${a10KoreanShort(e.id)}</div>
-                                    <div class="a10-card-sub">${a10FutureSub(e.id)}</div>
+                                <div class="a10-card${a10IsStarred(e) ? ' starred' : ''}" onclick="a10EditDate('${e.id}')">
+                                    ${a10CardHead(e)}
                                     <div class="a10-card-body">${a10Escape(e.content || '')}</div>
                                     ${a10MarketLine(e)}
                                 </div>`;
@@ -3251,8 +3388,11 @@
             const y = Number(e.id.substring(0, 4));
             const label = (y === thisYear) ? `${y}년 — 오늘` : `${y}년`;
             html += `
-                <div class="a10-past-card">
-                    <div class="a10-past-year">${label}</div>
+                <div class="a10-past-card${a10IsStarred(e) ? ' starred' : ''}">
+                    <div class="a10-past-head">
+                        <div class="a10-past-year">${label}</div>
+                        ${a10StarBtn(e.id, a10IsStarred(e))}
+                    </div>
                     <div class="a10-card-body">${a10Escape(e.content || '')}</div>
                     ${a10MarketLine(e)}
                 </div>`;
