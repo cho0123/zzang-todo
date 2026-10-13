@@ -2978,10 +2978,12 @@
        hourly 표시가 있는 날만 다시 물어보므로 요청이 몇 건 되지 않는다. */
     window.mkRecheck = async function () {
         if (mkBusy) return;
-        const n = Number(document.getElementById('mkDays').value) || 7;
-        const today = todayStr();
-        const dates = [];
-        for (let i = n - 1; i >= 0; i--) dates.push(mkShiftDay(today, -i));
+        /* 고른 기간을 다른 버튼들과 똑같이 mkTargetDates 로 읽는다.
+           예전에는 여기서만 Number(select.value) 로 직접 읽었는데, '시작일 지정'을 고르면
+           값이 'custom' 이라 Number('custom') = NaN → || 7 로 떨어져 말없이 최근 7일만
+           검사했다. 기간을 길게 잡고 눌러도 7일만 도니 과거의 잘못된 보완값이 남았다. */
+        const dates = mkTargetDates();
+        if (!dates.length) { mkStatus('시작일을 골라주세요.'); return; }
         try { for (const mo of [...new Set(dates.map(mkMonthOf))]) await mkEnsureMonth(mo); }
         catch (e) { console.error('시장 데이터 조회 실패:', e); mkStatus('불러오지 못했습니다.'); return; }
 
