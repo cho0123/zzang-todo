@@ -791,6 +791,23 @@
         .mk-table td.filled.hourly b { border-bottom: 2px dashed var(--zm-muted-3); }
         .mk-wk .mk-date { color: var(--zm-muted); }                            /* 주말 */
         .mk-legend { margin-top: 8px; font-size: 11px; color: var(--zm-muted-2); line-height: 1.7; }
+        /* 진단 — 읽기 전용 표시. 수집 버튼 줄과 섞이지 않게 위에 규칙선을 둔다 */
+        .mk-diag-row { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--zm-border); }
+        .mk-diag-note { font-size: 11px; color: var(--zm-muted-2); line-height: 1.6; }
+        .mk-diag-sec { margin-top: 12px; }
+        .mk-diag-h { font-family: var(--font-title); font-size: 12px; font-weight: 700; color: var(--zm-ink);
+            margin-bottom: 5px; }
+        .mk-diag-raw { font-family: var(--font-num); font-size: 11px; line-height: 1.8; color: var(--zm-text-soft);
+            background: var(--zm-card); border: 1px solid var(--zm-border); padding: 8px 10px;
+            white-space: pre-wrap; word-break: break-all; }
+        .mk-diag-tbl { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%;
+            font-family: var(--font-num); font-size: 11px; background: var(--zm-card);
+            border: 1px solid var(--zm-border); }
+        .mk-diag-tbl th, .mk-diag-tbl td { padding: 4px 9px; white-space: nowrap; text-align: left; }
+        .mk-diag-tbl thead th { border-bottom: 2px solid var(--zm-ink); color: var(--zm-muted); font-weight: 700; }
+        .mk-diag-tbl tbody tr + tr td { border-top: 1px solid var(--zm-line); }
+        .mk-diag-tbl td.no { color: var(--zm-muted-2); }
+        .mk-diag-none { font-size: 11px; color: var(--zm-muted-2); padding: 6px 2px; }
 
         /* ===================== 작사 (lyrics) =====================
            가사는 유실되면 복구가 안 된다 → 저장 상태를 늘 눈에 보이게 두고,
@@ -1662,6 +1679,14 @@
             <div class="mk-plan" id="mkPlan"></div>
             <div class="mk-status" id="mkStatus"></div>
             <div id="mkBody"></div>
+
+            <!-- 진단 — 저장된 것을 그대로 읽어 보여주기만 한다. 쓰기 없음. -->
+            <div class="mk-row mk-diag-row">
+                <button type="button" class="mk-sub" id="mkDiagBtn" onclick="mkDiag()">진단</button>
+                <input type="date" class="mk-days" id="mkDiagDate" value="2026-10-10">
+                <span class="mk-diag-note">저장된 값을 읽어 보여주기만 합니다 — 지우거나 고치지 않습니다.</span>
+            </div>
+            <div id="mkDiagBody"></div>
         </div>
         <!-- ===== /1단계 임시 ===== -->
     </div>
@@ -3082,6 +3107,137 @@
                 그날 종가와 달라서 빈 칸으로 둡니다. VIX는 단축장(미국 평일 휴장일)에는
                 마지막 봉이 종가가 아니라서, 봉이 정상일만큼 있는 날만 보완합니다.<br>
                 ‘미조회’는 아직 안 받아본 날, ‘다시 받음’은 받을 때 장중이어서 다음에 한 번 더 받을 날입니다.</div>`;
+    };
+
+
+    /* ── 진단 (읽기 전용) ─────────────────────────────────────────
+       저장된 marketDaily 를 그대로 읽어 보여준다. 어떤 경우에도 쓰지 않는다 —
+       조사하려는 상태가 조사 도중에 바뀌면 아무것도 가릴 수 없다.
+       setDoc·deleteField 는 이 함수 안에서 한 번도 부르지 않는다.
+
+       보여주는 것 세 가지
+       1) 고른 날짜의 days·filled·fetched 원본
+       2) 고른 기간 안에서 filled 꼬리표가 붙은 값 전부
+       3) 주말 칸에 들어간 값 중 비트코인이 아닌 것 전부
+       1·3 이 갈리는 지점이 중요하다 — 꼬리표가 없으면 '보완값 다시 검사'의
+       대상 자체가 아니라, 그 버튼으로는 영영 지워지지 않는다. */
+    const MK_WK = ['일', '월', '화', '수', '목', '금', '토'];
+    function mkDow(dateStr) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+        if (!m) return '';
+        return MK_WK[new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()];
+    }
+    function mkIsWeekendDay(dateStr) {
+        const w = mkDow(dateStr);
+        return w === '토' || w === '일';
+    }
+
+    window.mkDiag = async function () {
+        const body = document.getElementById('mkDiagBody');
+        if (!body) return;
+        body.innerHTML = '<div class="mk-status">읽는 중…</div>';
+
+        const dates = mkTargetDates();
+        const pick = (document.getElementById('mkDiagDate') || {}).value || '';
+        const months = [...new Set(dates.map(mkMonthOf).concat(pick ? [mkMonthOf(pick)] : []))].sort();
+        /* 월별로 따로 읽고, 실패한 달은 건너뛴다. 90일이면 서너 달에 걸치는데
+           한 달이 안 읽힌다고 보고서를 통째로 버리면 볼 수 있는 것까지 못 보게 된다.
+           못 읽은 달은 아래에 밝혀서, 빈 결과를 '이상 없음'으로 오해하지 않게 한다. */
+        const failed = [];
+        for (const mo of months) {
+            try { await mkEnsureMonth(mo); }                       // getDoc 만 한다
+            catch (e) { console.error('진단 조회 실패:', mo, e); failed.push(mo); }
+        }
+        if (failed.length === months.length) {
+            body.innerHTML = '<div class="a10-hint">저장된 데이터를 읽지 못했습니다 — '
+                + hlEsc(failed.join(', ')) + '</div>';
+            return;
+        }
+
+        let html = '';
+        if (failed.length) {
+            html += '<div class="mk-diag-sec"><div class="mk-diag-raw">⚠ 못 읽은 달: '
+                 + hlEsc(failed.join(', ')) + ' — 아래 결과에서 이 달은 빠져 있습니다.</div></div>';
+        }
+
+        // 1) 고른 날짜 원본
+        html += '<div class="mk-diag-sec"><div class="mk-diag-h">1. '
+             + hlEsc(pick || '(날짜 미선택)') + (pick ? ` (${mkDow(pick)})` : '') + ' 저장 원본</div>';
+        if (!pick) {
+            html += '<div class="mk-diag-none">날짜를 골라주세요.</div>';
+        } else {
+            const mo = mkMonths[mkMonthOf(pick)] || { days: {}, filled: {}, fetched: {} };
+            const dd = mkDayOf(pick);
+            const raw = {
+                days: mo.days[dd],
+                filled: mo.filled[dd],
+                fetched: mo.fetched[dd],
+            };
+            html += `<div class="mk-diag-raw">days    : ${hlEsc(JSON.stringify(raw.days) || 'undefined')}
+filled  : ${hlEsc(JSON.stringify(raw.filled) || 'undefined')}
+fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
+        }
+        html += '</div>';
+
+        // 2) 꼬리표가 붙은 값 전부 (고른 기간 안)
+        const inRange = new Set(dates);
+        const tags = [];
+        months.forEach(mo => {
+            const m = mkMonths[mo];
+            if (!m) return;
+            Object.keys(m.filled || {}).sort().forEach(dd => {
+                const d = mo + '-' + dd;
+                if (!inRange.has(d)) return;
+                const fl = mkFilledMap(m.filled[dd]);
+                Object.keys(fl).sort().forEach(k => {
+                    tags.push({ d, k, by: fl[k], v: (m.days[dd] || {})[k] });
+                });
+            });
+        });
+        html += '<div class="mk-diag-sec"><div class="mk-diag-h">2. 꼬리표(filled)가 붙은 값 — '
+             + tags.length + '건 <span style="font-weight:600;color:var(--zm-muted)">'
+             + '(‘보완값 다시 검사’가 손댈 수 있는 범위)</span></div>';
+        html += tags.length
+            ? '<div class="mk-wrap"><table class="mk-diag-tbl"><thead><tr>'
+              + '<th>날짜</th><th>지표</th><th>값</th><th>꼬리표</th></tr></thead><tbody>'
+              + tags.map(t => `<tr><td>${hlEsc(t.d)} (${mkDow(t.d)})</td><td>${hlEsc(MK_LABEL[t.k] || t.k)}</td>`
+                  + `<td>${t.v == null ? '<span class="no">(값 없음)</span>' : hlEsc(String(t.v))}</td>`
+                  + `<td>${hlEsc(t.by)}</td></tr>`).join('')
+              + '</tbody></table></div>'
+            : '<div class="mk-diag-none">없습니다.</div>';
+        html += '</div>';
+
+        // 3) 주말 칸에 들어간 비트코인 아닌 값
+        const odd = [];
+        months.forEach(mo => {
+            const m = mkMonths[mo];
+            if (!m) return;
+            Object.keys(m.days || {}).sort().forEach(dd => {
+                const d = mo + '-' + dd;
+                if (!inRange.has(d) || !mkIsWeekendDay(d)) return;
+                const fl = mkFilledMap(m.filled[dd]);
+                Object.keys(m.days[dd] || {}).sort().forEach(k => {
+                    if (k === 'btc') return;                       // 24시간 거래라 주말도 정상
+                    odd.push({ d, k, v: m.days[dd][k], by: fl[k] || null });
+                });
+            });
+        });
+        html += '<div class="mk-diag-sec"><div class="mk-diag-h">3. 주말(토·일) 칸에 들어간 값 — 비트코인 제외 · '
+             + odd.length + '건</div>';
+        html += odd.length
+            ? '<div class="mk-wrap"><table class="mk-diag-tbl"><thead><tr>'
+              + '<th>날짜</th><th>지표</th><th>값</th><th>꼬리표</th></tr></thead><tbody>'
+              + odd.map(t => `<tr><td>${hlEsc(t.d)} (${mkDow(t.d)})</td><td>${hlEsc(MK_LABEL[t.k] || t.k)}</td>`
+                  + `<td>${hlEsc(String(t.v))}</td>`
+                  + `<td>${t.by ? hlEsc(t.by)
+                        : '<span class="no">없음 — ‘보완값 다시 검사’ 대상 아님</span>'}</td></tr>`).join('')
+              + '</tbody></table></div>'
+            : '<div class="mk-diag-none">없습니다.</div>';
+        html += '</div>';
+
+        html += '<div class="mk-legend">읽기만 했습니다 — 저장하거나 지운 것은 없습니다.'
+              + ' 2·3번의 기간은 위 드롭다운에서 고른 범위를 따릅니다.</div>';
+        body.innerHTML = html;
     };
 
     /* ===================== After10 (일지) =====================
