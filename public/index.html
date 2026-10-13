@@ -3763,14 +3763,22 @@
             const chart = c.chart, area = chart.chartArea, sc = chart.scales && chart.scales.vix;
             const col = i => a10VixColor(A10_VIX_ZONES[i], role);
             if (!area || !sc) return col(0);
-            const g = chart.ctx.createLinearGradient(0, area.bottom, 0, area.top);
             const h = area.bottom - area.top;
+            /* ⚠ 눈금 영역이 아직 안 잡혔으면(숨겨진 칸은 높이가 0이다) 여기서 멈춘다.
+               h 가 0이면 아래 나눗셈이 0/0 = NaN 이 되고, addColorStop(NaN) 은 예외를 던진다.
+               그 예외가 new Chart() 안에서 터지면 차트가 통째로 안 그려지므로,
+               그릴 수 없을 때는 조용히 단색으로 물러선다. */
+            if (!(h > 0)) return col(0);
+            const g = chart.ctx.createLinearGradient(0, area.bottom, 0, area.top);
             // 값 → 그라디언트 위치(0=바닥, 1=천장). 축 밖으로 나가면 잘라낸다.
-            const at = v => Math.min(1, Math.max(0, (area.bottom - sc.getPixelForValue(v)) / h));
+            const at = v => {
+                const q = (area.bottom - sc.getPixelForValue(v)) / h;
+                return Number.isFinite(q) ? Math.min(1, Math.max(0, q)) : NaN;
+            };
             g.addColorStop(0, col(0));
             for (let i = 1; i < A10_VIX_ZONES.length; i++) {
                 const p = at(A10_VIX_ZONES[i].from);
-                if (p >= 1) break;                       // 축 상한 위의 구간은 그릴 자리가 없다
+                if (!Number.isFinite(p) || p >= 1) break; // 축 상한 위이거나 아직 못 재는 구간은 건너뛴다
                 g.addColorStop(p, col(i - 1));           // 여기까지 이전 구간 색
                 g.addColorStop(p, col(i));               // 같은 자리에서 바로 다음 색 (경계가 선명해진다)
             }
@@ -3975,6 +3983,13 @@
     }
 
     function a10RenderChart() {
+        /* 화면에 없을 때는 그리지 않는다. 숨겨진 칸은 높이가 0이라 눈금도 그라디언트도
+           제대로 잴 수 없고, 어차피 '지표 흐름'으로 들어올 때 다시 그린다.
+           수집이 끝나고 부르는 mkAutoFill·mkFill이 이 경우다(사용자는 보통 '오늘 쓰기'에 있다).
+           clientHeight 로 보면 뷰가 숨겨졌을 때와 After10 탭 자체를 떠났을 때가 함께 걸린다. */
+        const boxEl = document.getElementById('a10Chart');
+        if (boxEl && boxEl.parentElement && !boxEl.parentElement.clientHeight) return;
+
         // 컨트롤 상태 갱신
         const compare = a10ChartView === 'compare';
         a10BuildMetricBtns();
@@ -4009,13 +4024,18 @@
         const canvas = document.getElementById('a10Chart');
         const cfg = A10_METRICS[a10ChartMetric];
 
-        if (a10ChartInstance) { a10ChartInstance.destroy(); a10ChartInstance = null; }
-
         if (typeof Chart === 'undefined') {
             canvas.style.display = 'none'; statsEl.innerHTML = '';
             msgEl.innerHTML = '<div class="a10-empty">차트 라이브러리를 불러오지 못했습니다.<br>네트워크 확인 후 다시 시도해주세요.</div>';
             return;
         }
+        /* 이전 차트를 지울 때 우리 변수가 아니라 '캔버스에 실제로 물려 있는 것'을 본다.
+           new Chart() 도중에 예외가 나면 Chart.js에는 등록됐는데 변수에는 안 담긴다.
+           그 상태로 다시 그리려 하면 'Canvas is already in use'가 나면서 영영 막힌다 —
+           실제로 이것 때문에 지표 흐름이 빈 패널로 굳었다. */
+        const stale = Chart.getChart ? Chart.getChart(canvas) : null;
+        if (stale) stale.destroy();
+        a10ChartInstance = null;
         if (compare) { a10RenderCompare(); return; }
 
         const items = a10ChartData();
