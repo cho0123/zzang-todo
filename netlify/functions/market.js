@@ -215,10 +215,10 @@ async function fetchDailyRange(yahooSym, fromDate, toDate, fromEpoch, toEpoch, a
       values[ymd] = closes[i];
     }
   }
-  // 종가가 빈 최신 봉을 meta 값으로 (구간 안에 들어올 때만)
+  // 종가가 빈 최신 봉을 meta 값으로 (구간 안에 들어올 때만). hasRow 이유는 fetchDaily 주석 참고
   const metaDate = rmTime != null ? barYmd(rmTime, off) : null;
   if (metaDate && metaDate >= fromDate && metaDate <= toDate && metaDate !== liveDate &&
-      values[metaDate] == null && meta.regularMarketPrice != null) {
+      hasRow.has(metaDate) && values[metaDate] == null && meta.regularMarketPrice != null) {
     values[metaDate] = meta.regularMarketPrice;
     filled[metaDate] = 'regular';
   }
@@ -298,9 +298,14 @@ async function fetchDaily(yahooSym, targetDate, targetEpoch, allowHourly, minBar
       if (!best || ymd >= best.ymd) best = { ymd, close: closes[i], filled: false };
     }
   }
-  // 종가가 빈 최신 봉을 meta 값으로 메운다 (같은 날 확정 종가가 이미 있으면 건드리지 않는다)
+  /* 종가가 빈 최신 봉을 meta 값으로 메운다 (같은 날 확정 종가가 이미 있으면 건드리지 않는다)
+     ⚠ hasRow 를 꼭 같이 본다 — 이 보완은 '봉은 있는데 종가만 비었을 때' 쓰라고 둔 것이다.
+        봉 자체가 없는 날짜에까지 쓰면 거래도 없던 날에 값이 생긴다.
+        실제로 환율에서 그랬다: 런던(+1h) 기준이라 금요일 23시 이후의 마지막 호가가
+        토요일로 넘어가고, 토요일 봉이 없는데도 그 자리에 금요일 체결가가 꽂혔다
+        (2026-10-10 원/달러 1340.9 — 금요일 일봉 종가 1342.99와도 다른 값이다). */
   const metaDate = rmTime != null ? barYmd(rmTime, off) : null;
-  if (metaDate && metaDate <= targetDate && metaDate !== liveDate &&
+  if (metaDate && metaDate <= targetDate && metaDate !== liveDate && hasRow.has(metaDate) &&
       !seen.has(metaDate) && meta.regularMarketPrice != null &&
       (!best || metaDate > best.ymd)) {
     best = { ymd: metaDate, close: meta.regularMarketPrice, filled: 'regular' };
