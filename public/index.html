@@ -808,6 +808,9 @@
         .mk-diag-tbl tbody tr + tr td { border-top: 1px solid var(--zm-line); }
         .mk-diag-tbl td.no { color: var(--zm-muted-2); }
         .mk-diag-none { font-size: 11px; color: var(--zm-muted-2); padding: 6px 2px; }
+        /* 주말 이상치 정리 — 유일하게 지우는 곳이라 도구 줄을 분명히 둔다 */
+        .mk-odd-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+        .mk-odd-ck { width: auto; min-height: 0; margin: 0; cursor: pointer; }
 
         /* ===================== 작사 (lyrics) =====================
            가사는 유실되면 복구가 안 된다 → 저장 상태를 늘 눈에 보이게 두고,
@@ -1687,6 +1690,14 @@
                 <span class="mk-diag-note">저장된 값을 읽어 보여주기만 합니다 — 지우거나 고치지 않습니다.</span>
             </div>
             <div id="mkDiagBody"></div>
+
+            <!-- 주말 이상치 정리 — 여기만 지운다. 고르고 확인해야만 지워진다. -->
+            <div class="mk-row mk-diag-row">
+                <button type="button" class="mk-sub" id="mkOddBtn" onclick="mkOddList()">주말 이상치 정리</button>
+                <span class="mk-diag-note">주말 칸에 들어간 값(비트코인 제외)을 목록으로 보여줍니다.
+                    고른 항목만 지우며, 지우기 전에 한 번 더 확인합니다.</span>
+            </div>
+            <div id="mkOddBody"></div>
         </div>
         <!-- ===== /1단계 임시 ===== -->
     </div>
@@ -3131,6 +3142,10 @@
         const w = mkDow(dateStr);
         return w === '토' || w === '일';
     }
+    /* 주말 칸이 정상인 지표 — 수집 쪽 market.js 의 WEEKEND_OK 와 같은 뜻이다.
+       여기서는 '무엇을 이상치로 볼지' 판단에만 쓴다(수집은 함수가 막는다).
+       둘 중 하나만 늘리면 화면과 수집이 어긋나므로 지표를 더할 때 양쪽을 같이 본다. */
+    const MK_WEEKEND_OK = new Set(['btc']);
 
     window.mkDiag = async function () {
         const body = document.getElementById('mkDiagBody');
@@ -3208,20 +3223,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         html += '</div>';
 
         // 3) 주말 칸에 들어간 비트코인 아닌 값
-        const odd = [];
-        months.forEach(mo => {
-            const m = mkMonths[mo];
-            if (!m) return;
-            Object.keys(m.days || {}).sort().forEach(dd => {
-                const d = mo + '-' + dd;
-                if (!inRange.has(d) || !mkIsWeekendDay(d)) return;
-                const fl = mkFilledMap(m.filled[dd]);
-                Object.keys(m.days[dd] || {}).sort().forEach(k => {
-                    if (k === 'btc') return;                       // 24시간 거래라 주말도 정상
-                    odd.push({ d, k, v: m.days[dd][k], by: fl[k] || null });
-                });
-            });
-        });
+        const odd = mkWeekendOdd(dates);        // 정리 버튼과 같은 기준을 쓴다
         html += '<div class="mk-diag-sec"><div class="mk-diag-h">3. 주말(토·일) 칸에 들어간 값 — 비트코인 제외 · '
              + odd.length + '건</div>';
         html += odd.length
@@ -3238,6 +3240,153 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         html += '<div class="mk-legend">읽기만 했습니다 — 저장하거나 지운 것은 없습니다.'
               + ' 2·3번의 기간은 위 드롭다운에서 고른 범위를 따릅니다.</div>';
         body.innerHTML = html;
+    };
+
+
+    /* ── 주말 이상치 정리 ──────────────────────────────────────────
+       주말 칸에 들어간 비트코인 아닌 값을 목록으로 보여주고, 사용자가 고른 것만 지운다.
+
+       ⚠ 꼬리표(filled) 없는 값도 여기서는 지울 수 있다. 다만 자동으로는 절대 지우지 않는다 —
+         고르고 확인을 거쳐야만 지워진다. '보완값 다시 검사'(mkRecheck)의 대상 범위는
+         그대로 꼬리표 있는 값뿐이고, 여기서 넓히지 않는다. 둘은 성격이 다르다:
+         mkRecheck 는 함수 판단에 맡겨 자동으로 지우고, 이쪽은 사람이 고른 것만 지운다.
+
+       ⚠ 빈 맵을 merge 로 보내지 않는다. days 는 고른 항목이 있어야 여기까지 오므로 늘 비지 않고,
+         filled 는 꼬리표가 하나도 없을 수 있어 있을 때만 payload 에 싣는다. */
+
+    // 진단 3번과 정리 버튼이 같은 기준을 쓴다 — 보여주는 것과 지우는 것이 갈리면 안 된다
+    function mkWeekendOdd(dates) {
+        const inRange = new Set(dates);
+        const out = [];
+        [...new Set(dates.map(mkMonthOf))].sort().forEach(mo => {
+            const m = mkMonths[mo];
+            if (!m) return;
+            Object.keys(m.days || {}).sort().forEach(dd => {
+                const d = mo + '-' + dd;
+                if (!inRange.has(d) || !mkIsWeekendDay(d)) return;
+                const fl = mkFilledMap(m.filled[dd]);
+                Object.keys(m.days[dd] || {}).sort().forEach(k => {
+                    if (MK_WEEKEND_OK.has(k)) return;          // 24시간 거래라 주말도 정상
+                    out.push({ d, k, v: m.days[dd][k], by: fl[k] || null });
+                });
+            });
+        });
+        return out;
+    }
+
+    window.mkOddList = async function () {
+        const body = document.getElementById('mkOddBody');
+        if (!body) return;
+        body.innerHTML = '<div class="mk-status">읽는 중…</div>';
+        const dates = mkTargetDates();
+        if (!dates.length) { body.innerHTML = '<div class="mk-diag-none">시작일을 골라주세요.</div>'; return; }
+
+        const failed = [];
+        for (const mo of [...new Set(dates.map(mkMonthOf))]) {
+            try { await mkEnsureMonth(mo); }
+            catch (e) { console.error('주말 이상치 조회 실패:', mo, e); failed.push(mo); }
+        }
+        const odd = mkWeekendOdd(dates);
+        if (!odd.length) {
+            body.innerHTML = '<div class="mk-diag-none">고른 기간에 주말 이상치가 없습니다.'
+                + (failed.length ? ` (못 읽은 달: ${hlEsc(failed.join(', '))})` : '') + '</div>';
+            return;
+        }
+        body.innerHTML =
+            (failed.length ? `<div class="mk-diag-raw">⚠ 못 읽은 달: ${hlEsc(failed.join(', '))}</div>` : '')
+            + '<div class="mk-odd-tools">'
+            + '<button type="button" class="mk-sub" onclick="mkOddAll(true)">전체 선택</button>'
+            + '<button type="button" class="mk-sub" onclick="mkOddAll(false)">전체 해제</button>'
+            + '<button type="button" class="mk-btn" id="mkOddDelBtn" onclick="mkOddDelete()">고른 항목 지우기</button>'
+            + '<span class="mk-diag-note">고른 것만 지웁니다. 지우기 전에 한 번 더 확인합니다.</span>'
+            + '</div>'
+            + '<div class="mk-wrap"><table class="mk-diag-tbl"><thead><tr>'
+            + '<th></th><th>날짜</th><th>지표</th><th>값</th><th>꼬리표</th></tr></thead><tbody>'
+            + odd.map(t => `<tr><td><input type="checkbox" class="mk-odd-ck"`
+                + ` data-d="${hlAttr(t.d)}" data-k="${hlAttr(t.k)}" checked></td>`
+                + `<td>${hlEsc(t.d)} (${mkDow(t.d)})</td>`
+                + `<td>${hlEsc(MK_LABEL[t.k] || t.k)}</td>`
+                + `<td>${hlEsc(String(t.v))}</td>`
+                + `<td>${t.by ? hlEsc(t.by) : '<span class="no">없음</span>'}</td></tr>`).join('')
+            + '</tbody></table></div>'
+            + `<div class="mk-legend">${odd.length}건 — 주말(토·일) 칸에 들어간 값 중 비트코인이 아닌 것입니다.`
+            + ' 거래가 없던 날이라 차트에 없는 날의 점이 찍힙니다.</div>';
+    };
+
+    window.mkOddAll = function (on) {
+        document.querySelectorAll('#mkOddBody .mk-odd-ck').forEach(c => { c.checked = !!on; });
+    };
+
+    window.mkOddDelete = async function () {
+        if (mkBusy) return;
+        const picked = [...document.querySelectorAll('#mkOddBody .mk-odd-ck')]
+            .filter(c => c.checked)
+            .map(c => ({ d: c.dataset.d, k: c.dataset.k }));
+        if (!picked.length) { mkStatus('고른 항목이 없습니다.'); return; }
+
+        // 무엇을 지우는지 그대로 보여주고 확인을 받는다
+        const show = picked.slice(0, 12).map(p => {
+            const mo = mkMonths[mkMonthOf(p.d)] || { days: {} };
+            const v = (mo.days[mkDayOf(p.d)] || {})[p.k];
+            return `· ${p.d} (${mkDow(p.d)})  ${MK_LABEL[p.k] || p.k}  ${v}`;
+        });
+        if (picked.length > 12) show.push(`… 외 ${picked.length - 12}건`);
+        if (!confirm(`아래 ${picked.length}건을 marketDaily에서 지웁니다.\n되돌릴 수 없습니다.\n\n`
+            + show.join('\n') + '\n\n지울까요?')) return;
+
+        mkBusy = true;
+        const btn = document.getElementById('mkOddDelBtn');
+        if (btn) btn.disabled = true;
+        let removed = 0;
+        const errs = [];
+        try {
+            // 달 → 날짜별로 모아 한 번에 쓴다
+            const byMo = {};
+            picked.forEach(p => {
+                const mo = mkMonthOf(p.d), dd = mkDayOf(p.d);
+                const m = byMo[mo] || (byMo[mo] = {});
+                const slot = m[dd] || (m[dd] = { days: {}, filled: {} });
+                slot.days[p.k] = deleteField();
+                const fl = mkFilledMap((mkMonths[mo] || {}).filled ? mkMonths[mo].filled[dd] : null);
+                if (fl[p.k]) slot.filled[p.k] = deleteField();      // 꼬리표가 있을 때만
+            });
+            for (const mo of Object.keys(byMo).sort()) {
+                const days = {}, filled = {};
+                Object.keys(byMo[mo]).forEach(dd => {
+                    days[dd] = byMo[mo][dd].days;                    // 고른 항목이 있으니 비지 않는다
+                    if (Object.keys(byMo[mo][dd].filled).length) filled[dd] = byMo[mo][dd].filled;
+                });
+                const payload = { updatedAt: Date.now(), days };
+                if (Object.keys(filled).length) payload.filled = filled;   // ⚠ 빈 맵은 싣지 않는다
+                mkStatus(`지우는 중 · ${hlEsc(mo)}`);
+                try {
+                    await setDoc(doc(db, MARKET_COLLECTION, mo), payload, { merge: true });
+                    // 캐시도 같이 맞춘다 (표·차트가 바로 반영되게)
+                    const cache = mkMonths[mo];
+                    if (cache) {
+                        Object.keys(byMo[mo]).forEach(dd => {
+                            Object.keys(byMo[mo][dd].days).forEach(k => {
+                                if (cache.days[dd]) delete cache.days[dd][k];
+                                if (cache.filled[dd]) delete cache.filled[dd][k];
+                                removed++;
+                            });
+                        });
+                    }
+                } catch (e) {
+                    console.error('주말 이상치 삭제 실패:', mo, e);
+                    errs.push(mo);
+                }
+            }
+        } finally {
+            mkBusy = false;
+            if (btn) btn.disabled = false;
+        }
+        mkStatus(errs.length
+            ? `일부 실패 — 지움 ${removed}건 · 실패한 달: ${hlEsc(errs.join(', '))}`
+            : `지웠습니다 — ${removed}건`);
+        await mkOddList();
+        mkShow();
+        a10RenderChart();
     };
 
     /* ===================== After10 (일지) =====================
