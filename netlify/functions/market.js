@@ -54,6 +54,15 @@ const HOURLY_FALLBACK = new Set(["spx", "ndq", "dxy", "btc", "vix"]);
    ⚠ 여기 없는 지표는 개수를 보지 않는다 — 기존 4종의 동작은 그대로다. */
 const HOURLY_MIN_BARS = { vix: 14 };   // ^VIX 정상일 = 02:00~15:00 CT 14봉
 
+/* 주말(토·일) 칸을 허용하는 지표 — 실제로 주말에도 돌아가는 것만 넣는다.
+   야후는 이따금 주식·환율에도 주말 봉을 준다. 환율에서 실제로 그랬다 —
+   2026-09-27(일)·10-03(토)·10-10(토)·10-17(토) 칸에 환율 값이 들어가 있었다.
+   보완값(filled)이 아니라 야후가 준 '진짜 봉'이라 hasRow 가드로는 걸러지지 않았다.
+   거래가 없던 날에 값이 생기면 차트에 없는 날의 점이 찍히고 최저/최고도 흔들린다.
+   비트코인만 24시간 돌아가므로 주말을 허용한다. 시간봉 폴백이 쓰는 isWeekday 와
+   같은 판정을 쓴다 — 평일/주말을 두 군데서 다르게 세지 않으려는 것이다. */
+const WEEKEND_OK = new Set(["btc"]);
+
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
            "(KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
@@ -189,7 +198,7 @@ async function fetchHourlyClose(yahooSym, targetDate, targetEpoch, off, minBars)
    원래 구간으로 받는 것이라, 심볼당 한 번만 불러 구간 전체를 훑으면 10번으로 끝난다.
    시간봉 보완이 필요한 날이 있으면 그 심볼만 시간봉을 한 번 더 받는다(구간 전체를 한 번에).
    그래서 구간이 아무리 길어도 야후 요청은 최대 20번이다. */
-async function fetchDailyRange(yahooSym, fromDate, toDate, fromEpoch, toEpoch, allowHourly, minBars) {
+async function fetchDailyRange(yahooSym, fromDate, toDate, fromEpoch, toEpoch, allowHourly, minBars, weekendOk) {
   const r = await fetchChart(yahooSym,
     `period1=${fromEpoch - 5 * DAY}&period2=${toEpoch + 2 * DAY}&interval=1d`, 7000);
   const meta = r.meta || {};
@@ -210,6 +219,7 @@ async function fetchDailyRange(yahooSym, fromDate, toDate, fromEpoch, toEpoch, a
     for (let i = 0; i < ts.length; i++) {
       const ymd = barYmd(ts[i], off);
       if (ymd < fromDate || ymd > toDate) continue;
+      if (!weekendOk && !isWeekday(ymd)) continue;   // 주말 봉은 없는 것으로 (WEEKEND_OK 주석 참고)
       hasRow.add(ymd);
       if (ymd === liveDate || closes[i] == null) continue;
       values[ymd] = closes[i];
@@ -267,7 +277,7 @@ async function fetchDailyRange(yahooSym, fromDate, toDate, fromEpoch, toEpoch, a
       currentTradingPeriod.regular.end로 판단한다 —
       regularMarketTime이 그 끝보다 이르면 아직 장이 돌고 있는 것이다.
       그 날짜(liveDate)는 확정값에서 빼고, 왜 빠졌는지 알 수 있게 따로 알려준다. */
-async function fetchDaily(yahooSym, targetDate, targetEpoch, allowHourly, minBars) {
+async function fetchDaily(yahooSym, targetDate, targetEpoch, allowHourly, minBars, weekendOk) {
   const r = await fetchChart(yahooSym,
     `period1=${targetEpoch - 14 * DAY}&period2=${targetEpoch + 2 * DAY}&interval=1d`, 6000);
   const meta = r.meta || {};
@@ -292,6 +302,9 @@ async function fetchDaily(yahooSym, targetDate, targetEpoch, allowHourly, minBar
     for (let i = 0; i < ts.length; i++) {
       const ymd = barYmd(ts[i], off);
       if (ymd > targetDate) continue;
+      // 주말 봉은 아예 없는 것으로 본다 (WEEKEND_OK 주석 참고).
+      // hasRow 에도 넣지 않아 meta 보완까지 함께 막힌다.
+      if (!weekendOk && !isWeekday(ymd)) continue;
       hasRow.add(ymd);
       if (ymd === liveDate || closes[i] == null) continue;
       seen.add(ymd);
@@ -350,7 +363,7 @@ exports.handler = async (event) => {
     const keysR = Object.keys(SYMBOLS);
     const settledR = await Promise.allSettled(keysR.map(k =>
       fetchDailyRange(SYMBOLS[k], from, to, toEpoch(from), toEpoch(to),
-                      HOURLY_FALLBACK.has(k), HOURLY_MIN_BARS[k] || 0)));
+                      HOURLY_FALLBACK.has(k), HOURLY_MIN_BARS[k] || 0, WEEKEND_OK.has(k))));
 
     // 날짜별로 모아 준다 — 클라이언트가 월 문서에 그대로 옮겨 담을 수 있게
     const days = {}, errorsR = {}, liveR = {};
@@ -393,7 +406,7 @@ exports.handler = async (event) => {
     const keys2 = Object.keys(SYMBOLS);
     const settled2 = await Promise.allSettled(
       keys2.map(k => fetchDaily(SYMBOLS[k], date, targetEpoch,
-                                HOURLY_FALLBACK.has(k), HOURLY_MIN_BARS[k] || 0)));
+                                HOURLY_FALLBACK.has(k), HOURLY_MIN_BARS[k] || 0, WEEKEND_OK.has(k))));
     const symbols = {}, errors2 = {}, live = {};
     settled2.forEach((res, i) => {
       const k = keys2[i];
