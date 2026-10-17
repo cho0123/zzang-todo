@@ -341,6 +341,71 @@
         .tab-btn.active .tab-num { color: var(--zm-accent); }
         .tab-btn.active .tab-label { color: var(--zm-ink); font-weight: 900; }
 
+        /* ===================== ToDo 안의 메모 =====================
+           네이버 메모에서 옮겨온 글을 쌓아두는 곳. 옮겨 담은 글이 날아가면 복구가 안 되니
+           저장 상태를 늘 보이게 두고, 저장 안 된 채로 자리를 뜨면 막는다.
+           적색은 건강 탭 몫이라 쓰지 않는다 — 경고도 잉크와 굵기로만 세운다. */
+        .td-views { display: flex; gap: 2px; margin-bottom: 16px; }
+        .td-viewbtn {
+            flex: none; width: auto; white-space: nowrap;
+            padding: 7px 14px; border-radius: var(--zm-radius); font-size: 13px; font-weight: 700;
+            font-family: var(--font-body);
+            background: var(--zm-card); color: var(--zm-muted); border: 1px solid var(--zm-border);
+            cursor: pointer; transition: 0.15s;
+        }
+        .td-viewbtn:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
+        .td-viewbtn.active { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        /* 저장 안 된 메모가 있으면 '할 일'에 가 있어도 눈에 걸리게 */
+        .td-viewbtn .td-dot { display: none; margin-left: 6px; font-family: var(--font-num); font-weight: 800; }
+        .td-viewbtn.dirty .td-dot { display: inline; }
+
+        .td-memo-wrap { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
+        @media (max-width: 860px) { .td-memo-wrap { grid-template-columns: 1fr; } }
+        .td-memo-side { border: 1px solid var(--zm-border); background: var(--zm-card); }
+        .td-memo-sidehead { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            padding: 10px 12px; border-bottom: 2px solid var(--zm-ink); }
+        .td-memo-sidetitle { font-family: var(--font-title); font-size: 13px; font-weight: 700; color: var(--zm-ink); }
+        .td-memo-meta { font-family: var(--font-num); font-size: 11px; font-weight: 600; color: var(--zm-muted); }
+        .td-memo-newbtn { flex: none; width: auto; padding: 6px 10px; font-size: 12px; font-weight: 700;
+            background: var(--zm-ink); color: var(--zm-on-ink); border: none; border-radius: var(--zm-radius); cursor: pointer; }
+        .td-memo-list { max-height: 460px; overflow-y: auto; }
+        @media (max-width: 860px) { .td-memo-list { max-height: 220px; } }
+        .td-memo-item { padding: 10px 12px; border-bottom: 1px solid var(--zm-line); cursor: pointer; }
+        .td-memo-item:last-child { border-bottom: none; }
+        .td-memo-item:hover { background: var(--zm-bg); }
+        .td-memo-item.on { background: var(--zm-bg); border-left: 3px solid var(--zm-ink); padding-left: 9px; }
+        .td-memo-item-t { font-size: 14px; font-weight: 700; color: var(--zm-ink); word-break: break-word; }
+        /* 내용 앞부분을 두 줄까지만 — 목록에서 무엇인지 알아보되 길어지지 않게 */
+        .td-memo-item-b { margin-top: 3px; font-size: 12px; color: var(--zm-muted); line-height: 1.6;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+            word-break: break-word; }
+        .td-memo-item-d { margin-top: 4px; font-family: var(--font-num); font-size: 11px; color: var(--zm-muted-2); }
+
+        .td-memo-main { min-width: 0; }
+        .td-memo-title { width: 100%; box-sizing: border-box; padding: 11px 12px; margin-bottom: 10px;
+            font-size: 15px; font-weight: 700; font-family: var(--font-body); color: var(--zm-text);
+            background: #fff; border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        .td-memo-title:focus { outline: none; border-color: var(--zm-ink); }
+        /* 긴 글을 붙여넣는 칸 — 세로로 넉넉하게. 줄바꿈은 그대로 두고 서식은 손대지 않는다. */
+        .td-memo-body { width: 100%; min-height: 480px; resize: vertical; box-sizing: border-box; padding: 14px;
+            font-family: var(--font-body); font-size: 15px; line-height: 1.9; color: var(--zm-text);
+            background: #fff; border: 1px solid var(--zm-border); border-radius: var(--zm-radius);
+            white-space: pre-wrap; word-break: break-word; }
+        .td-memo-body:focus { outline: none; border-color: var(--zm-ink); }
+        @media (max-width: 600px) { .td-memo-body { min-height: 380px; font-size: 14px; } }
+        .td-memo-btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+        .td-memo-savebtn { flex: none; width: auto; padding: 12px 20px; font-weight: 800; cursor: pointer;
+            background: var(--zm-ink); color: var(--zm-on-ink); border: none; border-radius: var(--zm-radius); }
+        .td-memo-savebtn:disabled { opacity: 0.45; cursor: default; }
+        .td-memo-btn { flex: none; width: auto; padding: 12px 16px; font-weight: 700; cursor: pointer;
+            background: transparent; color: var(--zm-muted); border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        .td-memo-btn:hover:not(:disabled) { color: var(--zm-ink); border-color: var(--zm-muted); }
+        .td-memo-state { font-family: var(--font-num); font-size: 12px; font-weight: 700; color: var(--zm-muted); }
+        .td-memo-state.dirty { color: var(--zm-ink); }
+        .td-memo-state.fail { color: var(--zm-ink); border: 1px solid var(--zm-ink); padding: 4px 8px; }
+        .td-memo-empty { text-align: center; color: var(--zm-muted-2); font-size: 13px; line-height: 1.7;
+            padding: 40px 12px; border: 1px dashed var(--zm-border); }
+
         /* ===================== After10 (일지) — 계기판 톤 =====================
            일지(작성·목록·과거의 오늘)는 개인적인 글 → 무채색만, 경보색 없음, 넉넉한 행간.
            경제지표 한 줄은 부가정보 → 더 가라앉게. 지표 흐름 차트만 어두운 계기판 패널. */
@@ -1456,6 +1521,17 @@
 <!-- ===== ToDo 탭 (기존 화면 전체) ===== -->
 <div id="todoTab">
 
+    <!-- 할 일 / 메모장 전환. 탭을 늘리지 않고 ToDo 탭 안에서 갈아끼운다 —
+         메모장은 할 일과 성격이 달라 한 화면에 같이 두면 둘 다 좁아진다.
+         '메모장'이라 부르는 것은 할 일 입력칸의 메모(#memoInput)와 구분하기 위해서다.
+         After10·작사가 쓰는 뷰 전환과 같은 어휘라 돌아오는 길도 분명하다. -->
+    <div class="td-views">
+        <button type="button" class="td-viewbtn active" data-tdview="main" onclick="tdSetView('main')">할 일</button>
+        <button type="button" class="td-viewbtn" data-tdview="memo" onclick="tdSetView('memo')">메모장<span class="td-dot">●</span></button>
+    </div>
+
+    <div id="todoViewMain">
+
     <div class="input-group">
         <input type="text" id="taskInput" placeholder="할 일을 입력하세요">
 
@@ -1561,6 +1637,35 @@
         <div class="column" id="longColumn">
             <div class="section-header">장기 플랜 <span class="count" id="longCount"></span></div>
             <ul id="longList"></ul>
+        </div>
+    </div>
+
+    </div><!-- /todoViewMain -->
+
+    <!-- 메모 — tasks 와 무관한 별도 컬렉션(memos). 작사 탭의 통합 메모와도 별개다. -->
+    <div id="todoViewMemo" style="display:none">
+        <div class="td-memo-wrap">
+            <!-- 왼쪽: 메모 목록 (최근 수정 순) -->
+            <div class="td-memo-side">
+                <div class="td-memo-sidehead">
+                    <span class="td-memo-sidetitle">메모장 <span id="tdMemoCount" class="td-memo-meta"></span></span>
+                    <button type="button" class="td-memo-newbtn" onclick="tdMemoNew()">새 메모</button>
+                </div>
+                <div class="td-memo-list" id="tdMemoList"></div>
+            </div>
+
+            <!-- 오른쪽: 편집 -->
+            <div class="td-memo-main" id="tdMemoMain">
+                <input type="text" class="td-memo-title" id="tdMemoTitle" placeholder="제목" autocomplete="off">
+                <textarea class="td-memo-body" id="tdMemoBody" spellcheck="false" autocomplete="off"
+                          autocorrect="off" autocapitalize="off"
+                          placeholder="내용을 적거나 붙여넣으세요."></textarea>
+                <div class="td-memo-btnrow">
+                    <button type="button" class="td-memo-savebtn" id="tdMemoSaveBtn" onclick="tdMemoSave()">저장</button>
+                    <button type="button" class="td-memo-btn" id="tdMemoDelBtn" onclick="tdMemoDelete()">삭제</button>
+                    <span class="td-memo-state" id="tdMemoState"></span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2194,6 +2299,7 @@
         mkMonths = {}; mkAllLoaded = false; mkAutoDone = false;   // 시장 데이터 캐시도
         rtReset();         // 루틴 정의·체크 캐시도 정리 (다른 계정으로 다시 로그인할 수 있다)
         lyReset();         // 작사 캐시도 (저장 안 된 글은 여기서 이미 경고를 거친다)
+        tdMemoReset();     // ToDo 안 메모 캐시도 (저장 안 된 글은 전환할 때 이미 물어본다)
     }
 
     async function addTask() {
@@ -2633,6 +2739,216 @@
     }
     
     window.openEditMode = openEditMode;
+
+
+    /* ===================== ToDo 안의 메모 (memos) =====================
+       네이버 메모에서 옮겨온 글을 쌓아두는 곳. 메모 하나 = 문서 하나.
+         memos/{자동id} : { title, body, createdAt, updatedAt }
+
+       ⚠ tasks 컬렉션은 건드리지 않는다. vt-schedule 앱이 읽기 전용으로 구독 중이고,
+         메모는 성격도 수명도 달라 별도 컬렉션으로 둔다.
+       ⚠ 작사 탭의 통합 메모(lyricsMemo)와도 별개다. 그쪽 코드는 손대지 않았다.
+
+       옮겨 담은 글이 날아가면 복구가 안 되므로 작사 탭과 같은 방식으로 지킨다 —
+       저장 상태를 늘 띄우고, 저장 실패는 조용히 넘기지 않고, 저장 안 된 채로
+       다른 메모로 넘어가거나 창을 닫으려 하면 막는다. */
+    const MEMO_COLLECTION = "memos";
+
+    let tdMemos = [];            // 목록 캐시 (최근 수정 순)
+    let tdMemoId = null;         // 편집 중인 메모
+    let tdMemoLoaded = false;
+    let tdView = 'main';         // 'main'(할 일) | 'memo'
+    let tdMemoDirty = false;
+    let tdMemoSaving = false;
+
+    const tdEl = id => document.getElementById(id);
+    function tdMemoStamp(ts) {
+        if (!ts) return '';
+        const d = new Date(ts), p = n => String(n).padStart(2, '0');
+        const sameDay = d.toDateString() === new Date().toDateString();
+        return sameDay ? `${p(d.getHours())}:${p(d.getMinutes())}`
+                       : `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    }
+    // 로그아웃 시 캐시 비우기 (다른 계정으로 다시 들어올 수 있다)
+    function tdMemoReset() {
+        tdMemos = []; tdMemoId = null; tdMemoLoaded = false; tdMemoDirty = false;
+    }
+
+    function tdMemoSetState(txt, cls) {
+        const el = tdEl('tdMemoState');
+        if (el) { el.textContent = txt || ''; el.className = 'td-memo-state' + (cls ? ' ' + cls : ''); }
+    }
+    function tdMemoPaintDot() {
+        document.querySelectorAll('[data-tdview="memo"]').forEach(b => b.classList.toggle('dirty', tdMemoDirty));
+    }
+    function tdMemoFind(id) { return tdMemos.find(m => m.id === id) || null; }
+
+    function tdMemoMarkDirty(on) {
+        tdMemoDirty = on;
+        const btn = tdEl('tdMemoSaveBtn');
+        if (btn) btn.disabled = !on || tdMemoSaving;
+        if (!tdMemoSaving) {
+            const m = tdMemoFind(tdMemoId);
+            tdMemoSetState(on ? '저장 안 됨' : (m && m.updatedAt ? `저장됨 ${tdMemoStamp(m.updatedAt)}` : ''),
+                           on ? 'dirty' : '');
+        }
+        tdMemoPaintDot();
+    }
+
+    /* 할 일 ↔ 메모 전환. 메모를 떠날 때도 저장 안 된 글이 있으면 막는다 —
+       탭을 옮기면 화면에서 사라져 잊기 쉽다. */
+    window.tdSetView = function (v) {
+        if (v === tdView) return;
+        if (tdView === 'memo' && !tdMemoConfirmLeave()) return;
+        tdView = v;
+        document.querySelectorAll('[data-tdview]').forEach(b => b.classList.toggle('active', b.dataset.tdview === v));
+        tdEl('todoViewMain').style.display = (v === 'main') ? '' : 'none';
+        tdEl('todoViewMemo').style.display = (v === 'memo') ? '' : 'none';
+        if (v === 'memo') tdMemoLoad();
+        tdMemoPaintDot();
+    };
+
+    async function tdMemoLoad() {
+        if (tdMemoLoaded) { tdMemoRenderList(); return; }
+        try {
+            const snap = await getDocs(collection(db, MEMO_COLLECTION));
+            tdMemos = [];
+            snap.forEach(d => tdMemos.push(Object.assign({ id: d.id }, d.data())));
+            tdMemoSort();
+            tdMemoLoaded = true;
+            tdMemoRenderList();
+            if (!tdMemoId && tdMemos.length) tdMemoOpen(tdMemos[0].id, true);
+            else tdMemoPaintEditor();
+        } catch (e) {
+            console.error('메모 목록 조회 실패:', e);
+            const w = tdEl('tdMemoList');
+            if (w) w.innerHTML = '<div class="td-memo-empty">목록을 불러오지 못했습니다.<br>'
+                + '보안 규칙에 memos가 들어가 있는지 확인해주세요.</div>';
+        }
+    }
+    function tdMemoSort() { tdMemos.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); }
+
+    function tdMemoRenderList() {
+        const wrap = tdEl('tdMemoList'), cnt = tdEl('tdMemoCount');
+        if (!wrap) return;
+        if (cnt) cnt.textContent = tdMemos.length ? `(${tdMemos.length})` : '';
+        if (!tdMemos.length) {
+            wrap.innerHTML = '<div class="td-memo-empty">아직 메모가 없습니다.<br>위 ‘새 메모’로 시작해보세요.</div>';
+            return;
+        }
+        wrap.innerHTML = tdMemos.map(m => {
+            const head = String(m.body || '').replace(/\s+/g, ' ').trim();
+            return `<div class="td-memo-item${m.id === tdMemoId ? ' on' : ''}" onclick="tdMemoOpen('${m.id}')">
+                <div class="td-memo-item-t">${hlEsc(m.title || '(제목 없음)')}</div>
+                ${head ? `<div class="td-memo-item-b">${hlEsc(head.slice(0, 120))}</div>` : ''}
+                <div class="td-memo-item-d">${hlEsc(tdMemoStamp(m.updatedAt))}</div>
+            </div>`;
+        }).join('');
+    }
+
+    /* 저장 안 된 글을 두고 자리를 뜨려 할 때 — 옮겨 담은 글은 되돌릴 수 없으므로 반드시 묻는다 */
+    function tdMemoConfirmLeave() {
+        if (!tdMemoDirty) return true;
+        return confirm('저장하지 않은 메모가 있습니다.\n저장하지 않고 이동하면 이 내용은 사라집니다.\n\n이동할까요?');
+    }
+
+    window.tdMemoOpen = function (id, skipGuard) {
+        if (id === tdMemoId) return;
+        if (!skipGuard && !tdMemoConfirmLeave()) return;
+        tdMemoId = id;
+        tdMemoMarkDirty(false);
+        tdMemoPaintEditor();
+        tdMemoRenderList();
+    };
+
+    function tdMemoPaintEditor() {
+        const m = tdMemoFind(tdMemoId), main = tdEl('tdMemoMain');
+        if (!main) return;
+        main.style.display = m ? '' : 'none';
+        if (!m) { tdMemoSetState(''); return; }
+        tdEl('tdMemoTitle').value = m.title || '';
+        tdEl('tdMemoBody').value = m.body || '';
+        tdMemoSetState(m.updatedAt ? `저장됨 ${tdMemoStamp(m.updatedAt)}` : '');
+    }
+
+    window.tdMemoNew = async function () {
+        if (!tdMemoConfirmLeave()) return;
+        const now = Date.now();
+        try {
+            const ref = await addDoc(collection(db, MEMO_COLLECTION),
+                { title: '', body: '', createdAt: now, updatedAt: now });
+            tdMemos.unshift({ id: ref.id, title: '', body: '', createdAt: now, updatedAt: now });
+            tdMemoId = ref.id;
+            tdMemoMarkDirty(false);
+            tdMemoRenderList();
+            tdMemoPaintEditor();
+            const t = tdEl('tdMemoTitle'); if (t) t.focus();
+        } catch (e) {
+            console.error('메모 추가 실패:', e);
+            alert('새 메모를 만들지 못했습니다. 잠시 후 다시 시도해주세요.');
+        }
+    };
+
+    /* 저장 실패는 조용히 넘어가지 않는다 — 상태 글자와 경고창으로 알리고,
+       입력칸의 글은 절대 건드리지 않는다(다시 저장을 누르면 그대로 올라가야 한다). */
+    window.tdMemoSave = async function () {
+        const m = tdMemoFind(tdMemoId);
+        if (!m || tdMemoSaving) return;
+        const title = tdEl('tdMemoTitle').value.trim();
+        const body = tdEl('tdMemoBody').value;
+        const now = Date.now();
+
+        tdMemoSaving = true;
+        tdEl('tdMemoSaveBtn').disabled = true;
+        tdMemoSetState('저장 중…');
+        try {
+            await setDoc(doc(db, MEMO_COLLECTION, m.id), { title, body, updatedAt: now }, { merge: true });
+            m.title = title; m.body = body; m.updatedAt = now;
+            tdMemoSaving = false;
+            tdMemoMarkDirty(false);
+            tdMemoSort();
+            tdMemoRenderList();
+        } catch (e) {
+            console.error('메모 저장 실패:', e);
+            tdMemoSaving = false;
+            tdEl('tdMemoSaveBtn').disabled = false;
+            tdMemoSetState('저장 실패 — 다시 눌러주세요', 'fail');
+            tdMemoPaintDot();
+            alert('메모를 저장하지 못했습니다.\n\n적은 내용은 그대로 남아 있습니다.'
+                + ' 창을 닫지 말고 저장을 다시 눌러주세요.\n중요한 내용이면 먼저 복사해 두시는 것이 안전합니다.');
+        }
+    };
+
+    // 삭제는 되돌릴 수 없다 — 제목과 분량을 보여주고 한 번 더 묻는다
+    window.tdMemoDelete = async function () {
+        const m = tdMemoFind(tdMemoId);
+        if (!m) return;
+        const name = m.title || '(제목 없음)';
+        const lines = String(m.body || '').split('\n').filter(l => l.trim()).length;
+        if (!confirm(`‘${name}’을(를) 삭제합니다.\n내용 ${lines}줄이 함께 사라지고 되돌릴 수 없습니다.\n\n정말 삭제할까요?`)) return;
+        try {
+            await deleteDoc(doc(db, MEMO_COLLECTION, m.id));
+            tdMemos = tdMemos.filter(x => x.id !== m.id);
+            tdMemoId = null;
+            tdMemoDirty = false;
+            tdMemoRenderList();
+            if (tdMemos.length) tdMemoOpen(tdMemos[0].id, true); else tdMemoPaintEditor();
+            tdMemoPaintDot();
+        } catch (e) {
+            console.error('메모 삭제 실패:', e);
+            alert('삭제하지 못했습니다. 잠시 후 다시 시도해주세요.');
+        }
+    };
+
+    (function tdMemoBind() {
+        const t = tdEl('tdMemoTitle'), b = tdEl('tdMemoBody');
+        if (t) t.addEventListener('input', () => tdMemoMarkDirty(true));
+        if (b) b.addEventListener('input', () => tdMemoMarkDirty(true));
+        // 창을 닫거나 새로고침할 때 — 저장 안 된 글이 있으면 브라우저에게 물어달라고 한다
+        window.addEventListener('beforeunload', (e) => {
+            if (tdMemoDirty) { e.preventDefault(); e.returnValue = ''; return ''; }
+        });
+    })();
 
     /* ===================== 1단계 임시: 시장 데이터 수집 =====================
        경제지표를 일지 문서에서 떼어내 따로 쌓는다. 지금은 쌓기만 하고,
