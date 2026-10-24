@@ -7428,18 +7428,32 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
          [Verse 2] → verse,  [Pre-Chorus] → prechorus,  [pre chorus] → prechorus
          [Explosive Drop, Heavy Crash ...] → explosivedropheavycrash... → 목록에 없음
        그래서 번호가 붙어도, 하이픈·띄어쓰기가 달라도, 대소문자가 달라도 같게 본다.
-       ⚠ 섞여 적힌 줄([Bridge, soft piano])은 통째로 맞지 않아 빠진다.
-         구간으로 남기고 싶으면 그 줄은 [Bridge] 만 적고 지시는 다음 줄에 둔다.
        이름을 더할 일이 생기면 여기만 고치면 된다. */
     const LY_SECTIONS = [
         'intro', 'verse', 'prechorus', 'chorus', 'postchorus', 'hook',
         'bridge', 'breakdown', 'interlude', 'outro', 'refrain', 'drop',
         'instrumental', 'solo', 'ending',
     ];
-    function lyIsSection(raw) {
+    /* 대괄호 줄이 구간 표시인지 보고, 맞으면 최종본에 내보낼 형태를 돌려준다.
+       구간 이름과 편곡 지시가 한 줄에 섞여 적히는 일이 잦아서(수노에 그렇게 넣는다),
+       쉼표로 나눠 '첫 조각'만 본다. 맞으면 그 조각만 남기고 뒤는 지시로 보고 뗀다.
+         [Verse 2]                   → [Verse 2]   (단독 — 적은 그대로 내보낸다)
+         [Bridge, soft piano]        → [Bridge]     (뒤 지시를 뗌)
+         [Verse 2, heavy drums]      → [Verse 2]    (번호는 그대로)
+         [Explosive Drop, Heavy ...] → null         (첫 조각이 구간 이름이 아님 → 제외)
+       ⚠ 첫 조각만 본다. 뒤쪽까지 뒤지면 [Pushed Power Chords, Chorus-like] 처럼
+         순수 지시 줄이 구간으로 둔갑한다.
+       반환: { text, trimmed } 또는 null — trimmed 는 뒤 지시를 떼어냈다는 표시 */
+    function lySectionHead(raw) {
         const m = /^\s*\[\s*([^\]]*?)\s*\]\s*$/.exec(raw);
-        if (!m) return false;
-        return LY_SECTIONS.indexOf(m[1].toLowerCase().replace(/[^a-z]/g, '')) >= 0;
+        if (!m) return null;
+        const parts = m[1].split(',');
+        const first = parts[0].trim();
+        if (LY_SECTIONS.indexOf(first.toLowerCase().replace(/[^a-z]/g, '')) < 0) return null;
+        // 단독이면 적은 그대로 두고(형식을 바꾸지 않는다), 섞여 있을 때만 첫 조각으로 다시 쓴다
+        return parts.length > 1
+            ? { text: '[' + first + ']', trimmed: true }
+            : { text: raw, trimmed: false };
     }
 
     /* ── 최종본 조판 ────────────────────────────────────────────
@@ -7449,18 +7463,20 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
        1) 편곡 지시 대괄호는 뺀다. 묶음을 닫는 일은 파서가 이미 했으므로 출력만 건너뛴다.
           그 줄 바로 아래 대시 줄이 있으면 원문 없는 묶음이 되어 가사 줄로 남는다 —
           지시를 옮겨 적은 것이라면 작업판에서 지우거나 대시를 떼야 한다.
+          구간 이름과 지시가 한 줄에 섞였으면 구간 표시만 남긴다(lySectionHead 참고).
        2) 머리말(첫 구간 표시 앞의 내용)은 뺀다. 단 구간 표시가 하나도 없는 곡이면
           전부 머리말이 되어 빈 최종본이 나오므로 이 규칙을 적용하지 않는다.
        3) 간격은 작업판이 어떻든 다시 만든다 — 구간 표시 바로 아래에 가사가 붙고,
           구간과 구간 사이에만 빈 줄 하나, 앞뒤에는 빈 줄 없음.
           그래서 원본의 빈 줄은 전부 무시한다(묶음 안쪽이든 바깥이든).
 
-       반환: { items, dropped, preamble, groups }
-         items = [{ kind:'head'|'line'|'gap', text, block? }]  block 은 마우스오버용 */
+       반환: { items, dropped, preamble, trimmed, groups }
+         items = [{ kind:'head'|'line'|'gap', text, raw?, block? }]
+         raw 는 섞여 적힌 구간 줄의 원래 모습(마우스오버용), block 은 가사 줄의 출처 */
     function lyFinalBlocks(body) {
         const blocks = lyParse(body);
         const secs = [];
-        let cur = null, sawSection = false, dropped = 0;
+        let cur = null, sawSection = false, dropped = 0, trimmed = 0;
         const ensure = () => {
             if (!cur) { cur = { head: null, items: [] }; secs.push(cur); }
             return cur;
@@ -7468,8 +7484,11 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         blocks.forEach(b => {
             if (b.kind === 'pass') {
                 if (LY_BLANK.test(b.raw)) return;          // 빈 줄은 전부 무시 (간격은 아래서 다시 만든다)
-                if (lyIsSection(b.raw)) {
-                    cur = { head: b.raw, items: [] }; secs.push(cur); sawSection = true;
+                const sec = lySectionHead(b.raw);
+                if (sec) {
+                    cur = { head: sec.text, raw: sec.trimmed ? b.raw : null, items: [] };
+                    secs.push(cur); sawSection = true;
+                    if (sec.trimmed) trimmed++;             // 구간 이름만 남기고 뒤 지시를 뗀 줄
                 } else {
                     dropped++;                              // 편곡·사운드 지시 → 최종본에서 뺀다
                 }
@@ -7488,10 +7507,11 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         secs.forEach(sec => {
             if (!sec.head && !sec.items.length) return;
             if (items.length) items.push({ kind: 'gap', text: '' });   // 구간 사이에만, 맨 앞에는 넣지 않는다
-            if (sec.head) items.push({ kind: 'head', text: sec.head });
+            if (sec.head) items.push({ kind: 'head', text: sec.head, raw: sec.raw });
             sec.items.forEach(b => items.push({ kind: 'line', text: b.pick, block: b }));
         });
-        return { items, dropped, preamble, groups: blocks.filter(b => b.kind === 'group') };
+        return { items, dropped, preamble, trimmed,
+                 groups: blocks.filter(b => b.kind === 'group') };
     }
 
     // 최종본 평문 — 복사 버튼이 주는 것. 화면과 같은 조판을 쓴다.
@@ -7658,7 +7678,9 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         wrap.innerHTML = fin.items.map(it => {
             if (it.kind === 'gap') return '<div class="ly-fg blank"><div class="ly-fg-pick">&nbsp;</div></div>';
             if (it.kind === 'head') {
-                return '<div class="ly-fg pass"><div class="ly-fg-pick">'
+                // 뒤 지시를 떼어낸 줄이면 원래 모습을 마우스오버로 남긴다 (복사에는 안 들어간다)
+                const t = it.raw ? ` title="${hlAttr('원래: ' + it.raw.trim())}"` : '';
+                return `<div class="ly-fg pass"${t}><div class="ly-fg-pick">`
                     + lyEsc(it.text.trim()) + '</div></div>';
             }
             const b = it.block;
@@ -7676,6 +7698,8 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
                 // 무엇을 걸렀는지 눈으로 확인할 수 있게 숫자를 밝힌다
                 + (fin.dropped ? ` · 편곡 지시 ${fin.dropped}줄 뺌` : '')
                 + (fin.preamble ? ` · 머리말 ${fin.preamble}줄 뺌` : '')
+                // 구간 줄을 다시 쓴 것도 밝힌다 — 조용히 바꾸면 뭐가 달라졌는지 모른다
+                + (fin.trimmed ? ` · 구간 줄 ${fin.trimmed}개에서 지시 뗌` : '')
                 + ' — 간격은 구간마다 한 줄로 맞춥니다.';
         }
     }
