@@ -946,18 +946,16 @@
         .ly-state.dirty { color: var(--zm-ink); }
         .ly-state.fail { color: var(--zm-ink); border: 1px solid var(--zm-ink); padding: 4px 8px; }
 
-        /* 최종본 — 묶음마다 '원문(작게) → 뽑힌 줄' 로 보여 어느 줄이 채택됐는지 드러낸다 */
+        /* 최종본 — 수노에 그대로 붙여넣을 수 있게 구조 줄과 채택된 가사 줄만 둔다 */
         .ly-final { border: 1px solid var(--zm-border); background: var(--zm-card); padding: 6px 0; min-height: 200px; }
-        .ly-fg { display: flex; align-items: baseline; gap: 10px; padding: 7px 14px; }
-        .ly-fg + .ly-fg { border-top: 1px solid var(--zm-line); }
-        .ly-fg-l { flex: 1 1 auto; min-width: 0; }
-        .ly-fg-src { font-size: 11px; color: var(--zm-muted-2); line-height: 1.6; word-break: break-word; }
-        .ly-fg-pick { font-size: 15px; line-height: 1.8; color: var(--zm-text); word-break: break-word; }
-        .ly-fg-why { flex: none; font-family: var(--font-num); font-size: 10px; font-weight: 700;
-            color: var(--zm-muted); border: 1px solid var(--zm-border); padding: 1px 6px; }
-        .ly-fg-why.star { color: var(--zm-on-ink); background: var(--zm-ink); border-color: var(--zm-ink); }
+        /* 수노에 그대로 붙여넣는 화면이라, 보이는 것은 구조 줄과 채택된 가사 줄뿐이다.
+           원문과 채택 사유는 줄에 마우스를 올렸을 때만 뜨게 두었다(title) —
+           화면에 두면 복사할 내용과 섞여 보이고, 읽을 때도 눈이 두 줄씩 건너뛴다. */
+        .ly-fg { padding: 5px 14px; }
+        .ly-fg-pick { font-size: 15px; line-height: 1.8; color: var(--zm-text); word-break: break-word;
+            white-space: pre-wrap; }
         /* 구조 줄([Verse] 등)과 빈 줄은 묶음이 아니라 그대로 지나간다 */
-        .ly-fg.pass { padding: 7px 14px; }
+        .ly-fg.pass { padding: 10px 14px 4px; }
         .ly-fg.pass .ly-fg-pick { font-family: var(--font-num); font-size: 12px; font-weight: 700; color: var(--zm-muted); }
         .ly-fg.blank { padding: 4px 14px; }
         .ly-final-note { margin-top: 8px; font-size: 11px; color: var(--zm-muted-2); line-height: 1.7; }
@@ -7577,21 +7575,27 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         const dropped = all.filter(b => b.inner).length;     // 묶음 안쪽 빈 줄 (최종본에서 뺀 것)
         const blocks = all.filter(b => !b.inner);
         const WHY = { star: '별표', last: '마지막', src: '원문' };
+        // 마우스오버에 적는 설명 — 배지를 뺐으니 여기서만 풀어 쓴다
+        const WHY_LONG = { star: '별표(-*)가 붙은 줄', last: '마지막 작업 줄',
+                           src: '작업 줄이 없어 원문 그대로' };
         if (!blocks.length || blocks.every(b => b.kind === 'pass' && LY_BLANK.test(b.raw))) {
             wrap.innerHTML = '<div class="ly-empty">작업판에 내용을 넣으면 최종본이 여기에 만들어집니다.</div>';
             if (note) note.textContent = '';
             return;
         }
+        /* 보이는 것은 구조 줄과 채택된 가사 줄뿐 — 복사하면 나가는 것과 똑같다.
+           어느 원문에서 왔고 왜 뽑혔는지는 줄에 마우스를 올리면 뜬다(복사에는 안 들어간다). */
         wrap.innerHTML = blocks.map(b => {
             if (b.kind === 'pass') {
                 const blank = LY_BLANK.test(b.raw);
-                return `<div class="ly-fg pass${blank ? ' blank' : ''}"><div class="ly-fg-l">`
-                    + `<div class="ly-fg-pick">${blank ? '&nbsp;' : lyEsc(b.raw.trim())}</div></div></div>`;
+                return `<div class="ly-fg pass${blank ? ' blank' : ''}">`
+                    + `<div class="ly-fg-pick">${blank ? '&nbsp;' : lyEsc(b.raw.trim())}</div></div>`;
             }
-            const src = (b.src != null && b.why !== 'src') ? `<div class="ly-fg-src">${lyEsc(b.src)}</div>` : '';
-            return `<div class="ly-fg"><div class="ly-fg-l">${src}`
-                + `<div class="ly-fg-pick">${lyEsc(b.pick)}</div></div>`
-                + `<span class="ly-fg-why${b.why === 'star' ? ' star' : ''}">${WHY[b.why]}</span></div>`;
+            const srcLine = (b.src != null) ? '원문: ' + b.src + '\n' : '';
+            const tip = srcLine + `채택: ${WHY_LONG[b.why]}`
+                + (b.lines.length ? ` (작업 줄 ${b.lines.length}개)` : '');
+            return `<div class="ly-fg" title="${hlAttr(tip)}">`
+                + `<div class="ly-fg-pick">${lyEsc(b.pick)}</div></div>`;
         }).join('');
         const g = blocks.filter(b => b.kind === 'group');
         if (note) {
