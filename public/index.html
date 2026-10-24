@@ -7420,10 +7420,83 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         return out;
     }
 
-    // 최종본 평문 — 복사 버튼이 주는 것 (묶음 안쪽 빈 줄은 뺀다)
+    /* ── 구간 표시로 인정하는 이름 ──────────────────────────────
+       작업판에는 구간 표시 말고 편곡·사운드 지시도 대괄호로 적는다
+       (예: [snare rolls, guitar builds tension]).
+       최종본은 수노에 그대로 붙여넣는 글이라 구간 표시만 남기고 나머지 대괄호는 뺀다.
+       판정은 대괄호 안에서 '글자만' 추려 이 목록과 통째로 맞춰 본다 —
+         [Verse 2] → verse,  [Pre-Chorus] → prechorus,  [pre chorus] → prechorus
+         [Explosive Drop, Heavy Crash ...] → explosivedropheavycrash... → 목록에 없음
+       그래서 번호가 붙어도, 하이픈·띄어쓰기가 달라도, 대소문자가 달라도 같게 본다.
+       ⚠ 섞여 적힌 줄([Bridge, soft piano])은 통째로 맞지 않아 빠진다.
+         구간으로 남기고 싶으면 그 줄은 [Bridge] 만 적고 지시는 다음 줄에 둔다.
+       이름을 더할 일이 생기면 여기만 고치면 된다. */
+    const LY_SECTIONS = [
+        'intro', 'verse', 'prechorus', 'chorus', 'postchorus', 'hook',
+        'bridge', 'breakdown', 'interlude', 'outro', 'refrain', 'drop',
+        'instrumental', 'solo', 'ending',
+    ];
+    function lyIsSection(raw) {
+        const m = /^\s*\[\s*([^\]]*?)\s*\]\s*$/.exec(raw);
+        if (!m) return false;
+        return LY_SECTIONS.indexOf(m[1].toLowerCase().replace(/[^a-z]/g, '')) >= 0;
+    }
+
+    /* ── 최종본 조판 ────────────────────────────────────────────
+       화면과 복사가 같은 것을 보려면 둘이 같은 결과를 써야 한다. 여기서 한 번 만들어
+       lyFinalText(복사)와 lyRenderFinal(화면)이 나눠 쓴다.
+
+       1) 편곡 지시 대괄호는 뺀다. 묶음을 닫는 일은 파서가 이미 했으므로 출력만 건너뛴다.
+          그 줄 바로 아래 대시 줄이 있으면 원문 없는 묶음이 되어 가사 줄로 남는다 —
+          지시를 옮겨 적은 것이라면 작업판에서 지우거나 대시를 떼야 한다.
+       2) 머리말(첫 구간 표시 앞의 내용)은 뺀다. 단 구간 표시가 하나도 없는 곡이면
+          전부 머리말이 되어 빈 최종본이 나오므로 이 규칙을 적용하지 않는다.
+       3) 간격은 작업판이 어떻든 다시 만든다 — 구간 표시 바로 아래에 가사가 붙고,
+          구간과 구간 사이에만 빈 줄 하나, 앞뒤에는 빈 줄 없음.
+          그래서 원본의 빈 줄은 전부 무시한다(묶음 안쪽이든 바깥이든).
+
+       반환: { items, dropped, preamble, groups }
+         items = [{ kind:'head'|'line'|'gap', text, block? }]  block 은 마우스오버용 */
+    function lyFinalBlocks(body) {
+        const blocks = lyParse(body);
+        const secs = [];
+        let cur = null, sawSection = false, dropped = 0;
+        const ensure = () => {
+            if (!cur) { cur = { head: null, items: [] }; secs.push(cur); }
+            return cur;
+        };
+        blocks.forEach(b => {
+            if (b.kind === 'pass') {
+                if (LY_BLANK.test(b.raw)) return;          // 빈 줄은 전부 무시 (간격은 아래서 다시 만든다)
+                if (lyIsSection(b.raw)) {
+                    cur = { head: b.raw, items: [] }; secs.push(cur); sawSection = true;
+                } else {
+                    dropped++;                              // 편곡·사운드 지시 → 최종본에서 뺀다
+                }
+                return;
+            }
+            ensure().items.push(b);
+        });
+
+        // 머리말 — 첫 구간 표시 앞의 묶음들. 구간 표시가 있을 때만 걷어낸다.
+        let preamble = 0;
+        if (sawSection) {
+            while (secs.length && secs[0].head == null) { preamble += secs[0].items.length; secs.shift(); }
+        }
+
+        const items = [];
+        secs.forEach(sec => {
+            if (!sec.head && !sec.items.length) return;
+            if (items.length) items.push({ kind: 'gap', text: '' });   // 구간 사이에만, 맨 앞에는 넣지 않는다
+            if (sec.head) items.push({ kind: 'head', text: sec.head });
+            sec.items.forEach(b => items.push({ kind: 'line', text: b.pick, block: b }));
+        });
+        return { items, dropped, preamble, groups: blocks.filter(b => b.kind === 'group') };
+    }
+
+    // 최종본 평문 — 복사 버튼이 주는 것. 화면과 같은 조판을 쓴다.
     function lyFinalText(body) {
-        return lyParse(body).filter(b => !b.inner)
-            .map(b => (b.kind === 'pass' ? b.raw : b.pick)).join('\n');
+        return lyFinalBlocks(body).items.map(i => i.text).join('\n');
     }
 
 
@@ -7571,40 +7644,39 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
     function lyRenderFinal() {
         const wrap = lyEl('lyFinal'), note = lyEl('lyFinalNote');
         if (!wrap) return;
-        const all = lyParse(lyEl('lyBody').value);
-        const dropped = all.filter(b => b.inner).length;     // 묶음 안쪽 빈 줄 (최종본에서 뺀 것)
-        const blocks = all.filter(b => !b.inner);
-        const WHY = { star: '별표', last: '마지막', src: '원문' };
-        // 마우스오버에 적는 설명 — 배지를 뺐으니 여기서만 풀어 쓴다
+        // 마우스오버에 적는 설명 — 화면에 배지를 두지 않으므로 여기서만 풀어 쓴다
         const WHY_LONG = { star: '별표(-*)가 붙은 줄', last: '마지막 작업 줄',
                            src: '작업 줄이 없어 원문 그대로' };
-        if (!blocks.length || blocks.every(b => b.kind === 'pass' && LY_BLANK.test(b.raw))) {
+        const fin = lyFinalBlocks(lyEl('lyBody').value);
+        if (!fin.items.length) {
             wrap.innerHTML = '<div class="ly-empty">작업판에 내용을 넣으면 최종본이 여기에 만들어집니다.</div>';
             if (note) note.textContent = '';
             return;
         }
-        /* 보이는 것은 구조 줄과 채택된 가사 줄뿐 — 복사하면 나가는 것과 똑같다.
+        /* 복사하면 나가는 것과 글자 그대로 같은 화면을 그린다 (같은 조판을 쓰므로 어긋날 수 없다).
            어느 원문에서 왔고 왜 뽑혔는지는 줄에 마우스를 올리면 뜬다(복사에는 안 들어간다). */
-        wrap.innerHTML = blocks.map(b => {
-            if (b.kind === 'pass') {
-                const blank = LY_BLANK.test(b.raw);
-                return `<div class="ly-fg pass${blank ? ' blank' : ''}">`
-                    + `<div class="ly-fg-pick">${blank ? '&nbsp;' : lyEsc(b.raw.trim())}</div></div>`;
+        wrap.innerHTML = fin.items.map(it => {
+            if (it.kind === 'gap') return '<div class="ly-fg blank"><div class="ly-fg-pick">&nbsp;</div></div>';
+            if (it.kind === 'head') {
+                return '<div class="ly-fg pass"><div class="ly-fg-pick">'
+                    + lyEsc(it.text.trim()) + '</div></div>';
             }
-            const srcLine = (b.src != null) ? '원문: ' + b.src + '\n' : '';
-            const tip = srcLine + `채택: ${WHY_LONG[b.why]}`
-                + (b.lines.length ? ` (작업 줄 ${b.lines.length}개)` : '');
+            const b = it.block;
+            const srcLine = (b && b.src != null) ? '원문: ' + b.src + '\n' : '';
+            const tip = srcLine + `채택: ${WHY_LONG[b ? b.why : 'last']}`
+                + (b && b.lines.length ? ` (작업 줄 ${b.lines.length}개)` : '');
             return `<div class="ly-fg" title="${hlAttr(tip)}">`
-                + `<div class="ly-fg-pick">${lyEsc(b.pick)}</div></div>`;
+                + `<div class="ly-fg-pick">${lyEsc(it.text)}</div></div>`;
         }).join('');
-        const g = blocks.filter(b => b.kind === 'group');
+        const g = fin.groups;
         if (note) {
             note.textContent = `묶음 ${g.length}개 · 별표 채택 ${g.filter(b => b.why === 'star').length}`
                 + ` · 마지막 줄 채택 ${g.filter(b => b.why === 'last').length}`
                 + ` · 작업 줄 없이 원문 그대로 ${g.filter(b => b.why === 'src').length}`
-                // 규칙이 실제로 걸렀는지 눈으로 확인할 수 있게 숫자를 밝힌다
-                + (dropped ? ` · 묶음 안 빈 줄 ${dropped}개 뺌` : '')
-                + ' — 복사하면 뽑힌 줄만 나갑니다.';
+                // 무엇을 걸렀는지 눈으로 확인할 수 있게 숫자를 밝힌다
+                + (fin.dropped ? ` · 편곡 지시 ${fin.dropped}줄 뺌` : '')
+                + (fin.preamble ? ` · 머리말 ${fin.preamble}줄 뺌` : '')
+                + ' — 간격은 구간마다 한 줄로 맞춥니다.';
         }
     }
 
