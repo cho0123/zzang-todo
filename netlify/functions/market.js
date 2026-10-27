@@ -88,6 +88,24 @@ function epochToYmd(sec) {             // epoch(초) → YYYY-MM-DD (UTC)
 function barYmd(sec, gmtOffset) {
   return epochToYmd(sec + (Number(gmtOffset) || 0));
 }
+/* 봉 하나의 '거래소 현지 날짜'를 시간대로 직접 환산한다.
+   meta.gmtoffset 은 '지금'의 오프셋 하나뿐이라, 여러 해를 한 번에 받으면 서머타임이
+   있는 구간이 통째로 어긋난다. 런던 환율 일봉은 여름에 23:00Z, 겨울에 00:00Z 로 찍히는데
+   겨울에 받아 off=0 을 그대로 대면 여름 봉이 하루 앞으로 밀리고, 월요일 봉이 일요일
+   칸으로 떨어져 주말 가드에 버려진다(2026-03-29T23:00Z → 3/29(일), 실제는 3/30(월)).
+   그래서 소급 수집은 이 함수로 봉마다 따로 센다.
+   ⚠ 기존 mode(daily·range)는 건드리지 않는다. 그쪽은 최근 며칠만 보므로 한 응답 안에
+     서머타임 경계가 들어올 일이 거의 없고, 이미 검증된 동작이다. */
+function tzYmd(sec, tz) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(sec * 1000));                 // en-CA → YYYY-MM-DD
+  } catch (e) {
+    return null;                                     // 시간대를 못 쓰면 부르는 쪽이 예전 방식으로
+  }
+}
+
 function isWeekday(dateStr) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
   if (!m) return false;
@@ -349,6 +367,73 @@ async function fetchDaily(yahooSym, targetDate, targetEpoch, allowHourly, minBar
 exports.handler = async (event) => {
   const date = (event.queryStringParameters && event.queryStringParameters.date) || "";
   const mode = (event.queryStringParameters && event.queryStringParameters.mode) || "";
+
+  /* mode=history — 지표 하나의 과거 일봉 종가만 구간으로 돌려준다 (소급 수집 전용).
+     range 와 따로 둔 이유
+       · 지표 하나만 받는다. range 는 10종을 다 부르므로 한 지표를 몇 해 치 받으려면
+         쓸모없는 요청이 아홉 배로 늘어난다.
+       · 보완을 쓰지 않는다. 과거는 확정된 일봉 종가만 쓰면 되고, regularMarketPrice 나
+         시간봉은 '지금'을 보는 장치라 과거 구간에서는 뜻이 없다.
+       · 날짜를 봉마다 시간대로 환산한다(tzYmd). 여러 해를 한 번에 받으면 meta 의
+         오프셋 하나로는 서머타임 구간이 어긋난다.
+     주말 가드와 반올림은 기존과 같은 규칙을 쓴다. */
+  if (mode === "history") {
+    const q = event.queryStringParameters || {};
+    const key = q.key || "", from = q.from || "", to = q.to || "";
+    if (!SYMBOLS[key]) {
+      return { statusCode: 400, body: JSON.stringify({ error: "key=지표코드 필요" }) };
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
+      return { statusCode: 400, body: JSON.stringify({ error: "from·to=YYYY-MM-DD 필요(from<=to)" }) };
+    }
+    let r;
+    try {
+      r = await fetchChart(SYMBOLS[key],
+        `period1=${toEpoch(from) - 5 * DAY}&period2=${toEpoch(to) + 2 * DAY}&interval=1d`, 8000);
+    } catch (e) {
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+        body: JSON.stringify({ source: SOURCE, v: 4, mode: "history", key, from, to,
+                               days: {}, error: String((e && e.message) || e) }),
+      };
+    }
+    const meta = r.meta || {};
+    const tz = meta.exchangeTimezoneName || "";
+    const off = meta.gmtoffset || 0;
+    const ts = r.timestamp;
+    const closes = r.indicators && r.indicators.quote && r.indicators.quote[0] &&
+                   r.indicators.quote[0].close;
+
+    // 장중인 날은 확정 종가가 아니라 제외한다 (기존 갈래와 같은 판단)
+    const rmTime = meta.regularMarketTime;
+    const reg = (meta.currentTradingPeriod && meta.currentTradingPeriod.regular) || null;
+    const liveDate = (rmTime != null && reg && reg.start != null && reg.end != null &&
+                      rmTime >= reg.start && rmTime < reg.end)
+                     ? (tz ? (tzYmd(rmTime, tz) || barYmd(rmTime, off)) : barYmd(rmTime, off)) : null;
+
+    const days = {};
+    let bars = 0, weekend = 0, empty = 0;
+    if (ts && closes) {
+      for (let i = 0; i < ts.length; i++) {
+        const ymd = (tz ? tzYmd(ts[i], tz) : null) || barYmd(ts[i], off);
+        if (ymd < from || ymd > to) continue;
+        bars++;
+        if (closes[i] == null) { empty++; continue; }
+        if (ymd === liveDate) continue;                       // 아직 장중
+        if (!WEEKEND_OK.has(key) && !isWeekday(ymd)) { weekend++; continue; }   // 주말 가드
+        days[ymd] = roundVal(key, closes[i]);
+      }
+    }
+    const outH = { source: SOURCE, v: 4, mode: "history", key, from, to, tz, days,
+                   counted: { bars, saved: Object.keys(days).length, weekend, empty } };
+    if (liveDate) outH.live = liveDate;
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      body: JSON.stringify(outH),
+    };
+  }
 
   /* mode=range — from~to를 한 번에. 소급 수집이 하루씩 부르지 않도록. */
   if (mode === "range") {
