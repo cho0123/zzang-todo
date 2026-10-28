@@ -46,6 +46,9 @@
             --zm-series-4: #8fc866;    /* 연두 */
             --zm-series-5: #6fa8dc;    /* 하늘 */
             --zm-series-6: #d78fd0;    /* 연자주 */
+            /* 이동평균 참고선 — 본선(#e8e4e4)과 갈리되 VIX 구간 색(온색 계열)과도
+               겹치지 않게 --zm-series-2(청록)를 쓴다. 적색은 건강 탭 몫이라 쓰지 않는다. */
+            --zm-ma: #5ec8c8;
             /* VIX 수준 구간 (After10 지표 흐름 차트 전용)
                ── 왜 여기서는 적색을 쓰나 ────────────────────────────────
                적색을 건강 탭 이상치에만 두던 규칙을 이 화면에서는 풀었다. After10은 건강 탭과
@@ -582,6 +585,15 @@
         .a10-chip.vixtoggle:disabled { opacity: 0.45; cursor: default; }
         .a10-chip.vixtoggle:disabled:hover { background: var(--zm-card); color: var(--zm-muted); }
         .a10-chip2.cmp { display: inline-flex; align-items: center; }
+        /* 평균 대비 현재 위치 — 숫자는 또렷하게, 기준 날짜는 가라앉게.
+           평균보다 쌀 때만 잉크로 채워 눈에 걸리게 한다(적색은 건강 탭 몫이라 쓰지 않는다). */
+        .a10-ma-now { margin-top: 8px; font-size: 12px; color: var(--zm-muted); line-height: 1.8;
+            text-align: center; word-break: keep-all; }
+        .a10-ma-now b { font-family: var(--font-num); font-weight: 800; color: var(--zm-ink); }
+        .a10-ma-now .gap { display: inline-block; padding: 1px 7px; font-weight: 800;
+            font-family: var(--font-num); border: 1px solid var(--zm-border); color: var(--zm-muted); }
+        .a10-ma-now .gap.low { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        .a10-ma-now .basis { display: block; font-size: 11px; color: var(--zm-muted-2); }
         .a10-chart-stats { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; font-size: 13px; color: var(--zm-muted); }
         .a10-chart-stats b { color: var(--zm-ink); }
         .a10-chart-stats .up, .a10-chart-stats .down { color: var(--zm-ink); }  /* 일지 탭은 경보색 없이 무채 */
@@ -1764,6 +1776,8 @@
         <div class="a10-chart-legend" id="a10ChartLegend" style="display:none"></div>
         <div class="a10-chart-box"><canvas id="a10Chart"></canvas></div>
         <div class="a10-chart-stats" id="a10ChartStats"></div>
+        <!-- 지금 환율이 긴 평균 대비 어디에 있는지 한 줄로 -->
+        <div class="a10-ma-now" id="a10MaNow"></div>
         <div id="a10ChartMsg"></div>
 
         <!-- ===== 1단계 임시: 시장 데이터 수집 확인판 =====
@@ -4482,6 +4496,69 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         a10RenderChart();
     };
 
+    /* ── 이동평균 ──────────────────────────────────────────────────
+       환율이 긴 평균보다 낮을 때 환전을 생각하려고 두는 참고선이다.
+       지금은 원/달러만. 다른 지표로 넓힐 일이 생기면 이 표에 한 줄 더하면 된다. */
+    const A10_MA = {
+        usdkrw: { years: 3, label: '3년 평균' },
+    };
+
+    // ymd 에서 해를 더하거나 뺀다. 2월 29일은 평년에 없으니 그 달 말일로 당긴다.
+    function a10ShiftYears(ymd, n) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+        if (!m) return ymd;
+        const y = +m[1] + n;
+        const last = new Date(Date.UTC(y, +m[2], 0)).getUTCDate();
+        const p = x => String(x).padStart(2, '0');
+        return `${y}-${p(+m[2])}-${p(Math.min(+m[3], last))}`;
+    }
+
+    /* 지표 전체 시계열에서 날짜마다 '직전 N년' 평균을 낸다.
+       반환: { map: {ymd: 평균}, first, last, series }
+
+       ⚠ 구간(1개월 등)과 무관하게 전체에서 먼저 계산한다. 1개월만 보더라도 그 선을
+         그리려면 그 앞 3년치가 필요하다 — 구간을 먼저 자르면 선이 통째로 사라진다.
+       ⚠ 창이 '날짜' 기준이라 거래일 수가 달마다 다르다. 날짜마다 3년치를 다시 더하면
+         전체 구간에서 수십만 번을 더하게 되므로, 양 끝 포인터와 누적합으로 한 번만 훑는다.
+         평균 한 개당 더하기 한 번·빼기 한 번이라 점이 몇 천 개여도 가볍다.
+       ⚠ 3년치가 다 차지 않는 앞 구간은 값을 내지 않는다. 반 토막 평균을 그리면
+         2018~2020 이 실제보다 낮게 보여 판단을 흐린다. 2018년부터 받았으니 2021년부터 나온다. */
+    function a10MovingAvg(key, years) {
+        const series = [];
+        Object.keys(mkMonths).forEach(mo => {
+            const days = mkMonths[mo].days || {};
+            Object.keys(days).forEach(dd => {
+                const v = days[dd] ? days[dd][key] : null;
+                if (v != null) series.push({ ymd: mo + '-' + dd, v });
+            });
+        });
+        series.sort((a, b) => a.ymd < b.ymd ? -1 : a.ymd > b.ymd ? 1 : 0);
+        const map = {};
+        if (!series.length) return { map, first: null, last: null, series };
+        const first = series[0].ymd;
+        let lo = 0, sum = 0, last = null;
+        for (let i = 0; i < series.length; i++) {
+            sum += series[i].v;
+            const from = a10ShiftYears(series[i].ymd, -years);   // 창의 시작 — 이 날짜는 빼고 센다
+            while (series[lo].ymd <= from) { sum -= series[lo].v; lo++; }
+            if (from < first) continue;                          // 3년치가 아직 안 찼다
+            map[series[i].ymd] = sum / (i - lo + 1);
+            last = series[i].ymd;
+        }
+        return { map, first, last, series };
+    }
+
+    /* 차트에 겹칠 이동평균 한 벌. 쓰지 않을 상황이면 null.
+       비교 보기는 첫 값을 100으로 환산해 겹치므로 원래 단위의 평균선이 뜻을 잃고,
+       '매년 같은 날'은 x축이 연도라 연속된 선을 그릴 자리가 없다 — 둘 다 그리지 않는다. */
+    function a10MaFor(metric, compare, mode) {
+        const cfgMa = A10_MA[metric];
+        if (!cfgMa || compare || mode !== 'range') return null;
+        const r = a10MovingAvg(metric, cfgMa.years);
+        if (!r.last) return null;                                // 3년치가 찬 날이 하나도 없다
+        return Object.assign({ key: metric, years: cfgMa.years, label: cfgMa.label }, r);
+    }
+
     /* VIX 수준 구간 — 시장에서 통상 쓰는 눈금이지 절대 기준이 아니다.
        (VIX 자체가 'S&P500 옵션이 앞으로 30일을 얼마로 보는가'라, 국면에 따라 평균이 움직인다.)
        그래서 숫자를 단정적으로 칠하지 않고 농도로만 구분하고, 축에 이름을 붙여 참고용임을
@@ -4689,6 +4766,37 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         });
     }
 
+    function a10MaColor() {
+        return getComputedStyle(document.documentElement).getPropertyValue('--zm-ma').trim() || '#5ec8c8';
+    }
+    // 이동평균 범례 한 조각 — 본선과 모양이 다르다는 것이 보이게 점선 자국으로
+    function a10MaLegendItem(ma) {
+        return '<span class="a10-legend-item">'
+            + '<i class="a10-legend-line d3" style="color:var(--zm-ma)"></i>'
+            + hlEsc(ma.label) + '</span>';
+    }
+
+    /* 평균 대비 지금 위치 한 줄.
+       구간을 바꿔도 값이 흔들리지 않게 전체 시계열의 마지막 날을 쓴다 —
+       '오늘 기준'이라는 뜻이고, 이동평균선의 맨 오른쪽 끝점과 같은 값이다. */
+    function a10PaintMaNow(ma, cfg) {
+        const el = document.getElementById('a10MaNow');
+        if (!el) return;
+        if (!ma) { el.innerHTML = ''; return; }
+        const d = ma.last;
+        const avg = ma.map[d];
+        const cur = (ma.series.find(x => x.ymd === d) || {}).v;
+        if (avg == null || cur == null) { el.innerHTML = ''; return; }
+        const diff = cur - avg;
+        const low = diff < 0;
+        const pct = avg ? Math.abs(diff / avg * 100) : 0;
+        el.innerHTML = `${hlEsc(ma.label)} <b>${cfg.fmt(avg)}</b> · 현재 <b>${cfg.fmt(cur)}</b> · `
+            + `<span class="gap${low ? ' low' : ''}">${a10FmtNum(Math.abs(diff), 1)}원`
+            + `(${pct.toFixed(1)}%) ${low ? '낮음' : '높음'}</span>`
+            + `<span class="basis">${hlEsc(a10ShiftYears(d, -ma.years))} ~ ${hlEsc(d)} 기준`
+            + ` · ${ma.years}년치 거래일 평균</span>`;
+    }
+
     /* 배경 띠 범례 한 조각. 면을 선 범례와 구분해 네모 칩(.band)으로 보여주고,
        값을 어느 축에서 읽는지까지 밝힌다 — 왼쪽 축과 눈금이 다르기 때문이다. */
     function a10VixLegendItem(zonesOnLine) {
@@ -4708,18 +4816,22 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
        엉뚱한 항목이 뜬다. 값은 본문 아래에 따로 적는다.
        dateAt : 툴팁 항목 하나에서 그날 날짜(YYYY-MM-DD)를 꺼내는 함수 —
                 단일 모드와 비교 모드가 날짜를 담는 자리가 달라 부르는 쪽이 넘긴다. */
-    function a10VixTooltip(band, dateAt, callbacks) {
+    function a10VixTooltip(band, dateAt, callbacks, ma) {
         /* ⚠ filter 는 tooltip 바로 아래, afterBody 는 callbacks 안이다 —
               자리를 바꿔 달면 Chart.js가 조용히 무시한다(값이 안 뜬다). */
         const tip = { callbacks: Object.assign({}, callbacks) };
-        if (!band) return tip;
-        tip.filter = it => !(it.dataset && it.dataset.yAxisID === 'vix');
+        if (!band && !ma) return tip;
+        // 배경 띠도 이동평균선도 '선택해 읽는' 항목이 아니라 참고선이라 본문에서 뺀다
+        tip.filter = it => !(it.dataset && (it.dataset.yAxisID === 'vix' || it.dataset.a10ma));
         tip.callbacks.afterBody = ctx => {
             if (!ctx.length) return '';
             const ymd = dateAt(ctx[0]);
-            const v = ymd ? band.byDate[ymd] : null;
-            // 숫자만으로는 높은지 낮은지 모른다 — 구간 이름을 함께 적는다
-            return v == null ? '' : `VIX ${a10FmtNum(v, 2)} · ${a10VixZone(v).name}`;
+            const lines = [];
+            if (ma && ymd && ma.map[ymd] != null) lines.push(`${ma.label} ${a10FmtNum(ma.map[ymd], 2)}`);
+            if (band && ymd && band.byDate[ymd] != null) {
+                lines.push(`VIX ${a10FmtNum(band.byDate[ymd], 2)} · ${a10VixZone(band.byDate[ymd]).name}`);
+            }
+            return lines;
         };
         return tip;
     }
@@ -4832,10 +4944,11 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         const stale = Chart.getChart ? Chart.getChart(canvas) : null;
         if (stale) stale.destroy();
         a10ChartInstance = null;
-        if (compare) { a10RenderCompare(); return; }
+        if (compare) { a10PaintMaNow(null); a10RenderCompare(); return; }
 
         const items = a10ChartData();
         if (!items.length) {
+            a10PaintMaNow(null);
             canvas.style.display = 'none'; statsEl.innerHTML = '';
             msgEl.innerHTML = `<div class="a10-empty">표시할 <b>${cfg.label}</b> 데이터가 없습니다.<br>거래일 데이터가 쌓이면 그려집니다.</div>`;
             return;
@@ -4894,8 +5007,23 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         /* 배경 VIX 띠. 등간격 폴백에서는 x축이 이 지표의 거래일이므로 그 날짜에 맞춰 얹는다
            (시간축이면 VIX 자기 거래일에 그대로 찍힌다). */
         const band = a10VixBand(fullDates, useTime, false);   // 단일 — 화면 모드(연속/기념일)를 따른다
-        if (band || zonesOnLine) {
-            legendEl0.innerHTML = a10VixLegendItem(zonesOnLine);
+
+        /* 이동평균 참고선. 전체 시계열에서 미리 계산해 두고 여기서 보이는 날짜에만 맞춘다 —
+           1개월만 보더라도 그 선을 그리려면 앞 3년치가 필요하다.
+           3년이 안 찬 날은 null 이라 선이 거기서 끊긴다(spanGaps 를 켜지 않는 이유다). */
+        const ma = a10MaFor(a10ChartMetric, false, a10ChartMode);
+        const maData = ma
+            ? (useTime ? items.map(e => ({ x: hlDateTs(e.ymd), y: ma.map[e.ymd] != null ? ma.map[e.ymd] : null }))
+                       : items.map(e => (ma.map[e.ymd] != null ? ma.map[e.ymd] : null)))
+            : null;
+        const maHasAny = !!maData && maData.some(v => (useTime ? v.y : v) != null);
+        a10PaintMaNow(ma, cfg);
+
+        const legendParts = [];
+        if (ma && maHasAny) legendParts.push(a10MaLegendItem(ma));
+        if (band || zonesOnLine) legendParts.push(a10VixLegendItem(zonesOnLine));
+        if (legendParts.length) {
+            legendEl0.innerHTML = legendParts.join('');
             legendEl0.style.display = 'flex';
         }
 
@@ -4914,7 +5042,12 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
                        흰 8% 면이 구간 색 위에 겹쳐 평온/긴장/공포가 뿌옇게 섞인다.
                        띠(다른 지표)를 볼 때는 예전처럼 면을 채운다. */
                     tension: 0.25, fill: !zonesOnLine,
-                }].concat(band ? [band.dataset] : [])
+                }].concat(ma && maHasAny ? [{
+                    label: ma.label, data: maData, a10ma: true, order: 50,
+                    borderColor: a10MaColor(), borderWidth: 1.5, borderDash: [5, 4],
+                    backgroundColor: 'transparent', pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 0,
+                    tension: 0.25, fill: false, spanGaps: false,
+                }] : []).concat(band ? [band.dataset] : [])
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
@@ -4928,7 +5061,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
                             + (a10ChartMetric === 'vix' ? ` · ${a10VixZone(ctx.parsed.y).name}` : '')
                             + (items[ctx.dataIndex] && items[ctx.dataIndex].filled
                                 ? (items[ctx.dataIndex].filled === 'hourly' ? ' · 시간봉 보완' : ' · 보완값') : ''),
-                    })
+                    }, ma)
                 },
                 scales: Object.assign({
                     y: yScale,
