@@ -1770,6 +1770,7 @@
             <button class="a10-chip2 active" data-crange="1m" onclick="a10SetChartRange('1m')">1개월</button>
             <button class="a10-chip2" data-crange="3m" onclick="a10SetChartRange('3m')">3개월</button>
             <button class="a10-chip2" data-crange="1y" onclick="a10SetChartRange('1y')">1년</button>
+            <button class="a10-chip2" data-crange="3y" onclick="a10SetChartRange('3y')">3년</button>
             <button class="a10-chip2" data-crange="all" onclick="a10SetChartRange('all')">전체</button>
         </div>
 
@@ -4431,6 +4432,20 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         return { unit: 'year', fmt: 'yyyy' };                         // 전체(>2년): 연
     }
     const CHART_MAX_TICKS = 8;
+    /* After10 차트만 쓰는 보정. 3년쯤 되는 구간을 공유 규칙에 맡기면 '연' 눈금이라
+       2024·2025·2026 세 칸뿐이다 — 9년을 보는 '전체'(다섯 칸)와 별 차이가 없어
+       구간을 좁힌 보람이 없다. 달 눈금으로 내리면 autoSkip 이 알아서 솎아 여덟 칸
+       안팎이 되고, 연초 칸에는 chartMonthTickLabel 이 연도를 붙여 어느 해인지도 남는다.
+       기준을 1200일(약 3년 3개월)로 둔 것은 '3년' 버튼(약 1093일)을 넉넉히 담되
+       4년을 넘는 구간까지 달 눈금으로 끌어내리지 않기 위해서다.
+       ⚠ 공유 규칙 자체는 건드리지 않는다 — 건강 탭 차트가 같이 쓴다. */
+    function a10TimeUnit(tMinMs, tMaxMs) {
+        const tu = chartTimeUnit(tMinMs, tMaxMs);
+        if (tu.unit === 'year' && (tMaxMs - tMinMs) / 86400000 <= 1200) {
+            return { unit: 'month', fmt: 'M월' };
+        }
+        return tu;
+    }
     /* x축 눈금 공통 설정 — 다섯 군데 차트가 똑같이 쓰던 것을 한곳으로 모았다.
        autoSkipPadding은 눈금 사이 최소 여백이라, 폭이 좁아지면 눈금이 알아서 솎인다.
        (모바일에서 'MM/DD' 라벨이 붙어 뭉개지던 문제 — maxTicksLimit만으로는 폭을 모른다) */
@@ -4465,7 +4480,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
     };
     let a10ChartMetric = 'usdkrw';   // 기본: 원/달러
     let a10ChartMode = 'range';      // 'range' | 'anniv'
-    let a10ChartRange = '1m';        // '1m' | '3m' | '1y' | 'all'
+    let a10ChartRange = '1m';        // '1m' | '3m' | '1y' | '3y' | 'all'
     let a10ChartInstance = null;
     let a10ChartView = 'single';     // 'single' | 'compare'
     let a10CompareKeys = ['usdkrw', 'spx'];   // 비교 모드에서 겹쳐 볼 지표 (최대 3개)
@@ -4879,9 +4894,17 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
             const md = todayStr().substring(5);                 // 오늘의 MM-DD
             items = items.filter(e => e.ymd.substring(5) === md);
         } else if (a10ChartRange !== 'all') {
-            const days = a10ChartRange === '1m' ? 30 : a10ChartRange === '3m' ? 92 : 365;
-            const cut = new Date(); cut.setHours(0, 0, 0, 0); cut.setDate(cut.getDate() - days);
-            const cutStr = a10DateToYmd(cut);
+            /* '3년'만 달력으로 센다. 이동평균 창(3년)과 같은 길이로 보라고 둔 버튼이라
+               365×3 어림이 아니라 그 창과 똑같은 날짜에서 끊는다.
+               나머지 버튼은 예전 그대로 일수로 센다. */
+            let cutStr;
+            if (a10ChartRange === '3y') {
+                cutStr = a10ShiftYears(todayStr(), -3);
+            } else {
+                const days = a10ChartRange === '1m' ? 30 : a10ChartRange === '3m' ? 92 : 365;
+                const cut = new Date(); cut.setHours(0, 0, 0, 0); cut.setDate(cut.getDate() - days);
+                cutStr = a10DateToYmd(cut);
+            }
             items = items.filter(e => e.ymd >= cutStr);
         }
         items.sort((a, b) => a.ymd < b.ymd ? -1 : a.ymd > b.ymd ? 1 : 0);
@@ -5004,7 +5027,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
             // 점이 1개뿐이거나 전부 같은 날이면 폭이 0이라 밀리초 눈금이 생긴다. 앞뒤 보름씩 벌린다.
             const single = (tMin === tMax);
             if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
-            const tu = chartTimeUnit(tMin, tMax);  // 기간에 맞는 단위·형식 (공유 규칙)
+            const tu = a10TimeUnit(tMin, tMax);    // 기간에 맞는 단위·형식 (공유 규칙 + 3년 보정)
             const xticks = chartXTicks();
             if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }  // 연초에 연도 표기
             xScale = {
@@ -5178,7 +5201,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
             let tMin = Math.min.apply(null, tsAll), tMax = Math.max.apply(null, tsAll);
             const single = (tMin === tMax);   // 점이 하나뿐이면 폭이 0이라 밀리초 눈금이 생긴다
             if (single) { const pad = 15 * 24 * 60 * 60 * 1000; tMin -= pad; tMax += pad; }
-            const tu = chartTimeUnit(tMin, tMax);
+            const tu = a10TimeUnit(tMin, tMax);    // 단일 보기와 같은 규칙(3년 보정 포함)
             const xticks = chartXTicks();
             if (tu.unit === 'month') { xticks.major = { enabled: true }; xticks.callback = chartMonthTickLabel; }
             xScale = {
