@@ -831,9 +831,10 @@
             background: var(--zm-ink); color: var(--zm-on-ink); border: none; cursor: pointer; }
         .wo-seed-btn:disabled { opacity: 0.5; cursor: default; }
 
-        /* ===== 1단계 임시: 시장 데이터 수집 확인판 =====
-           일지에서 떼어낸 marketDaily가 제대로 쌓이는지 눈으로 보려는 화면이다.
-           2단계에서 차트를 이 컬렉션으로 옮기고 나면 이 블록(CSS·마크업·JS)을 지운다. */
+        /* ===== 시장 데이터 점검판 =====
+           차트가 marketDaily를 읽게 된 뒤로는 '쌓이는지 보는 임시 화면'이 아니라
+           구멍을 메우고 저장된 값을 확인하는 상시 도구다. 평소 수집은 탭에 들어올 때
+           자동으로 돌고(mkAutoFill), 여기 버튼은 그것으로 안 되는 경우에만 쓴다. */
         .mk-panel { margin-top: 28px; padding: 14px; border: 1px dashed var(--zm-border); }
         .mk-head { font-family: var(--font-title); font-size: 12px; font-weight: 700;
             letter-spacing: 0.04em; color: var(--zm-muted); margin-bottom: 6px; }
@@ -1781,12 +1782,13 @@
         <div class="a10-ma-now" id="a10MaNow"></div>
         <div id="a10ChartMsg"></div>
 
-        <!-- ===== 1단계 임시: 시장 데이터 수집 확인판 =====
-             2단계에서 차트를 marketDaily로 옮기면 이 블록과 .mk-* CSS, mk 관련 JS를 지운다. -->
+        <!-- ===== 시장 데이터 점검판 =====
+             수집은 탭에 들어올 때 자동으로 돈다. 여기 버튼은 구멍을 메우거나
+             저장된 값을 확인할 때만 쓰는 상시 도구다. -->
         <div class="mk-panel" id="mkPanel">
-            <div class="mk-head">1단계 임시 · 시장 데이터 수집 (marketDaily)</div>
-            <div class="mk-note">일지와 따로, 지표마다 자기 실제 거래일 칸에 저장합니다.
-                일지 저장·표시·차트는 아직 손대지 않았습니다.
+            <div class="mk-head">시장 데이터 점검 (marketDaily)</div>
+            <div class="mk-note">탭에 들어올 때 최근 7일을 자동으로 받습니다.
+                아래 버튼은 그보다 오래 비웠거나 값이 빈 날이 있을 때 씁니다.
                 이미 저장된 날짜는 다시 받지 않습니다.</div>
             <div class="mk-row">
                 <select class="mk-days" id="mkDays" onchange="mkRangeChanged()">
@@ -1801,7 +1803,6 @@
                 <button type="button" class="mk-sub" id="mkGapBtn" onclick="mkFill(true)">빠진 지표만 다시</button>
                 <button type="button" class="mk-sub" id="mkStopBtn" onclick="mkStop()" style="display:none">중단</button>
                 <button type="button" class="mk-sub" id="mkRecheckBtn" onclick="mkRecheck()">보완값 다시 검사</button>
-                <button type="button" class="mk-sub" id="mkReloadBtn" onclick="mkShow()">새로고침</button>
             </div>
             <div class="mk-plan" id="mkPlan"></div>
             <div class="mk-status" id="mkStatus"></div>
@@ -1822,16 +1823,8 @@
                     고른 항목만 지우며, 지우기 전에 한 번 더 확인합니다.</span>
             </div>
             <div id="mkOddBody"></div>
-
-            <!-- 과거 소급 수집 — 평소 쓰는 버튼이 아니라서 따로 떼어 두고 확인을 받는다 -->
-            <div class="mk-row mk-diag-row">
-                <button type="button" class="mk-sub" id="mkHistBtn" onclick="mkHistFill()">원/달러 과거 채우기</button>
-                <span class="mk-diag-note">이동평균선용으로 2018년부터의 원/달러를 한 번 받아옵니다.
-                    이미 있는 값은 건드리지 않고, 없는 날짜만 더합니다. 눌러도 확인을 한 번 더 받습니다.</span>
-            </div>
-            <div class="mk-status" id="mkHistStatus"></div>
         </div>
-        <!-- ===== /1단계 임시 ===== -->
+        <!-- ===== /시장 데이터 점검판 ===== -->
     </div>
 
 </div>
@@ -2992,9 +2985,9 @@
         });
     })();
 
-    /* ===================== 1단계 임시: 시장 데이터 수집 =====================
-       경제지표를 일지 문서에서 떼어내 따로 쌓는다. 지금은 쌓기만 하고,
-       일지 저장·표시·차트는 그대로 둔다(2단계에서 옮긴다).
+    /* ===================== 시장 데이터 수집 (marketDaily) =====================
+       경제지표를 일지 문서에서 떼어내 따로 쌓는다. 지표 흐름 차트가 이 컬렉션을 읽고,
+       화면 아래 점검판은 구멍을 메우고 저장된 값을 확인하는 상시 도구다.
 
        ── 왜 월 단위 문서인가 ─────────────────────────────────────
        marketDaily/{YYYY-MM} : { month,
@@ -3493,13 +3486,18 @@
        '그날 10종을 다 받아봤다'는 뜻인 fetched 를 찍으면 나머지 지표를 영영 못 채운다.
 
        구간은 1년씩 끊는다. 한 해가 260건 남짓이라 한 번에 받아도 가볍고(약 250ms),
-       중간에 끊겨도 어느 해까지 됐는지 바로 보인다. 이미 채워진 해는 요청 없이 건너뛴다. */
+       중간에 끊겨도 어느 해까지 됐는지 바로 보인다. 이미 채워진 해는 요청 없이 건너뛴다.
+
+       화면 버튼은 뗐다 — 원/달러는 2018년부터 한 번 받아 뒀고 다시 누를 일이 없다.
+       다른 지표에 쓸 일이 생기면 MK_HIST_KEY 를 바꿔 콘솔에서 mkHistFill() 로 부른다
+       (진행 상황은 적을 자리가 없으면 콘솔로 나간다). market.js 의 history 모드도 그대로 둔다. */
     const MK_HIST_KEY = 'usdkrw';
     const MK_HIST_FROM_YEAR = 2018;
 
     function mkHistStatus(html) {
         const el = document.getElementById('mkHistStatus');
         if (el) el.innerHTML = html || '';
+        else console.log('[mkHistFill]', String(html || '').replace(/<[^>]*>/g, ''));   // 버튼 없이 돌 때
     }
     // 그 해가 이미 채워졌나 — 달마다 평일 수의 대략 절반 이상이면 받은 것으로 본다
     function mkHistYearDone(y) {
@@ -4052,7 +4050,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         });
         if (view === 'timeline') a10RenderTimeline();
         if (view === 'past') a10RenderPast();
-        if (view === 'chart') { a10RenderChart(); mkPaintPlan(); mkShow(); }   // 1단계 임시 확인판도 함께
+        if (view === 'chart') { a10RenderChart(); mkPaintPlan(); mkShow(); }   // 아래 점검판도 함께
     };
 
     // Firestore에서 일지 전체 조회 (구독 아님)
