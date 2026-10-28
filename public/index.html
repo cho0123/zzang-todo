@@ -4395,7 +4395,11 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
        - 값이 하나뿐이거나 전부 같아 최고=최저인 점은 마름모(보라 테두리)로 구분한다.
        - 기존 pointBackgroundColor(이상치 빨강 등)는 건드리지 않고, 테두리·모양·크기만 얹는다.
     ============================================================== */
-    function chartExtremeOverlay(values, baseRadius, baseHoverRadius) {
+    function chartExtremeOverlay(values, baseRadius, baseHoverRadius, extra) {
+        /* extra: 최고·최저를 보통 점보다 얼마나 키울지(기본 3).
+           보통 점을 숨긴 화면에서는 0 + 3 = 3px 이라 표식이 너무 작아지므로
+           부르는 쪽이 키워 넘길 수 있게 열어 둔다. 안 넘기면 예전 그대로다. */
+        const bump = extra == null ? 3 : extra;
         const mx = Math.max(...values), mn = Math.min(...values);
         const isMax = values.map(v => v === mx);
         const isMin = values.map(v => v === mn);
@@ -4404,8 +4408,8 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         const pointBorderColor = values.map((v, i) =>
             (isMax[i] && isMin[i]) ? '#7048e8' : isMax[i] ? '#f08c00' : isMin[i] ? '#1c7ed6' : 'transparent');
         const pointBorderWidth = values.map((v, i) => (isMax[i] || isMin[i]) ? 2 : 0);
-        const pointRadius = values.map((v, i) => (isMax[i] || isMin[i]) ? baseRadius + 3 : baseRadius);
-        const pointHoverRadius = values.map((v, i) => (isMax[i] || isMin[i]) ? baseHoverRadius + 3 : baseHoverRadius);
+        const pointRadius = values.map((v, i) => (isMax[i] || isMin[i]) ? baseRadius + bump : baseRadius);
+        const pointHoverRadius = values.map((v, i) => (isMax[i] || isMin[i]) ? baseHoverRadius + bump : baseHoverRadius);
         return { isMax, isMin, pointStyle, pointRotation, pointBorderColor, pointBorderWidth, pointRadius, pointHoverRadius };
     }
     // 툴팁 라벨에 붙일 "이 기간 최고/최저" 문구
@@ -4495,6 +4499,18 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         } else a10CompareKeys.push(k);
         a10RenderChart();
     };
+
+    /* 점을 보일지는 개수가 아니라 '한 점이 가로로 몇 px를 갖느냐'로 정한다.
+       점 지름이 8px(반지름 4)이라 간격이 그 아래로 떨어지면 점끼리 겹쳐
+       선이 두꺼운 띠처럼 뭉개진다 — 2018~2026 전체는 0.3px 간격이다.
+       개수 하나로 못 박지 않는 이유는 같은 260점이라도 폭에 따라 전혀 다르기 때문이다.
+       (패널 815px → 약 86점까지, 폰 375px → 약 31점까지 점이 남는다.) */
+    const A10_PT_DIAM = 8;     // 점 지름 = 반지름 4 × 2
+    const A10_AXIS_PX = 130;   // 세로축 눈금·여백이 먹는 폭 (815px 패널에서 그림 영역이 688px)
+    function a10PointsFit(n, boxW) {
+        const plot = Math.max(80, (boxW || 640) - A10_AXIS_PX);
+        return n <= plot / A10_PT_DIAM;
+    }
 
     /* ── 이동평균 ──────────────────────────────────────────────────
        환율이 긴 평균보다 낮을 때 환전을 생각하려고 두는 참고선이다.
@@ -4966,7 +4982,13 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
             return yearChanged ? `${e.ymd.substring(0, 4)}/${mmdd}` : mmdd;
         });
 
-        const ext = chartExtremeOverlay(values, 4, 6);
+        /* 점이 서로 겹칠 만큼 촘촘하면 점을 숨기고 선만 남긴다.
+           최고·최저 표식은 남긴다 — 긴 구간일수록 그 두 점이 더 쓸모 있다.
+           대신 보통 점이 사라진 화면에서 묻히지 않게 반지름을 6으로 키운다. */
+        const dense = !a10PointsFit(values.length,
+            boxEl && boxEl.parentElement ? boxEl.parentElement.clientWidth : 0);
+        const ext = dense ? chartExtremeOverlay(values, 0, 4, 6)
+                          : chartExtremeOverlay(values, 4, 6);
         // 어두운 계기판 팔레트(건강 탭과 동일). 최고/최저 테두리는 무채, 구분은 모양이 담당.
         const A10_FONT = 'Archivo';
         const extremeBorder = ext.pointBorderWidth.map(w => w > 0 ? '#f3f2f2' : 'transparent');
@@ -5034,6 +5056,8 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
                 datasets: [{
                     label: cfg.label, data: useTime ? tsData : values,
                     borderColor: '#e8e4e4', backgroundColor: 'rgba(232,228,228,0.08)',
+                    // 점을 뺀 화면에서는 기본 3px 선이 그 자체로 두껍다. 이동평균(1.5)보다는 굵게 둔다.
+                    borderWidth: dense ? 2 : 3,
                     pointBackgroundColor: '#e8e4e4',
                     pointBorderColor: extremeBorder, pointBorderWidth: ext.pointBorderWidth,
                     pointStyle: ext.pointStyle, pointRotation: ext.pointRotation,
@@ -5051,6 +5075,10 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
+                /* 점을 숨기면 '점 위에 올렸을 때만'이라는 Chart.js 기본 조건(intersect)을
+                   맞출 수가 없다. 가로 위치로 그날을 집게 한다 — 배경 띠와 이동평균은
+                   툴팁 filter 에서 빠지므로 본선 항목만 남아 집히는 날짜가 흔들리지 않는다. */
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { display: false },
                     tooltip: a10VixTooltip(band, it => fullDates[it.dataIndex], {
@@ -5116,6 +5144,11 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         msgEl.innerHTML = '';
 
         const A10_FONT = 'Archivo';
+        /* 밀도 판정은 지표 중 가장 촘촘한 것을 기준으로 한다 —
+           한 줄만 뭉개져도 화면은 띠로 보이기 때문이다. */
+        const cmpDense = !a10PointsFit(
+            Math.max.apply(null, series.map(s => s.items.length)),
+            canvas && canvas.parentElement ? canvas.parentElement.clientWidth : 0);
         const useTime = hlDateAdapterOk() && series.every(s => s.items.every(e => hlDateTs(e.ymd) != null));
         // 등간격 폴백에서 쓸 날짜 합집합 (지표마다 기록된 날이 다를 수 있다)
         const allDates = [...new Set([].concat.apply([], series.map(s => s.items.map(e => e.ymd))))].sort();
@@ -5133,7 +5166,8 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
                 borderColor: colors[i], backgroundColor: 'transparent',
                 borderWidth: 2, borderDash: CHART_SERIES_DASH[i],
                 pointBackgroundColor: colors[i], pointBorderColor: 'transparent',
-                pointRadius: 2, pointHoverRadius: 5,
+                // 단일 보기와 같은 기준. 겹칠 만큼 촘촘하면 숨기고 올렸을 때만 보인다.
+                pointRadius: cmpDense ? 0 : 2, pointHoverRadius: cmpDense ? 4 : 5,
                 tension: 0.25, fill: false, spanGaps: true,
             };
         });
