@@ -8562,11 +8562,16 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         for (const r of rows) {
             let streak = 0;
             try { streak = await rtStreak(r.id); } catch (e) { console.error('연속 일수 계산 실패:', e); }
-            const st = rtMonthStat(r, rtMonthOf(todayStr()));
+            /* 달은 '오늘'이 아니라 보고 있는 날짜에서 뽑는다. 오늘로 뽑으면 자정을 넘긴 뒤
+               10/31 화면에 11월 통계가 얹혀, 체크해 둔 루틴이 0/1처럼 보인다.
+               오늘과 다른 달을 보고 있으면 '이번 달'이 아니므로 이름도 그 달로 바꾼다. */
+            const month = rtMonthOf(rtDate);
+            const st = rtMonthStat(r, month);
+            const mLabel = (month === rtMonthOf(todayStr())) ? '이번 달' : `${+month.substring(5)}월`;
             const el = document.querySelector(`#rtList [data-rmeta="${CSS.escape(r.id)}"]`);
             if (!el) continue;   // 그 사이 화면이 바뀌었으면 버린다
             el.innerHTML = `<span>연속 <b>${streak}</b>일</span>`
-                + `<span>이번 달 <b>${st.done}</b>/${st.denom}일</span>`;
+                + `<span>${mLabel} <b>${st.done}</b>/${st.denom}일</span>`;
         }
     }
 
