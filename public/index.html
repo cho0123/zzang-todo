@@ -800,6 +800,23 @@
         }
         .wo-unit-sel:hover, .wo-unit-sel:focus { color: var(--zm-ink); border-bottom-color: var(--zm-ink); outline: none; }
 
+        /* 날짜별 모아보기 — 최근 운동일 칩을 누르면 그날 한 것만 남는다 */
+        .wo-legend-btn { flex: none; width: auto; min-height: 0; padding: 0; margin: 0;
+            border: none; background: transparent; cursor: pointer; }
+        .wo-date.sel { box-shadow: 0 0 0 2px var(--zm-ink); }
+        .wo-filter { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 8px 10px;
+            border: 1px solid var(--zm-border); background: var(--zm-card); }
+        .wo-filter-swatch { flex: none; width: 10px; height: 10px; background: var(--zm-border); }
+        .wo-filter-text { font-size: 12px; font-weight: 700; color: var(--zm-ink); }
+        .wo-filter-text b { font-family: var(--font-num); font-size: 14px; font-weight: 800; }
+        .wo-filter-count { font-family: var(--font-num); font-size: 12px; font-weight: 700; color: var(--zm-muted); }
+        .wo-filter-clear {
+            margin-left: auto; flex: none; width: auto; min-height: 32px; padding: 0 10px;
+            font-size: 11px; font-weight: 700; cursor: pointer;
+            background: transparent; color: var(--zm-muted-2); border: 1px dashed var(--zm-border);
+        }
+        .wo-filter-clear:hover { background: var(--zm-ink); color: var(--zm-on-ink); border: 1px solid var(--zm-ink); }
+
         /* 최근 날짜 */
         .wo-recent { display: flex; align-items: baseline; gap: 8px; margin-top: 10px;
             padding-top: 8px; border-top: 1px solid var(--zm-line); }
@@ -7264,6 +7281,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
     const WO_MAX_DATES = 10;   // 날짜는 최근 10개만 남긴다
 
     let woItems = [];           // [{id, machine, part, weight, reps, repsUnit, sets, dates[], planDate}]
+    let woFilterDate = '';      // 날짜별 모아보기 — 'YYYY-MM-DD' 면 그날 한 것만 보여준다
     const woTimers = {};        // 문서 id → 저장 디바운스 타이머
     const woPlanOpen = new Set();   // '오늘 예정'에서 ± 조정을 펼쳐둔 항목
 
@@ -7455,9 +7473,9 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         woDateColorMap = {};
         woRecentDates.forEach((d, i) => { woDateColorMap[d] = colors[i]; });
     }
-    function woDateChip(d, extra) {
+    function woDateChip(d, extra, sel) {
         const c = woDateColorMap[d];
-        return `<span class="wo-date${c ? ' hit' : ''}"${c ? ` style="background:${c}"` : ''}>`
+        return `<span class="wo-date${c ? ' hit' : ''}${sel ? ' sel' : ''}"${c ? ` style="background:${c}"` : ''}>`
             + `${hlEsc(woShortDate(d))}${extra || ''}</span>`;
     }
     function woRenderLegend() {
@@ -7467,7 +7485,10 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         el.style.display = 'flex';
         el.innerHTML = '<span class="wo-legend-label">최근 운동일</span>' + woRecentDates.map(d => {
             const names = woItems.filter(it => it.dates.indexOf(d) >= 0).map(it => it.machine);
-            return `<span title="${hlAttr(names.join(', '))}">${woDateChip(d, `<b>${names.length}</b>`)}</span>`;
+            const on = (woFilterDate === d);
+            return `<button type="button" class="wo-legend-btn" aria-pressed="${on}"`
+                + ` title="${hlAttr(names.join(', '))}" onclick="woToggleDateFilter('${hlAttr(d)}')">`
+                + woDateChip(d, `<b>${names.length}</b>`, on) + '</button>';
         }).join('');
     }
 
@@ -7591,31 +7612,64 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         ids.forEach(id => { woPaintCard(id); woQueueSave(id, 0); });
     };
 
+    /* ── 날짜별 모아보기 ──────────────────────────────────────────
+       최근 운동일 칩을 누르면 그날 한 기구만 남는다. 그날 무엇을 돌렸는지 되짚을 때 쓴다.
+       색은 범례 칩에서 쓰던 것을 그대로 머리줄에 물려, 어느 칩을 눌렀는지 눈으로 잇는다.
+       고르는 동안 '기구 추가'와 '기본 목록 넣기'는 감춘다 — 지난 날을 되짚는 자리에서
+       새 기구를 만들면 그날 한 것이 아닌데 목록에 끼어든다. */
+    window.woToggleDateFilter = function (d) {
+        woFilterDate = (woFilterDate === d) ? '' : d;
+        woRenderList();
+    };
+    window.woClearDateFilter = function () { woFilterDate = ''; woRenderList(); };
+    function woFilterStrip(d, n) {
+        const c = woDateColorMap[d];
+        return `<div class="wo-filter">
+                <span class="wo-filter-swatch"${c ? ` style="background:${c}"` : ''}></span>
+                <span class="wo-filter-text"><b>${hlEsc(woShortDate(d))}</b> ${hlEsc(woAgoLabel(d))}에 한 운동</span>
+                <span class="wo-filter-count">${n}개</span>
+                <button type="button" class="wo-filter-clear" onclick="woClearDateFilter()">전체 보기</button>
+            </div>`;
+    }
+
     function woRenderList() {
         woBuildDateColors();
         woRenderLegend();
         woRenderPlan();
         const root = document.getElementById('woParts');
-        const seed = woItems.length ? '' :
+        const pick = woFilterDate;
+        const pool = pick ? woItems.filter(it => it.dates.indexOf(pick) >= 0) : woItems;
+        const strip = pick ? woFilterStrip(pick, pool.length) : '';
+        if (pick && !pool.length) {
+            root.innerHTML = strip + '<div class="wo-empty">그날 기록된 운동이 없습니다.<br>'
+                + '위 ‘전체 보기’를 누르면 모든 기구가 다시 보입니다.</div>';
+            return;
+        }
+        const seed = (pick || woItems.length) ? '' :
             `<div class="wo-seed">
                 <div class="wo-seed-text">기구가 아직 없습니다. 기본 목록으로 시작하거나, 부위별 ‘기구 추가’로 직접 넣으세요.</div>
                 <button type="button" class="wo-seed-btn" id="woSeedBtn" onclick="woSeed()">기본 목록 넣기</button>
             </div>`;
 
-        root.innerHTML = seed + woPartList().map(part => {
-            const rows = woItems.filter(it => (it.part || '기타') === part).sort((a, b) => {
+        root.innerHTML = strip + seed + woPartList().map(part => {
+            const rows = pool.filter(it => (it.part || '기타') === part).sort((a, b) => {
                 // 최근에 한 것이 위. 기록 없는 기구는 woLastTs가 -Infinity라 저절로 맨 아래로 간다.
                 // (뺄셈을 쓰면 둘 다 -Infinity일 때 NaN이 되어 정렬이 흐트러진다)
                 const ta = woLastTs(a), tb = woLastTs(b);
                 if (ta !== tb) return tb > ta ? 1 : -1;
                 return a.machine.localeCompare(b.machine, 'ko');   // 같은 날 한 것끼리는 가나다순
             });
+            if (pick && !rows.length) return '';   // 그날 한 것이 없는 부위는 접는다
             const newest = rows.reduce((acc, r) => (r.dates.length && woLastTs(r) > woLastTs(acc) ? r : acc), { dates: [] });
+            /* 날짜를 골라 본 화면에서는 '마지막 …'을 적지 않는다 —
+               그 기구의 최근 날짜라서, 11/1을 보고 있는데 '마지막 오늘'이라고 나온다.
+               보고 있는 날짜는 머리줄이 이미 말하므로 여기서는 개수만 센다. */
             const head = `<div class="wo-part-head">${hlEsc(part)}`
-                + `<span class="wo-part-last">${newest.dates.length ? '마지막 ' + hlEsc(woAgoLabel(newest.dates[0])) : '기록 없음'}</span></div>`;
+                + `<span class="wo-part-last">${pick ? `${rows.length}개`
+                    : (newest.dates.length ? '마지막 ' + hlEsc(woAgoLabel(newest.dates[0])) : '기록 없음')}</span></div>`;
             const cards = rows.map(it =>
                 `<div class="wo-card${it.dates.length ? '' : ' none'}" data-id="${hlAttr(it.id)}">${woCardInner(it)}</div>`).join('');
-            const add = `<div class="wo-add" data-part="${hlAttr(part)}">
+            const add = pick ? '' : `<div class="wo-add" data-part="${hlAttr(part)}">
                     <button type="button" class="wo-add-open" onclick="woAddStart('${hlAttr(part)}')">기구 추가</button>
                     <form class="wo-add-form" onsubmit="return woAddSubmit(event,'${hlAttr(part)}')">
                         <input type="text" class="wo-add-input" placeholder="기구 이름" maxlength="40">
@@ -7662,7 +7716,8 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         const i = it.dates.indexOf(t);
         if (i >= 0) it.dates.splice(i, 1);                                       // 다시 누르면 취소
         else it.dates = [t].concat(it.dates).sort().reverse().slice(0, WO_MAX_DATES);
-        woRepaintAll();
+        if (woFilterDate) woRenderList();   // 고른 날의 목록에서 빠지거나 들어온다
+        else woRepaintAll();
         woQueueSave(id, 0);   // 눌렀다는 표시는 바로 남긴다
     };
     // 이름은 문서 id와 무관한 필드라, 고쳐도 기록(무게·횟수·세트·날짜)이 그대로 남는다
