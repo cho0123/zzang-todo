@@ -751,6 +751,15 @@
         }
         .wo-name-input:hover { border-color: var(--zm-border); }
         .wo-name-input:focus { outline: none; background: #fff; border-color: var(--zm-ink); }
+        /* 부위 — 러닝머신을 하체에 넣어 뒀다가 유산소로 옮기는 일이 있다.
+           자주 쓰는 칸이 아니라 조용히 두고, 단위 고르기와 같은 점선 밑줄로 알린다. */
+        .wo-part-sel {
+            flex: none; width: auto; min-width: 5.4em; min-height: 0; padding: 2px 4px 3px; margin: 0;
+            cursor: pointer; border: none; border-bottom: 1px dotted var(--zm-muted-2); border-radius: 0;
+            background: transparent; -webkit-appearance: none; appearance: none;
+            font-size: 11px; font-weight: 700; color: var(--zm-muted);
+        }
+        .wo-part-sel:hover, .wo-part-sel:focus { color: var(--zm-ink); border-bottom-color: var(--zm-ink); outline: none; }
         .wo-today {
             margin-left: auto; flex: none; width: auto; min-height: 44px; padding: 0 18px;
             font-size: 13px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer;
@@ -7508,6 +7517,10 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         return `<div class="wo-card-head">
                 <input type="text" class="wo-name-input" value="${hlAttr(it.machine)}" aria-label="기구 이름"
                        oninput="woRename('${hlAttr(it.id)}',this.value)" onchange="woRenameDone('${hlAttr(it.id)}',this)">
+                <select class="wo-part-sel" aria-label="부위" onchange="woSetPart('${hlAttr(it.id)}',this.value)">
+                    ${woPartList().map(pt =>
+                        `<option value="${hlAttr(pt)}"${pt === (it.part || '기타') ? ' selected' : ''}>${hlEsc(pt)}</option>`).join('')}
+                </select>
                 <div class="wo-card-btns">
                     <button type="button" class="wo-plan-btn${woPlanned(it) ? ' on' : ''}" onclick="woTogglePlan('${hlAttr(it.id)}')">${woPlanned(it) ? '예정됨' : '＋예정'}</button>
                     <button type="button" class="wo-today${on ? ' on' : ''}" onclick="woToggleToday('${hlAttr(it.id)}')">${on ? `${woShortDate(today)} 완료` : `오늘 ${woShortDate(today)}`}</button>
@@ -7732,6 +7745,15 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         if (woFilterDate) woRenderList();   // 고른 날의 목록에서 빠지거나 들어온다
         else woRepaintAll();
         woQueueSave(id, 0);   // 눌렀다는 표시는 바로 남긴다
+    };
+    /* 부위를 옮기면 카드가 다른 묶음으로 가야 하므로 목록을 통째로 다시 그린다.
+       기록(무게·횟수·세트·날짜)은 같은 문서에 그대로 남는다. */
+    window.woSetPart = function (id, v) {
+        const it = woItem(id);
+        if (!it || !v || v === it.part) return;
+        it.part = v;
+        woRenderList();
+        woQueueSave(id, 0);
     };
     // 이름은 문서 id와 무관한 필드라, 고쳐도 기록(무게·횟수·세트·날짜)이 그대로 남는다
     window.woRename = function (id, value) {
