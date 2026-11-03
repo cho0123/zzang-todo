@@ -7247,7 +7247,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
     const WORKOUT_COLLECTION = "workout";
     // 부위는 몸의 구획이라 거의 바뀌지 않아 상수로 둔다.
     // 다만 데이터에 없는 부위가 들어와도 묻히지 않도록, 실제 문서에 있는 부위는 뒤에 덧붙여 보여준다.
-    const WO_PART_ORDER = ['상체', '하체', '프리웨이트'];
+    const WO_PART_ORDER = ['상체', '하체', '프리웨이트', '유산소'];
     /* 옛 부위(등·가슴·어깨·팔·코어) → 새 부위. 저장된 문서는 건드리지 않고 읽는 시점에만 옮긴다.
        woSaveNow가 part를 함께 쓰므로, 그 기구를 다음에 손대는 순간 새 값으로 자연히 굳는다.
        표에 없는 부위(손으로 넣은 이름 등)는 그대로 두고 목록 맨 뒤에 붙는다. */
@@ -7265,6 +7265,15 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         { part: '하체', machines: ['레그프레스', '레그익스텐션', '레그컬', '힙어브덕션'] },
     ];
     const WO_DEFAULT = { weight: 20, reps: 12, sets: 3 };
+    /* 부위마다 처음 값이 다르다. 러닝머신을 20kg·12회·3세트로 시작하면
+       세 칸을 전부 고쳐야 하므로, 유산소는 무게 없이 30분 한 번으로 연다.
+       여기 없는 부위는 WO_DEFAULT 그대로다. */
+    const WO_PART_DEFAULT = { '유산소': { weight: 0, reps: 30, repsUnit: '분', sets: 1 } };
+    function woNewValues(part) {
+        return Object.assign({ weight: WO_DEFAULT.weight, reps: WO_DEFAULT.reps,
+                               repsUnit: WO_UNIT.reps, sets: WO_DEFAULT.sets },
+                             WO_PART_DEFAULT[part] || {});
+    }
     const WO_STEP = { weight: 2.5, reps: 1, sets: 1 };
     const WO_MIN = { weight: 0, reps: 1, sets: 1 };
     const WO_UNIT = { weight: 'kg', reps: '회', sets: '세트' };
@@ -7532,8 +7541,12 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
             return a.machine.localeCompare(b.machine, 'ko');
         });
     }
+    /* 한 줄 요약. 무게가 0이면 적지 않는다 — 러닝머신에 '0kg'이 붙으면
+       무게를 아직 안 넣은 것처럼 읽힌다. 0은 '무게라는 개념이 없다'는 뜻이다.
+       카드의 무게 칸은 그대로 둔다. 거기까지 감추면 다시 넣을 길이 없어진다. */
     function woPlanVals(it) {
-        return `${it.weight}kg × ${it.reps}${woRepsUnit(it.repsUnit)} × ${it.sets}`;
+        const reps = `${it.reps}${woRepsUnit(it.repsUnit)} × ${it.sets}`;
+        return it.weight > 0 ? `${it.weight}kg × ${reps}` : reps;
     }
     // 값 칩만 고쳐 쓴다 — 줄 전체를 다시 그리면 적고 있던 칸에서 커서가 빠진다
     function woPaintPlanChip(id) {
@@ -7762,12 +7775,13 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
     async function woCreate(name, part) {
         try {
             const now = Date.now();
+            const v = woNewValues(part);
             const ref = await addDoc(collection(db, WORKOUT_COLLECTION), {
                 machine: name, part,
-                weight: WO_DEFAULT.weight, reps: WO_DEFAULT.reps, repsUnit: WO_UNIT.reps, sets: WO_DEFAULT.sets,
+                weight: v.weight, reps: v.reps, repsUnit: v.repsUnit, sets: v.sets,
                 dates: [], planDate: '', createdAt: now, updatedAt: now,
             });
-            woItems.push({ id: ref.id, machine: name, part, weight: WO_DEFAULT.weight, reps: WO_DEFAULT.reps, repsUnit: WO_UNIT.reps, sets: WO_DEFAULT.sets, dates: [], planDate: '' });
+            woItems.push({ id: ref.id, machine: name, part, weight: v.weight, reps: v.reps, repsUnit: v.repsUnit, sets: v.sets, dates: [], planDate: '' });
             woRenderList();
             woMsg('');
         } catch (e) {
