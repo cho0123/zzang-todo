@@ -36,6 +36,11 @@
             --zm-tone-moss: #3f4a2a;   /* 건강 검진 */
             --zm-tone-plum: #46304a;   /* 건강 노력 */
             --zm-tone-bronze: #4a3a2b; /* 건강 측정 — 위 셋과 색상환에서 떨어진 짙은 갈색 */
+            /* 다른 성격의 기록을 가르는 분홍 — 루틴 탭의 '구입', 작사 탭의 '메모 있음'.
+               적색(#ec3013, 색상 8°)과 헷갈리지 않게 자주빛으로 당겨 331°에 두고,
+               채도를 낮춰 계기판 톤에 맞췄다. 칠했을 때도(--zm-on-ink 글자 6.04:1)
+               글자만 썼을 때도(카드 6.19:1 · 지면 5.57:1) 읽힌다. */
+            --zm-tone-pink: #a32c66;
             /* 여러 계열을 겹쳐 그릴 때 쓰는 선 색 (After10 비교 / 건강 묶음 겹쳐보기 공용).
                어두운 패널(#242a38·#2d2b2b) 위에서 서로 갈리도록 색상환에 흩어 놓았고,
                적색 계열은 뺐다 — 적색은 이상치 표식(--zm-accent) 몫이라 헷갈리면 안 된다.
@@ -1033,6 +1038,12 @@
         /* 저장 안 된 글이 있으면 뷰 버튼에도 표가 나게 (다른 데 보다가 잊지 않도록) */
         .ly-viewbtn .ly-dot { display: none; margin-left: 6px; font-family: var(--font-num); font-weight: 800; }
         .ly-viewbtn.dirty .ly-dot { display: inline; }
+        /* 이 곡에 메모가 있다는 표시. 점이 아니라 색으로 둔다 —
+           점은 이미 '저장 안 됨' 몫이라, 같은 탭에서 점이 두 뜻을 지면 무엇이 무엇인지 모른다.
+           색과 점은 서로 다른 자리라 둘이 겹쳐도 각각 읽힌다. */
+        .ly-viewbtn.hasmemo { color: var(--zm-tone-pink); border-color: var(--zm-tone-pink); }
+        .ly-viewbtn.hasmemo:hover { background: var(--zm-tone-pink); color: var(--zm-on-ink); }
+        .ly-viewbtn.hasmemo.active { background: var(--zm-tone-pink); color: var(--zm-on-ink); border-color: var(--zm-tone-pink); }
 
         /* 왼쪽 목록 + 오른쪽 편집. 좁아지면 목록이 위로 올라가고 한 열이 된다. */
         .ly-wrap { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -1141,6 +1152,14 @@
         }
         .rt-chip:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
         .rt-chip.active { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        /* 구입은 루틴 네 개와 성격이 다르다. 묶음을 떼어 칩 사이 간격(2px)보다 훨씬 넓은
+           줄 간격(.rt-toolbar 의 14px)을 두고, 거기에 색을 더한다 —
+           폰에서 줄이 바뀌면 간격만으로는 분리가 사라지지만 색은 어디서 접히든 남는다.
+           구분선을 쓰지 않은 것도 같은 이유다. 줄이 바뀌면 줄 맨 앞에 선만 남는다. */
+        .rt-buygroup { margin-left: 6px; }
+        .rt-chip.buy { color: var(--zm-tone-pink); border-color: var(--zm-tone-pink); }
+        .rt-chip.buy:hover { background: var(--zm-tone-pink); color: var(--zm-on-ink); }
+        .rt-chip.buy.active { background: var(--zm-tone-pink); color: var(--zm-on-ink); border-color: var(--zm-tone-pink); }
 
         /* 날짜 이동 — 가운데 큰 날짜, 좌우 이동. 앞날은 체크할 수 없어 버튼을 잠근다. */
         .rt-datebar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
@@ -2142,7 +2161,10 @@
             <button class="rt-chip view" data-rview="month" onclick="rtSetView('month')">월간 보기</button>
             <button class="rt-chip view" data-rview="year" onclick="rtSetView('year')">연간</button>
             <button class="rt-chip view" data-rview="manage" onclick="rtSetView('manage')">루틴 관리</button>
-            <button class="rt-chip view" data-rview="buy" onclick="rtSetView('buy')">구입</button>
+        </div>
+        <!-- 구입은 루틴이 아니다. 묶음을 따로 둬서 줄이 바뀌어도 같이 움직이게 한다. -->
+        <div class="rt-views rt-buygroup">
+            <button class="rt-chip view buy" data-rview="buy" onclick="rtSetView('buy')">구입</button>
         </div>
     </div>
 
@@ -8213,6 +8235,17 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         const el = lyEl('lyMemoState');
         if (el) { el.textContent = txt || ''; el.className = 'ly-state' + (cls ? ' ' + cls : ''); }
     }
+    /* 메모 버튼에 '이 곡에 메모가 있다'를 칠한다.
+       저장본이 아니라 지금 칸에 있는 글로 본다 — 적자마자 켜지고 지우면 바로 꺼진다.
+       저장 뒤에만 켜면, 메모를 적고 작업판으로 옮긴 순간 글이 그대로 남아 있는데도
+       버튼이 비어 보인다. '아직 저장 안 됐다'는 점과 상태줄이 따로 말해 주므로
+       이 색이 그 뜻까지 겸할 필요가 없다. 공백만 남은 것은 내용 없음으로 본다. */
+    function lyPaintMemoMark() {
+        const btn = document.querySelector('[data-lymode="memo"]');
+        if (!btn) return;
+        const el = lyEl('lySongMemo');
+        btn.classList.toggle('hasmemo', !!(el && el.value.trim()));
+    }
     // 저장 안 된 글이 있으면 뷰 버튼에도 점을 띄운다 (다른 뷰에 있어도 눈에 걸리게)
     function lyPaintDots() {
         document.querySelectorAll('[data-lyview]').forEach(b => {
@@ -8291,12 +8324,13 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         const s = lyFindSong(lyCurrentId), main = lyEl('lyMain');
         if (!main) return;
         main.style.display = s ? '' : 'none';
-        if (!s) { lySetState(''); return; }
+        if (!s) { lySetState(''); lyPaintMemoMark(); return; }
         lyEl('lyTitle').value = s.title || '';
         lyEl('lyBody').value = s.body || '';
         // 예전 문서에는 memo 가 없다 — 읽는 자리에서 빈 값으로 본다(문서는 손대지 않는다)
         lyEl('lySongMemo').value = s.memo || '';
         lyEl('lyArchiveBtn').textContent = (s.active === false) ? '보관 해제' : '보관';
+        lyPaintMemoMark();                 // 곡이 바뀌었으니 그 곡 기준으로 다시 본다
         lySetState(s.updatedAt ? `저장됨 ${lyStamp(s.updatedAt)}` : '');
         lySetMode(lyMode);
     }
@@ -8552,7 +8586,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         if (body) body.addEventListener('input', () => lyMarkDirty(true));
         if (title) title.addEventListener('input', () => lyMarkDirty(true));
         // 곡 메모도 같은 문서라 같은 '저장 안 됨' 표시를 쓴다 (떠날 때 묻는 것도 그대로 걸린다)
-        if (songMemo) songMemo.addEventListener('input', () => lyMarkDirty(true));
+        if (songMemo) songMemo.addEventListener('input', () => { lyMarkDirty(true); lyPaintMemoMark(); });
         if (memo) {
             memo.addEventListener('input', () => {
                 lyMemoDirty = (memo.value !== lyMemoSaved);
