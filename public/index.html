@@ -964,6 +964,20 @@
         .pu-ok { flex: none; min-height: 40px; padding: 0 16px; font-size: 13px; font-weight: 800; cursor: pointer;
             background: var(--zm-ink); color: var(--zm-on-ink); border: none; border-radius: var(--zm-radius); }
         .pu-ok:disabled { opacity: 0.5; cursor: default; }
+        /* 전에 적은 품목 고르기 — 폼 아래 한 줄을 통째로 쓴다.
+           폰에서 한 번 눌러 넣는 것이 가장 빠르고, 글자를 치면 그 줄이 좁혀진다. */
+        .pu-picks { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+        .pu-picks:empty { display: none; }
+        .pu-picks-label { flex: none; font-size: 11px; font-weight: 700; color: var(--zm-muted-2); margin-right: 2px; }
+        .pu-pick { flex: none; width: auto; min-height: 30px; padding: 0 9px; cursor: pointer;
+            font-size: 12px; font-weight: 700; color: var(--zm-ink);
+            background: var(--zm-bg); border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        .pu-pick:hover { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        .pu-pick.on { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        .pu-pick-n { margin-left: 5px; font-family: var(--font-num); font-size: 11px; opacity: 0.65; }
+        .pu-pick-more { background: transparent; color: var(--zm-muted-2); border-style: dashed; }
+        .pu-pick-more:hover { background: var(--zm-bg); color: var(--zm-ink); border-style: solid; }
+        .pu-pick-none { font-size: 11px; color: var(--zm-muted-2); }
 
         /* 보기 고르기 */
         .pu-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -2229,6 +2243,8 @@
             <label class="pu-f">날짜<input type="date" class="pu-date" id="puDate"></label>
             <label class="pu-f">분류<select class="pu-cat" id="puCat"></select></label>
             <button type="submit" class="pu-ok" id="puAddBtn">기록</button>
+            <!-- 전에 적은 품목. 누르면 이름과 분류가 채워지고 개수 칸으로 넘어간다. -->
+            <div class="pu-picks" id="puPicks"></div>
         </form>
 
         <div class="pu-bar">
@@ -9613,6 +9629,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
     let puFold = new Set();  // 접어 둔 분류
     let puManageOpen = false;
     let puBusy = false;
+    let puPickAll = false;   // 전에 적은 품목을 다 펼쳤나
 
     function puMsg(t, fail) {
         const el = document.getElementById('puMsg');
@@ -9626,6 +9643,72 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         const n = parseInt(String(v == null ? '' : v).replace(/[^\d-]/g, ''), 10);
         return isFinite(n) ? Math.max(min, n) : min;
     }
+
+    /* ── 전에 적은 품목 ──────────────────────────────────────────
+       휴지처럼 되풀이해 사는 것을 매번 다시 적지 않게, 또 '휴지'와 '휴지 '가 따로 쌓이지 않게
+       한 번 누르면 들어가게 한다.
+
+       목록은 purchases 기록에서 뽑는다. 따로 두면 기록을 지워도 목록에 남고 둘이 어긋나는데,
+       뽑아 쓰면 어긋날 자리가 없다. 조회도 늘지 않는다 — 이 화면은 이미 컬렉션을 통째로
+       읽어 캐시에 들고 있어서, 아래 셈은 그 캐시를 한 번 훑는 것이 전부다.
+
+       앞에 오는 순서는 '산 횟수' → '마지막으로 산 날' → 이름이다. 되풀이해 사는 것일수록
+       다시 누를 일이 잦고, 같은 횟수면 최근 것이 먼저 떠오른다.
+       분류는 그 품목을 마지막에 적었을 때의 것을 따라간다 — 중간에 분류를 옮겼다면
+       옮긴 뒤의 것이 지금 쓰는 분류다.
+
+       ⚠ 표기가 다른 같은 품목(휴지·화장지)은 합치지 않는다. 이름 그대로 따로 센다. */
+    const PU_PICK_MAX = 10;        // 처음에 보여줄 칩 수 (그 뒤는 '더 보기'나 글자로 좁혀서)
+    function puNameList() {
+        const by = {};
+        puItems.forEach(r => {
+            const k = r.name;
+            const o = by[k] || (by[k] = { name: k, n: 0, last: '', categoryId: PU_UNCAT_ID });
+            o.n++;
+            if (r.date >= o.last) { o.last = r.date; o.categoryId = r.categoryId; }   // 마지막 기록의 분류
+        });
+        return Object.keys(by).map(k => by[k]).sort((a, b) =>
+            (b.n - a.n) || (a.last < b.last ? 1 : a.last > b.last ? -1 : 0) || a.name.localeCompare(b.name, 'ko'));
+    }
+    function puPaintPicks() {
+        const el = document.getElementById('puPicks');
+        if (!el) return;
+        const nameEl = document.getElementById('puName');
+        const typed = String(nameEl ? nameEl.value : '').trim();
+        const all = puNameList();
+        if (!all.length) { el.innerHTML = ''; return; }
+        // 글자를 치면 그 글자가 든 것만 남긴다 — 품목이 늘어나도 칩 줄이 길어지지 않는다
+        const hit = typed ? all.filter(o => o.name.indexOf(typed) >= 0) : all;
+        const show = (puPickAll || typed) ? hit : hit.slice(0, PU_PICK_MAX);
+        const parts = ['<span class="pu-picks-label">전에 적은 품목</span>'];
+        if (!hit.length) {
+            parts.push('<span class="pu-pick-none">전에 적은 것 중에는 없습니다 — 새 품목으로 기록됩니다.</span>');
+        } else {
+            show.forEach(o => {
+                parts.push(`<button type="button" class="pu-pick${o.name === typed ? ' on' : ''}"`
+                    + ` onclick="puPick('${hlAttr(o.name)}')">${hlEsc(o.name)}`
+                    + `<span class="pu-pick-n">${o.n}</span></button>`);
+            });
+            if (!typed && !puPickAll && hit.length > PU_PICK_MAX) {
+                parts.push(`<button type="button" class="pu-pick pu-pick-more" onclick="puPickMore()">+${hit.length - PU_PICK_MAX}개 더</button>`);
+            }
+        }
+        el.innerHTML = parts.join('');
+    }
+    window.puPickMore = function () { puPickAll = true; puPaintPicks(); };
+    /* 고르면 이름과 분류만 채운다. 개수·날짜는 이번에 사는 것이라 따라오지 않는다 —
+       대신 개수 칸으로 넘겨 바로 숫자만 치면 되게 한다. */
+    window.puPick = function (name) {
+        const o = puNameList().find(x => x.name === name);
+        if (!o) return;
+        const nameEl = document.getElementById('puName');
+        const catEl = document.getElementById('puCat');
+        if (nameEl) nameEl.value = o.name;
+        if (catEl && [...catEl.options].some(x => x.value === o.categoryId)) catEl.value = o.categoryId;
+        puPaintPicks();
+        const cnt = document.getElementById('puCount');
+        if (cnt) { cnt.focus(); cnt.select(); }
+    };
 
     // ── 분류 ────────────────────────────────────────────────────
     function puCatList() {
@@ -9698,6 +9781,11 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
 
     /* 구입 뷰에 들어올 때 한 번 읽는다. 컬렉션이 작아 통째로 가져와 캐시에 둔다. */
     function puLoad() {
+        const nameEl = document.getElementById('puName');
+        if (nameEl && !nameEl.dataset.bound) {      // 한 번만 묶는다 (구입 뷰에 들어올 때마다 부른다)
+            nameEl.dataset.bound = '1';
+            nameEl.addEventListener('input', puPaintPicks);
+        }
         if (!document.getElementById('puDate').value) document.getElementById('puDate').value = todayStr();
         document.getElementById('puDate').max = todayStr();
         if (!puYear) puYear = todayStr().substring(0, 4);
@@ -9762,6 +9850,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
             }
             fil.innerHTML = puItems.length ? chips.join('') : '';
         }
+        puPaintPicks();
         const mb = document.getElementById('puManageBtn');
         if (mb) mb.classList.toggle('on', puManageOpen);
         const mw = document.getElementById('puManage');
