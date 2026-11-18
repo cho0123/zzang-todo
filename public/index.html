@@ -814,6 +814,18 @@
         }
         .wo-unit-sel:hover, .wo-unit-sel:focus { color: var(--zm-ink); border-bottom-color: var(--zm-ink); outline: none; }
 
+        /* 부위 고르기 — 넷을 다 펼치면 화면이 너무 길어, 한 부위씩 본다.
+           숫자는 '보고 있는 날 그 부위에서 한 기구 / 그 부위 기구 수'(루틴 탭의 2/6과 같은 꼴).
+           한 것이 없으면 숫자를 가라앉히고, 하나라도 있으면 또렷하게 둔다. */
+        .wo-parts-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; }
+        .wo-part-btn { flex: none; width: auto; min-height: 34px; padding: 0 12px; cursor: pointer;
+            font-size: 13px; font-weight: 700; color: var(--zm-muted);
+            background: var(--zm-card); border: 1px solid var(--zm-border); border-radius: var(--zm-radius); }
+        .wo-part-btn:hover { background: var(--zm-bg); color: var(--zm-text-soft); }
+        .wo-part-btn.on { background: var(--zm-ink); color: var(--zm-on-ink); border-color: var(--zm-ink); }
+        .wo-part-btn b { margin-left: 6px; font-family: var(--font-num); font-size: 12px; font-weight: 800; opacity: 0.5; }
+        .wo-part-btn.did b { opacity: 1; }
+
         /* 날짜별 모아보기 — 최근 운동일 칩을 누르면 그날 한 것만 남는다 */
         .wo-legend-btn { flex: none; width: auto; min-height: 0; padding: 0; margin: 0;
             border: none; background: transparent; cursor: pointer; }
@@ -7471,6 +7483,10 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
 
     let woItems = [];           // [{id, machine, part, weight, reps, repsUnit, sets, dates[], planDate}]
     let woFilterDate = '';      // 날짜별 모아보기 — 'YYYY-MM-DD' 면 그날 한 것만 보여준다
+    /* 보고 있는 부위. '*' 는 전체, null 은 아직 안 정함(처음 그릴 때 기구가 있는 첫 부위로 잡는다).
+       탭을 나갔다 와도 고른 것이 남는다 — 같은 세션에서는 같은 부위를 이어 보는 일이 잦다.
+       새로고침하면 다시 null 이라 처음처럼 첫 부위로 열린다. */
+    let woPartPick = null;
     const woTimers = {};        // 문서 id → 저장 디바운스 타이머
     const woPlanOpen = new Set();   // '오늘 예정'에서 ± 조정을 펼쳐둔 항목
 
@@ -7829,6 +7845,33 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
             </div>`;
     }
 
+    /* 부위 버튼 줄. 날짜를 보는 중이면 숫자도 그날 것으로 센다 —
+       11/1 을 보면서 '오늘 2개'라고 적혀 있으면 어느 날 이야기인지 알 수 없다.
+       무슨 날을 세고 있는지는 바로 위 날짜 머리줄이 말한다. */
+    function woPartBarHtml() {
+        const day = woFilterDate || todayStr();
+        const on = it => it.dates.indexOf(day) >= 0;
+        const total = woItems.length, totalOn = woItems.filter(on).length;
+        const btn = (key, label, n, m) =>
+            `<button type="button" class="wo-part-btn${woPartPick === key ? ' on' : ''}${n ? ' did' : ''}"`
+            + ` onclick="woPickPart('${hlAttr(key)}')">${hlEsc(label)}<b>${n}/${m}</b></button>`;
+        return '<div class="wo-parts-bar" id="woPartBar">'
+            + btn('*', '전체', totalOn, total)
+            + woPartList().map(pt => {
+                const rows = woItems.filter(it => (it.part || '기타') === pt);
+                return btn(pt, pt, rows.filter(on).length, rows.length);
+            }).join('')
+            + '</div>';
+    }
+    function woPaintPartBar() {
+        const el = document.getElementById('woPartBar');
+        if (el) el.outerHTML = woPartBarHtml();
+    }
+    window.woPickPart = function (key) {
+        woPartPick = key;
+        woRenderList();
+    };
+
     function woRenderList() {
         woBuildDateColors();
         woRenderLegend();
@@ -7842,40 +7885,57 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
                 + '위 ‘전체 보기’를 누르면 모든 기구가 다시 보입니다.</div>';
             return;
         }
-        const seed = (pick || woItems.length) ? '' :
-            `<div class="wo-seed">
+        if (!woItems.length) {
+            root.innerHTML = `<div class="wo-seed">
                 <div class="wo-seed-text">기구가 아직 없습니다. 기본 목록으로 시작하거나, 부위별 ‘기구 추가’로 직접 넣으세요.</div>
                 <button type="button" class="wo-seed-btn" id="woSeedBtn" onclick="woSeed()">기본 목록 넣기</button>
+            </div>` + woPartList().map(part => woPartSection(part, [], pick, false)).join('');
+            return;
+        }
+        /* 처음 열 때는 기구가 있는 첫 부위로 잡는다 — 넷을 다 펼치면 화면이 너무 길다는 것이
+           이 기능의 까닭이라, 처음부터 '전체'로 열면 고친 것이 없다. '전체'는 한 번 누르면 된다. */
+        if (woPartPick === null) {
+            const first = woPartList().find(pt => woItems.some(it => (it.part || '기타') === pt));
+            woPartPick = first || '*';
+        }
+        const parts = (woPartPick === '*') ? woPartList()
+            : (woPartList().indexOf(woPartPick) >= 0 ? [woPartPick] : woPartList());
+        const one = (parts.length === 1);   // 한 부위만 보는 중인가 (빈 부위 안내를 둘지)
+        root.innerHTML = strip + woPartBarHtml()
+            + parts.map(part => woPartSection(part, pool.filter(it => (it.part || '기타') === part), pick, one)).join('');
+    }
+    /* 부위 한 묶음. rows 는 이미 (날짜·부위로) 걸러진 것이다. */
+    function woPartSection(part, rows, pick, one) {
+        rows = rows.slice().sort((a, b) => {
+            // 최근에 한 것이 위. 기록 없는 기구는 woLastTs가 -Infinity라 저절로 맨 아래로 간다.
+            // (뺄셈을 쓰면 둘 다 -Infinity일 때 NaN이 되어 정렬이 흐트러진다)
+            const ta = woLastTs(a), tb = woLastTs(b);
+            if (ta !== tb) return tb > ta ? 1 : -1;
+            return a.machine.localeCompare(b.machine, 'ko');   // 같은 날 한 것끼리는 가나다순
+        });
+        // 전체 보기에서 그날 한 것이 없는 부위는 접는다. 한 부위만 볼 때는 접으면 빈 화면이 되므로 안내를 둔다.
+        if (pick && !rows.length && !one) return '';
+        const newest = rows.reduce((acc, r) => (r.dates.length && woLastTs(r) > woLastTs(acc) ? r : acc), { dates: [] });
+        /* 날짜를 골라 본 화면에서는 '마지막 …'을 적지 않는다 —
+           그 기구의 최근 날짜라서, 11/1을 보고 있는데 '마지막 오늘'이라고 나온다.
+           보고 있는 날짜는 머리줄이 이미 말하므로 여기서는 개수만 센다. */
+        const head = `<div class="wo-part-head">${hlEsc(part)}`
+            + `<span class="wo-part-last">${pick ? `${rows.length}개`
+                : (newest.dates.length ? '마지막 ' + hlEsc(woAgoLabel(newest.dates[0])) : '기록 없음')}</span></div>`;
+        const cards = rows.map(it =>
+            `<div class="wo-card${it.dates.length ? '' : ' none'}" data-id="${hlAttr(it.id)}">${woCardInner(it)}</div>`).join('');
+        const empty = (rows.length || !one) ? '' : `<div class="wo-empty">${pick
+            ? '그날 이 부위에서 한 기구가 없습니다.'
+            : `${hlEsc(part)}에 기구가 없습니다.<br>아래 ‘기구 추가’로 넣어보세요.`}</div>`;
+        const add = pick ? '' : `<div class="wo-add" data-part="${hlAttr(part)}">
+                <button type="button" class="wo-add-open" onclick="woAddStart('${hlAttr(part)}')">기구 추가</button>
+                <form class="wo-add-form" onsubmit="return woAddSubmit(event,'${hlAttr(part)}')">
+                    <input type="text" class="wo-add-input" placeholder="기구 이름" maxlength="40">
+                    <button type="submit" class="wo-add-ok">추가</button>
+                    <button type="button" class="wo-add-cancel" onclick="woAddCancel('${hlAttr(part)}')">취소</button>
+                </form>
             </div>`;
-
-        root.innerHTML = strip + seed + woPartList().map(part => {
-            const rows = pool.filter(it => (it.part || '기타') === part).sort((a, b) => {
-                // 최근에 한 것이 위. 기록 없는 기구는 woLastTs가 -Infinity라 저절로 맨 아래로 간다.
-                // (뺄셈을 쓰면 둘 다 -Infinity일 때 NaN이 되어 정렬이 흐트러진다)
-                const ta = woLastTs(a), tb = woLastTs(b);
-                if (ta !== tb) return tb > ta ? 1 : -1;
-                return a.machine.localeCompare(b.machine, 'ko');   // 같은 날 한 것끼리는 가나다순
-            });
-            if (pick && !rows.length) return '';   // 그날 한 것이 없는 부위는 접는다
-            const newest = rows.reduce((acc, r) => (r.dates.length && woLastTs(r) > woLastTs(acc) ? r : acc), { dates: [] });
-            /* 날짜를 골라 본 화면에서는 '마지막 …'을 적지 않는다 —
-               그 기구의 최근 날짜라서, 11/1을 보고 있는데 '마지막 오늘'이라고 나온다.
-               보고 있는 날짜는 머리줄이 이미 말하므로 여기서는 개수만 센다. */
-            const head = `<div class="wo-part-head">${hlEsc(part)}`
-                + `<span class="wo-part-last">${pick ? `${rows.length}개`
-                    : (newest.dates.length ? '마지막 ' + hlEsc(woAgoLabel(newest.dates[0])) : '기록 없음')}</span></div>`;
-            const cards = rows.map(it =>
-                `<div class="wo-card${it.dates.length ? '' : ' none'}" data-id="${hlAttr(it.id)}">${woCardInner(it)}</div>`).join('');
-            const add = pick ? '' : `<div class="wo-add" data-part="${hlAttr(part)}">
-                    <button type="button" class="wo-add-open" onclick="woAddStart('${hlAttr(part)}')">기구 추가</button>
-                    <form class="wo-add-form" onsubmit="return woAddSubmit(event,'${hlAttr(part)}')">
-                        <input type="text" class="wo-add-input" placeholder="기구 이름" maxlength="40">
-                        <button type="submit" class="wo-add-ok">추가</button>
-                        <button type="button" class="wo-add-cancel" onclick="woAddCancel('${hlAttr(part)}')">취소</button>
-                    </form>
-                </div>`;
-            return `<div class="wo-part">${head}<div class="wo-grid">${cards}${add}</div></div>`;
-        }).join('');
+        return `<div class="wo-part">${head}${empty}<div class="wo-grid">${cards}${add}</div></div>`;
     }
     // '오늘'을 켜고 끄면 날짜 색 순위가 바뀌므로 범례와 모든 카드를 다시 칠한다.
     // 다만 정렬은 건드리지 않는다 — 손가락 밑에서 카드가 움직이면 정신없다.
@@ -7883,6 +7943,7 @@ fetched : ${hlEsc(JSON.stringify(raw.fetched) || 'undefined')}</div>`;
         woBuildDateColors();
         woRenderLegend();
         woRenderPlan();
+        woPaintPartBar();      // 오늘 개수가 바뀐다
         document.querySelectorAll('#woParts .wo-card[data-id]').forEach(el => {
             const it = woItem(el.dataset.id);
             if (!it) return;
